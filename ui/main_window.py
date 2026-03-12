@@ -51,6 +51,7 @@ from app_config import (
     APP_ORG,
     APP_VERSION,
     DEFAULT_UPDATE_MANIFEST_URL,
+    LEGACY_UPDATE_MANIFEST_URL,
     UPDATE_INSTALLER_NAME,
     THUMB_DIR,
     app_data_dir,
@@ -167,6 +168,14 @@ class Downloader(QMainWindow, PagesMixin):
             "",
             type=str
         )
+        if self.update_manifest_url == LEGACY_UPDATE_MANIFEST_URL:
+            self.update_manifest_url = DEFAULT_UPDATE_MANIFEST_URL
+            self.settings.setValue("update_manifest_url", self.update_manifest_url)
+            if self.update_url_404_value == LEGACY_UPDATE_MANIFEST_URL:
+                self.update_url_404_value = ""
+                self.update_url_404_disabled = False
+                self.settings.setValue("update_url_404_value", "")
+                self.settings.setValue("update_url_404_disabled", False)
 
         self._fetch_thread = None
         self._fetch_worker = None

@@ -1,11 +1,13 @@
 import os
+import re
 import sys
 
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
 APP_VERSION = "1.0.0"
-DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
+DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-code/releases/latest"
+LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe"
 
 
@@ -124,5 +126,17 @@ def extract_update_info(data, manifest_url):
         or data.get("sha256")
         or ""
     )
-    info["release_notes"] = data.get("release_notes") or data.get("notes") or ""
+    notes = data.get("release_notes") or data.get("notes") or data.get("body") or ""
+    info["release_notes"] = notes
+
+    if notes:
+        if not info["min_required_version"]:
+            match = re.search(r"(?im)^\s*min_required_version\s*:\s*([^\r\n]+)\s*$", notes)
+            if match:
+                info["min_required_version"] = match.group(1).strip()
+        if not info["installer_sha256"]:
+            match = re.search(r"(?im)^\s*installer_sha256\s*:\s*([a-fA-F0-9]{64})\s*$", notes)
+            if match:
+                info["installer_sha256"] = match.group(1).strip()
+
     return info

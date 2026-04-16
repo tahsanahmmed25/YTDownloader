@@ -64,8 +64,9 @@ from logging_utils import get_logger
 from ui.widgets import FadingTextButton, PasteButton, MarqueeLabel
 from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
-from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
+from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker, FFmpegInstallWorker
 import queue_manager
+import ytdlp_exe_manager
 
 _log = get_logger()
 MAX_COOKIE_FILE_BYTES = 5 * 1024 * 1024
@@ -200,6 +201,10 @@ class Downloader(QMainWindow, PagesMixin):
         self._update_download_thread = None
         self._update_download_worker = None
         self._update_progress_dialog = None
+        self._ffmpeg_install_thread = None
+        self._ffmpeg_install_worker = None
+        self._ffmpeg_installed = False
+        self._ytdlp_exe_ready = False
         self._last_downloaded_bytes = None
         self._last_total_bytes = None
         self._estimated_size_mb = None
@@ -269,6 +274,7 @@ class Downloader(QMainWindow, PagesMixin):
             QTimer.singleShot(250, self.start_update_check)
         QTimer.singleShot(400, self._maybe_show_cookie_reminder)
         QTimer.singleShot(600, self._check_ffmpeg_on_startup)
+        QTimer.singleShot(800, self._check_ytdlp_exe_on_startup)
 
     def _build_ui(self):
         root = QWidget()
@@ -759,6 +765,19 @@ class Downloader(QMainWindow, PagesMixin):
 
     @Slot(str, str, object)
     def _show_dialog_on_ui_thread(self, title, message, icon_obj):
+        # Internal sentinel signals from background threads
+        if title == "__ytdlp_ready__":
+            self._ytdlp_exe_ready = True
+            self._show_toast("yt-dlp downloaded and ready!", variant="success", duration=4000)
+            return
+        if title == "__ytdlp_error__":
+            self._show_toast(
+                f"yt-dlp download failed: {message}\nDownloads won't work until it's available.",
+                variant="error",
+                duration=8000
+            )
+            return
+
         box = QMessageBox(self)
         box.setAttribute(Qt.WA_DeleteOnClose, True)
         try:
@@ -1441,56 +1460,102 @@ class Downloader(QMainWindow, PagesMixin):
     def _check_ffmpeg_on_startup(self):
         if self._find_ffmpeg():
             return
+        self._install_ffmpeg_background()
+
+    def _install_ffmpeg_background(self):
+        """Start FFmpeg installation in a background thread on first launch."""
+        if self._ffmpeg_install_thread and self._ffmpeg_install_thread.isRunning():
+            _log.info("FFmpeg installation already in progress.")
+            return
+
         self._show_toast(
-            "FFmpeg is not installed. Some downloads need it. "
-            "Go to Options -> Downloads to install essentials.",
-            variant="warning"
+            "Installing FFmpeg essentials in the background...",
+            variant="info"
+        )
+
+        from PySide6.QtCore import QThread
+        self._ffmpeg_install_thread = QThread()
+        self._ffmpeg_install_worker = FFmpegInstallWorker(app_dir())
+        self._ffmpeg_install_worker.moveToThread(self._ffmpeg_install_thread)
+
+        self._ffmpeg_install_thread.started.connect(self._ffmpeg_install_worker.run)
+        self._ffmpeg_install_worker.progress.connect(self._on_ffmpeg_progress)
+        self._ffmpeg_install_worker.completed.connect(self._on_ffmpeg_completed)
+        self._ffmpeg_install_worker.error.connect(self._on_ffmpeg_error)
+        self._ffmpeg_install_worker.finished.connect(self._ffmpeg_install_thread.quit)
+        self._ffmpeg_install_worker.finished.connect(self._ffmpeg_install_worker.deleteLater)
+        self._ffmpeg_install_thread.finished.connect(self._ffmpeg_install_thread.deleteLater)
+
+        self._ffmpeg_install_thread.start()
+
+    def _on_ffmpeg_progress(self, percent):
+        _log.debug("FFmpeg installation progress: %d%%", percent)
+
+    def _on_ffmpeg_completed(self):
+        self._ffmpeg_installed = True
+        self._show_toast("FFmpeg installed successfully.", variant="success")
+
+    def _on_ffmpeg_error(self, error_msg):
+        _log.error("FFmpeg installation failed: %s", error_msg)
+        self._show_toast(
+            f"FFmpeg installation failed: {error_msg}",
+            variant="error"
         )
 
     def _run_install_essentials(self):
-        script = os.path.join(app_dir(), "install_essentials.ps1")
-        if not os.path.exists(script):
-            self._show_error_dialog(
-                "Essentials",
-                "install_essentials.ps1 not found. "
-                "Please reinstall the app."
+        """Manual FFmpeg install from Preferences page, reuses the background worker."""
+        if self._ffmpeg_install_thread and self._ffmpeg_install_thread.isRunning():
+            self._show_toast("FFmpeg installation already in progress.", variant="info")
+            return
+        if self._find_ffmpeg():
+            self._show_toast("FFmpeg is already installed.", variant="success")
+            return
+        self._install_ffmpeg_background()
+
+    # ── yt-dlp.exe auto-download ──────────────────────────────────────────
+
+    def _check_ytdlp_exe_on_startup(self):
+        """Check for yt-dlp.exe on startup; download/update in background."""
+        if ytdlp_exe_manager.is_exe_present():
+            self._ytdlp_exe_ready = True
+            _log.info("yt-dlp.exe already present at %s", ytdlp_exe_manager.get_exe_path())
+            # Still check for updates silently in background
+            ytdlp_exe_manager.ensure_ytdlp_exe_background(
+                on_done=lambda: _log.info("yt-dlp.exe is up to date."),
+                on_error=lambda e: _log.warning("yt-dlp.exe update check failed: %s", e),
             )
             return
-        try:
-            import subprocess
-            subprocess.run(
-                [
-                    os.path.join(
-                        os.environ.get("SystemRoot", "C:\\Windows"),
-                        "System32",
-                        "WindowsPowerShell",
-                        "v1.0",
-                        "powershell.exe"
-                    ),
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    script,
-                    "-TargetDir",
-                    app_dir()
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                shell=False,
-                creationflags=0x08000000 # subprocess.CREATE_NO_WINDOW
-            )
-            self._show_toast(
-                "Installing essentials in the background...",
-                variant="info"
-            )
-        except Exception:
-            _log.exception("Failed to run install_essentials.ps1")
-            self._show_error_dialog(
-                "Essentials",
-                "Failed to start install_essentials.ps1. "
-                "Please run it manually from the app folder."
-            )
+
+        # Not present — first run. Show toast and download.
+        self._show_toast(
+            "Downloading yt-dlp... This may take a moment on first launch.",
+            variant="info",
+            duration=8000
+        )
+
+        def _progress(pct):
+            # Update toast text with live progress
+            try:
+                self.dialog_requested.emit(
+                    "__ytdlp_progress__", str(pct), None
+                )
+            except Exception:
+                pass
+
+        ytdlp_exe_manager.ensure_ytdlp_exe_background(
+            on_done=self._on_ytdlp_exe_ready,
+            on_error=self._on_ytdlp_exe_error,
+        )
+
+    def _on_ytdlp_exe_ready(self):
+        self._ytdlp_exe_ready = True
+        _log.info("yt-dlp.exe ready at %s", ytdlp_exe_manager.get_exe_path())
+        # Signal back to UI thread via the existing queued dialog mechanism
+        self.dialog_requested.emit("__ytdlp_ready__", "", None)
+
+    def _on_ytdlp_exe_error(self, error_msg):
+        _log.error("yt-dlp.exe download failed: %s", error_msg)
+        self.dialog_requested.emit("__ytdlp_error__", error_msg, None)
 
     def _terms_text(self):
         return (

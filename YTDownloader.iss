@@ -1,10 +1,10 @@
 [Setup]
 AppName=YTDownloader
-AppVersion=1.0.0
+AppVersion=2.0.1
 AppPublisher=Tahsan
-AppPublisherURL=https://github.com/yourusername/YTDownloader
-AppSupportURL=https://github.com/yourusername/YTDownloader/issues
-AppUpdatesURL=https://github.com/yourusername/YTDownloader/releases
+AppPublisherURL=https://github.com/tahsanahmmed25/YTDownloader
+AppSupportURL=https://github.com/tahsanahmmed25/YTDownloader/issues
+AppUpdatesURL=https://github.com/tahsanahmmed25/YTDownloader/releases
 DefaultDirName={localappdata}\Programs\YTDownloader
 DefaultGroupName=YTDownloader
 OutputDir=dist_installer
@@ -19,20 +19,25 @@ LicenseFile=LICENSE
 DisableProgramGroupPage=yes
 CreateAppDir=yes
 ShowLanguageDialog=no
+SetupLogging=yes
+DisableWelcomePage=no
+DisableReadyPage=no
 
 [Files]
-Source: "dist\YTDownloader\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-Source: "install_essentials.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; Main application bundle (everything PyInstaller produced)
+Source: "dist\YTDownloader\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion createallsubdirs
 
 [Icons]
-Name: "{group}\YTDownloader"; Filename: "{app}\YTDownloader.exe"
+Name: "{group}\YTDownloader"; Filename: "{app}\YTDownloader.exe"; IconFilename: "{app}\icons\download.ico"
 Name: "{group}\Uninstall YTDownloader"; Filename: "{uninstallexe}"
+Name: "{commondesktop}\YTDownloader"; Filename: "{app}\YTDownloader.exe"; IconFilename: "{app}\icons\download.ico"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\install_essentials.ps1"" -TargetDir ""{app}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\YTDownloader.exe"; Description: "Launch YTDownloader"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
-Type: files; Name: "{app}\ffmpeg.exe"
-Type: files; Name: "{app}\ffprobe.exe"
+Type: filesandordirs; Name: "{app}\.data"
 Type: filesandordirs; Name: "{localappdata}\YTDownloader"

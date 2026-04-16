@@ -1,5 +1,7 @@
 import hashlib
 import os
+import shutil
+import zipfile
 from datetime import datetime, UTC
 
 from PySide6.QtCore import QObject, Signal
@@ -14,12 +16,92 @@ from downloader import (
     CookieLockError
 )
 from history_manager import save_history
-from app_config import THUMB_DIR, ensure_dir
+from app_config import THUMB_DIR, ensure_dir, local_tmp_dir
 from logging_utils import get_logger
 from net_utils import request_with_retry, get_bytes
 
-
 _log = get_logger()
+
+class FFmpegInstallWorker(QObject):
+    """Downloads and installs FFmpeg/FFprobe into the target directory asynchronously."""
+    progress = Signal(int)
+    completed = Signal()
+    error = Signal(str)
+    finished = Signal()
+
+    FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
+    def __init__(self, target_dir):
+        super().__init__()
+        self.target_dir = target_dir
+
+    def run(self):
+        try:
+            ensure_dir(self.target_dir)
+
+            # Use project-local temp paths (not %TEMP% on C:)
+            local_tmp = local_tmp_dir()
+            zip_path = os.path.join(local_tmp, "ffmpeg-release-essentials.zip")
+            extract_dir = os.path.join(local_tmp, "ffmpeg-essentials")
+
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir, ignore_errors=True)
+
+            self.progress.emit(5)
+            _log.info("Downloading FFmpeg essentials...")
+            resp = request_with_retry("GET", self.FFMPEG_URL, stream=True, timeout=30)
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+
+            with open(zip_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = min(int(downloaded * 100 / total), 50)
+                        self.progress.emit(5 + pct)
+
+            self.progress.emit(60)
+            _log.info("Extracting FFmpeg essentials...")
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(extract_dir)
+
+            self.progress.emit(80)
+            ffmpeg_src = None
+            ffprobe_src = None
+            for root, dirs, files in os.walk(extract_dir):
+                for fname in files:
+                    if fname.lower() == "ffmpeg.exe" and ffmpeg_src is None:
+                        ffmpeg_src = os.path.join(root, fname)
+                    elif fname.lower() == "ffprobe.exe" and ffprobe_src is None:
+                        ffprobe_src = os.path.join(root, fname)
+
+            if ffmpeg_src:
+                shutil.copy2(ffmpeg_src, os.path.join(self.target_dir, "ffmpeg.exe"))
+            else:
+                raise RuntimeError("ffmpeg.exe not found in downloaded archive")
+
+            if ffprobe_src:
+                shutil.copy2(ffprobe_src, os.path.join(self.target_dir, "ffprobe.exe"))
+
+            self.progress.emit(100)
+            _log.info("FFmpeg installed successfully to %s", self.target_dir)
+
+            # Clean up local tmp
+            try:
+                if os.path.exists(local_tmp):
+                    shutil.rmtree(local_tmp, ignore_errors=True)
+            except Exception:
+                pass
+
+            self.completed.emit()
+        except Exception as e:
+            _log.exception("FFmpeg installation failed")
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
 
 
 class UpdateWorker(QObject):

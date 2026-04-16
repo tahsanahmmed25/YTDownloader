@@ -15,10 +15,10 @@
 ### Version Management
 ```bash
 # Update version in these files:
-1. app_config.py          → APP_VERSION = "1.0.0"
-2. YTDownloader.iss       → AppVersion=1.0.0
-3. YTDownloader.spec      → version='1.0.0'
-4. YTDownloader_obf.spec  → version='1.0.0'
+1. app_config.py          → APP_VERSION = "2.0.1"
+2. YTDownloader.iss       → AppVersion=2.0.1
+3. CHANGELOG.md           → release entry for 2.0.1
+4. README.md              → current stable release text
 ```
 
 ### Code Quality
@@ -62,7 +62,10 @@ Remove-Item .\obf -Recurse -Force -ErrorAction SilentlyContinue
 
 ### Step 2: Build Executable
 ```powershell
-# Run in PowerShell (as Administrator recommended)
+# Install runtime dependencies into the project environment
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# Run in PowerShell from the repo root
 .\build_release.ps1
 
 # Or without obfuscation (faster):
@@ -70,15 +73,25 @@ Remove-Item .\obf -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 This will:
-1. Install PyInstaller (if needed)
-2. Optionally obfuscate code with PyArmor
-3. Build executable with PyInstaller
-4. Create Windows installer with Inno Setup
+1. Select `.\venv\Scripts\python.exe` when present, otherwise use the active Python
+2. Fail fast if `PySide6`, `requests`, `browser_cookie3`, or `yt_dlp` are missing
+3. Install build tools (`PyInstaller`, `PyArmor`) into that same interpreter if needed
+4. Optionally obfuscate code with PyArmor
+5. Build executable with PyInstaller
+6. Create Windows installer with Inno Setup
 
 ### Step 3: Verify Build
 ```bash
 # Check if installer was created
 ls dist_installer/*.exe
+
+# Smoke-test the packaged EXE before distributing
+$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+Start-Sleep -Seconds 8
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+Stop-Process -Id $proc.Id
+
+# Confirm the GUI appears and stays open during the check
 
 # Test installer locally (don't run in production dir)
 # Use a VM or separate test directory
@@ -93,7 +106,7 @@ ls dist_installer/*.exe
 # Initialize git (if not already)
 git init
 git add .
-git commit -m "Initial commit: YTDownloader v1.0.0"
+git commit -m "Initial commit: YTDownloader v2.0.1"
 
 # Add remote (replace with your username)
 git remote add origin https://github.com/tahsanahmmed25/YTDownloader.git
@@ -152,21 +165,21 @@ Create `CHANGELOG.md`:
 4. Fill details (see below)
 
 # Method B: Via GitHub CLI
-gh release create v1.0.0 \
+gh release create v2.0.1 \
   ./dist_installer/YTDownloader-Setup.exe \
-  --title "YTDownloader v1.0.0" \
+  --title "YTDownloader v2.0.1" \
   --notes "See CHANGELOG.md for details"
 ```
 
 ### Step 2: Release Details Template
 
-**Tag:** `v1.0.0`
+**Tag:** `v2.0.1`
 
-**Title:** `YTDownloader v1.0.0 - Release`
+**Title:** `YTDownloader v2.0.1 - Release`
 
 **Description:**
 ```markdown
-## 🎉 YTDownloader v1.0.0
+## YTDownloader v2.0.1
 
 ### ✨ Features
 - Modern UI with dark mode
@@ -177,7 +190,7 @@ gh release create v1.0.0 \
 - Speed limiting
 
 ### 📥 Installation
-1. Download `YTDownloader-Setup-1.0.0.exe`
+1. Download `YTDownloader-Setup.exe`
 2. Run installer
 3. Follow prompts
 4. Done! App starts automatically
@@ -198,15 +211,15 @@ SHA256: `<paste hash here>`
 
 To verify installer integrity:
 \`\`\`powershell
-Get-FileHash YTDownloader-Setup-1.0.0.exe -Algorithm SHA256
+Get-FileHash YTDownloader-Setup.exe -Algorithm SHA256
 \`\`\`
 ```
 
 ### Step 3: Upload Installer
 
 **Files to upload:**
-1. `YTDownloader-Setup-1.0.0.exe` - Main installer
-2. `YTDownloader-v1.0.0-portable.zip` (optional) - No installation needed
+1. `YTDownloader-Setup.exe` - Main installer
+2. `YTDownloader-v2.0.1-portable.zip` (optional) - No installation needed
 3. `SHA256-Checksums.txt` - Security verification
 
 ### Step 4: Generate SHA256 Checksum
@@ -227,12 +240,12 @@ Your app already has update checking! Verify it works:
 Your app expects JSON with:
 ```json
 {
-  "tag_name": "v1.0.1",
-  "name": "v1.0.1",
+  "tag_name": "v2.0.1",
+  "name": "v2.0.1",
   "prerelease": false,
   "assets": [
     {
-      "name": "YTDownloader-Setup-1.0.1.exe",
+      "name": "YTDownloader-Setup.exe",
       "browser_download_url": "https://github.com/..."
     }
   ],
@@ -314,7 +327,8 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt pyinstaller
+      - run: python -m venv venv
+      - run: .\venv\Scripts\python.exe -m pip install -r requirements.txt
       - run: .\build_release.ps1 -NoObfuscate
       - uses: ncipollo/release-action@v1
         with:
@@ -330,27 +344,38 @@ This automatically builds & releases when you push a git tag like `git push orig
 
 ```powershell
 # 1. Update version
-# Edit: app_config.py, YTDownloader.iss, .spec files
+# Edit: app_config.py, YTDownloader.iss, CHANGELOG.md, README.md
 
 # 2. Update changelog
 # Edit: CHANGELOG.md
 
-# 3. Test
+# 3. Install deps into the project environment
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# 4. Build
 .\build_release.ps1
 
-# 4. Git commit
+# 5. Smoke test the built EXE
+$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+Start-Sleep -Seconds 8
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+Stop-Process -Id $proc.Id
+
+# 6. Confirm the GUI appears and stays open during the check
+
+# 7. Git commit
 git add .
-git commit -m "Release v1.0.0"
-git tag v1.0.0
+git commit -m "Release v2.0.1"
+git tag v2.0.1
 git push origin main --tags
 
-# 5. Create GitHub Release
+# 8. Create GitHub Release
 # - Go to GitHub.com
 # - Create Release from tag
 # - Upload installer
 # - Add release notes
 
-# 6. Users get auto-update notification
+# 9. Users get auto-update notification
 # Done! 🎉
 ```
 

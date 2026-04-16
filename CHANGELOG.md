@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [2.0.1] - 2026-04-16
+
+### Added
+- Automatic first-run `yt-dlp.exe` download and background update checks
+- Background FFmpeg essentials install workflow inside the app
+- Release-build preflight checks for required runtime dependencies
+- Shared PyInstaller spec configuration for normal and obfuscated builds
+
+### Changed
+- Windows release builds now prefer the project `venv` instead of whichever global Python is first on `PATH`
+- FFmpeg and temporary download assets now use project-local temp paths instead of system temp folders
+- Release documentation now uses a packaged-process smoke test that matches Windows GUI behavior
+
+### Fixed
+- Packaged Windows EXE no longer ships without `PySide6` because of interpreter mismatch during release builds
+- Startup import ordering in `app_config.py` no longer causes packaged app launch failure
+- SQLite history operations now close database connections reliably
+- Format cache access is now guarded for concurrent use
+
 ## [1.0.0] - 2026-03-17
 
 ### Added
@@ -41,7 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 1.0.0+ | Active | Current stable release |
+| 2.0.1+ | Active | Current stable release |
+| 1.0.0 | Upgrade recommended | Earlier public release |
 | 0.9.0 | EOL | No longer supported |
 
 ---

@@ -120,6 +120,7 @@ def _load_raw():
 
 def load_history():
     if _use_sqlite():
+        conn = None
         try:
             conn = _ensure_db()
             _migrate_json_if_needed(conn)
@@ -128,7 +129,6 @@ def load_history():
                 "FROM history ORDER BY added_at DESC"
             )
             rows = cur.fetchall()
-            conn.close()
             return [
                 {
                     "id": r[0],
@@ -143,6 +143,9 @@ def load_history():
         except Exception as exc:
             _log.warning("Failed to load history (sqlite): %s", exc)
             return []
+        finally:
+            if conn:
+                conn.close()
     raw = _load_raw()
     data = []
     if isinstance(raw, list):
@@ -154,6 +157,7 @@ def load_history():
 def save_history(item):
     normalized = _normalize_item(item)
     if _use_sqlite():
+        conn = None
         try:
             conn = _ensure_db()
             _migrate_json_if_needed(conn)
@@ -170,11 +174,13 @@ def save_history(item):
                 )
             )
             conn.commit()
-            conn.close()
             return
         except Exception as exc:
             _log.warning("Failed to save history (sqlite): %s", exc)
             return
+        finally:
+            if conn:
+                conn.close()
 
     data = load_history()
     if any(x.get("id") == normalized["id"] for x in data):
@@ -189,15 +195,18 @@ def save_history(item):
 
 def remove_history(item_id):
     if _use_sqlite():
+        conn = None
         try:
             conn = _ensure_db()
             conn.execute("DELETE FROM history WHERE id = ?", (item_id,))
             conn.commit()
-            conn.close()
             return
         except Exception as exc:
             _log.warning("Failed to remove history (sqlite): %s", exc)
             return
+        finally:
+            if conn:
+                conn.close()
     data = load_history()
     data = [x for x in data if x.get("id") != item_id]
     try:
@@ -209,15 +218,18 @@ def remove_history(item_id):
 
 def clear_history():
     if _use_sqlite():
+        conn = None
         try:
             conn = _ensure_db()
             conn.execute("DELETE FROM history")
             conn.commit()
-            conn.close()
             return
         except Exception as exc:
             _log.warning("Failed to clear history (sqlite): %s", exc)
             return
+        finally:
+            if conn:
+                conn.close()
     try:
         with open(FILE, "w", encoding="utf-8") as f:
             json.dump([], f, indent=4)

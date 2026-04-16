@@ -2,32 +2,69 @@
 setlocal
 cd /d %~dp0
 
-python -m pip show pyinstaller >nul 2>&1
-if errorlevel 1 (
-  python -m pip install pyinstaller
+set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
+if exist "%PYTHON_EXE%" goto python_ready
+
+set "PYTHON_EXE="
+for /f "delims=" %%I in ('where python 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
+if not defined PYTHON_EXE (
+  echo Python was not found. Create .\venv or add python to PATH.
+  exit /b 1
 )
+
+:python_ready
+echo Using Python interpreter: %PYTHON_EXE%
+"%PYTHON_EXE%" "%~dp0build_release_support.py" preflight
+if errorlevel 1 exit /b %errorlevel%
+
+call :ensure_package pyinstaller
+if errorlevel 1 exit /b %errorlevel%
 
 set SPEC=YTDownloader.spec
 
 if /i "%1"=="--no-obfuscate" goto build
 
-python -m pip show pyarmor >nul 2>&1
+call :ensure_package pyarmor
 if errorlevel 1 (
-  python -m pip install pyarmor
-)
-
-if exist obf rmdir /s /q obf
-pyarmor gen -O obf --recursive main.py downloader.py history_manager.py queue_manager.py ui_style.py
-if errorlevel 1 (
-  echo PyArmor failed. Falling back to non-obfuscated build.
+  echo PyArmor is unavailable. Falling back to non-obfuscated build.
   set SPEC=YTDownloader.spec
 ) else (
-  set SPEC=YTDownloader_obf.spec
+  if exist obf rmdir /s /q obf
+  "%PYTHON_EXE%" -m pyarmor gen -O obf --recursive main.py downloader.py history_manager.py queue_manager.py ui_style.py
+  if errorlevel 1 (
+    echo PyArmor failed. Falling back to non-obfuscated build.
+    if exist obf rmdir /s /q obf
+    set SPEC=YTDownloader.spec
+  ) else (
+    set SPEC=YTDownloader_obf.spec
+  )
 )
 
 :build
-pyinstaller --clean -y %SPEC%
+echo Building spec: %SPEC%
+"%PYTHON_EXE%" -m PyInstaller --clean -y %SPEC%
+if errorlevel 1 exit /b %errorlevel%
 
-"C:\Users\Tahsan\AppData\Local\Programs\INNOSE~1\ISCC.exe" YTDownloader.iss
+set "ISCC="
+if exist "F:\Installed Softwares\InnoSetup\ISCC.exe" set "ISCC=F:\Installed Softwares\InnoSetup\ISCC.exe"
+if not defined ISCC (
+  for /f "delims=" %%I in ('where ISCC.exe 2^>nul') do if not defined ISCC set "ISCC=%%I"
+)
+if not defined ISCC (
+  echo Inno Setup compiler not found. Install Inno Setup or add ISCC.exe to PATH.
+  exit /b 1
+)
+
+"%ISCC%" YTDownloader.iss
+if errorlevel 1 exit /b %errorlevel%
 
 endlocal
+goto :eof
+
+:ensure_package
+"%PYTHON_EXE%" -m pip show %~1 >nul 2>&1
+if not errorlevel 1 exit /b 0
+echo Installing %~1 into the selected interpreter...
+"%PYTHON_EXE%" -m pip install %~1
+if errorlevel 1 exit /b 1
+exit /b 0

@@ -1,17 +1,17 @@
 import os
+import re
 import time
 import sys
 import shutil
-import tempfile
 import zipfile
 import importlib
 import subprocess
-import time
 import threading
+import traceback
 import requests
 from urllib.parse import urlparse, parse_qs
 
-from app_config import app_data_dir
+from app_config import app_data_dir, local_tmp_dir
 from logging_utils import get_logger
 from net_utils import request_with_retry
 
@@ -21,6 +21,7 @@ _YTDLP_VERSION_FILE = "yt_dlp_version.txt"
 _YTDLP_LAST_CHECK_FILE = "yt_dlp_last_check.txt"
 _YTDLP_CHECK_INTERVAL = 24 * 60 * 60
 _FORMAT_CACHE = {}
+_FORMAT_CACHE_LOCK = threading.Lock()
 
 _log = get_logger()
 _YTDLP_LOCK = threading.Lock()
@@ -119,32 +120,39 @@ def _ensure_ytdlp_updated(force=False):
     if not wheel_url:
         return
 
+    tmpdir = local_tmp_dir()
+    wheel_path = os.path.join(tmpdir, "yt_dlp.whl")
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            wheel_path = os.path.join(tmpdir, "yt_dlp.whl")
-            r = request_with_retry("GET", wheel_url, timeout=20)
-            with open(wheel_path, "wb") as f:
-                f.write(r.content)
+        r = request_with_retry("GET", wheel_url, timeout=20)
+        with open(wheel_path, "wb") as f:
+            f.write(r.content)
 
-            for name in os.listdir(deps_dir):
-                if name.startswith("yt_dlp") or name.startswith("yt_dlp-"):
-                    path = os.path.join(deps_dir, name)
-                    try:
-                        if os.path.isdir(path):
-                            shutil.rmtree(path, ignore_errors=True)
-                        else:
-                            os.remove(path)
-                    except Exception:
-                        _log.warning("Failed to remove old yt-dlp: %s", path)
+        for name in os.listdir(deps_dir):
+            if name.startswith("yt_dlp") or name.startswith("yt_dlp-"):
+                path = os.path.join(deps_dir, name)
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path, ignore_errors=True)
+                    else:
+                        os.remove(path)
+                except Exception:
+                    _log.warning("Failed to remove old yt-dlp: %s", path)
 
-            with zipfile.ZipFile(wheel_path, "r") as zf:
-                zf.extractall(deps_dir)
+        with zipfile.ZipFile(wheel_path, "r") as zf:
+            zf.extractall(deps_dir)
 
         with open(version_path, "w", encoding="utf-8") as f:
             f.write(latest)
     except Exception as exc:
         _log.warning("yt-dlp update failed: %s", exc)
         return
+    finally:
+        # Always remove the temp wheel file, even if extraction fails
+        try:
+            if os.path.exists(wheel_path):
+                os.remove(wheel_path)
+        except Exception:
+            pass
     try:
         with open(os.path.join(deps_dir, _YTDLP_LAST_CHECK_FILE), "w", encoding="utf-8") as f:
             f.write(str(time.time()))
@@ -272,12 +280,14 @@ def get_video_info(url,
     thumbnail = info.get("thumbnail")
 
     cache_key = info.get("id") or normalize_youtube_url(url, keep_playlist=playlist_mode)
-    cached = _FORMAT_CACHE.get(cache_key)
+    with _FORMAT_CACHE_LOCK:
+        cached = _FORMAT_CACHE.get(cache_key)
     if cached:
         available_formats, available_qualities = cached
     else:
         available_formats, available_qualities = _available_format_quality(info)
-        _FORMAT_CACHE[cache_key] = (available_formats, available_qualities)
+        with _FORMAT_CACHE_LOCK:
+            _FORMAT_CACHE[cache_key] = (available_formats, available_qualities)
     available_subtitles = _available_subtitles(info)
     return title, size_mb, thumbnail, available_formats, available_qualities, available_subtitles
 
@@ -1661,3 +1671,4 @@ def download_video(url,
         raise last_non_cookie_err
     if last_err:
         raise last_err
+    return []

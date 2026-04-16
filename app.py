@@ -1,7 +1,6 @@
 import sys
 import argparse
 import os
-import sys
 import traceback
 import threading
 

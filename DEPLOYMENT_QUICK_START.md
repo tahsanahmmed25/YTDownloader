@@ -15,8 +15,8 @@
 ### **Step 1: Prepare Release** (30 minutes)
 ```powershell
 # Update version numbers
-app_config.py → APP_VERSION = "1.0.0"
-YTDownloader.iss → AppVersion=1.0.0
+app_config.py → APP_VERSION = "2.0.1"
+YTDownloader.iss → AppVersion=2.0.1
 
 # Test on clean system
 # Run: CHANGELOG.md, README.md update
@@ -24,11 +24,21 @@ YTDownloader.iss → AppVersion=1.0.0
 
 ### **Step 2: Build Installer** (5-10 minutes)
 ```powershell
+# Install runtime dependencies into the project environment
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
 # Clean old builds
 Remove-Item .\build, .\dist, .\dist_installer -Recurse -Force -ErrorAction SilentlyContinue
 
-# Build
+# Build from the project environment
 .\build_release.ps1
+
+# Smoke-test the packaged EXE before shipping the installer
+$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+Start-Sleep -Seconds 8
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+Stop-Process -Id $proc.Id
+# Confirm the window appears and stays open during the check
 
 # Output: dist_installer\YTDownloader-Setup.exe
 ```
@@ -43,7 +53,7 @@ Remove-Item .\build, .\dist, .\dist_installer -Recurse -Force -ErrorAction Silen
 # Create Release
 1. Click "Releases" tab
 2. "Create a new release"
-3. Tag: v1.0.0
+3. Tag: v2.0.1
 4. Upload: YTDownloader-Setup.exe
 5. Add CHANGELOG content
 
@@ -113,7 +123,9 @@ User clicks "Update" → Downloads & installs
 - [ ] Version number updated in all files
 - [ ] CHANGELOG.md updated
 - [ ] Tested on clean Windows 10/11
+- [ ] Runtime deps installed in `.\venv`
 - [ ] Build successful: `.\build_release.ps1`
+- [ ] Built EXE stays alive during the smoke-test launch
 - [ ] GitHub repo created & code pushed
 - [ ] GitHub Release created with installer
 - [ ] Release notes include changelog
@@ -155,16 +167,19 @@ git push -u origin main
 ## Per-Release Process (Repeatable)
 
 ```bash
-# 1. Update version in 4 files (2 min)
+# 1. Update version metadata (2 min)
 # 2. Update CHANGELOG.md (5 min)
-# 3. Test locally (10 min)
+# 3. Install deps: .\venv\Scripts\python.exe -m pip install -r requirements.txt
 # 4. Build: .\build_release.ps1 (10 min)
-# 5. Git push (2 min)
+# 5. Smoke test: Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+# 6. Wait 8s, confirm the process is still running, then stop it
+# 7. Test locally (10 min)
+# 8. Git push (2 min)
 git add .
 git commit -m "v1.0.1: Bug fixes and improvements"
 git push origin main
 
-# 6. Create Release on GitHub (5 min)
+# 9. Create Release on GitHub (5 min)
 # Via web: github.com → Releases → New Release
 # Tag: v1.0.1
 # Upload: dist_installer/YTDownloader-Setup.exe
@@ -229,7 +244,7 @@ You: Push code → Release on GitHub → Done!
 
 1. **Read** `DEPLOYMENT.md` (comprehensive guide)
 2. **Create** GitHub account & repo
-3. **Update** version number to 1.0.0
+3. **Update** version number to 2.0.1
 4. **Build** release: `.\build_release.ps1`
 5. **Create** GitHub Release with installer
 6. **Complete** - Users can now download & auto-update

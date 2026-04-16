@@ -15,7 +15,8 @@ if (-not (Test-Path $TargetDir)) {
 
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-} catch {
+}
+catch {
 }
 
 function DownloadFile($Url, $Destination) {
@@ -27,8 +28,12 @@ $ffmpegTarget = Join-Path $TargetDir "ffmpeg.exe"
 $ffprobeTarget = Join-Path $TargetDir "ffprobe.exe"
 
 $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-$zipPath = Join-Path $env:TEMP "ffmpeg-release-essentials.zip"
-$extractDir = Join-Path $env:TEMP "ffmpeg-essentials"
+$localTmp = Join-Path $TargetDir ".data\YTDownloader\.tmp"
+if (-not (Test-Path $localTmp)) {
+    New-Item -ItemType Directory -Path $localTmp -Force | Out-Null
+}
+$zipPath = Join-Path $localTmp "ffmpeg-release-essentials.zip"
+$extractDir = Join-Path $localTmp "ffmpeg-essentials"
 
 if (Test-Path $extractDir) {
     Remove-Item -Recurse -Force $extractDir

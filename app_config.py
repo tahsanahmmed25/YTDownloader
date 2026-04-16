@@ -5,15 +5,24 @@ import sys
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.1"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe"
 
 
+def app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.getcwd()
+
+
 def app_data_dir():
-    base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~") or os.getcwd()
-    path = os.path.join(base, APP_NAME)
+    """Returns a project-local data directory (not on C: drive by default).
+    Uses the application directory (where the app/exe lives) as the base.
+    """
+    base = app_dir()
+    path = os.path.join(base, ".data", APP_NAME)
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -28,10 +37,11 @@ THUMB_DIR = os.path.join(app_data_dir(), "thumbs")
 LOG_DIR = os.path.join(app_data_dir(), "logs")
 
 
-def app_dir():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.getcwd()
+def local_tmp_dir():
+    """A project-local temporary directory (replaces tempfile.gettempdir usage)."""
+    path = os.path.join(app_data_dir(), ".tmp")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def get_icon_path():

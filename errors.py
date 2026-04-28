@@ -26,6 +26,23 @@ def humanize_error(raw_message, cookies_loaded=False):
         return "yt-dlp is still setting up. Please wait a moment and try again."
     if "no module named" in lowered:
         return "A required component is missing. Please reinstall the app."
+    if "secretstorage" in lowered or "jeepney" in lowered:
+        return (
+            "Browser cookie decryption is not available on this system. "
+            "Try using Firefox instead — it works without extra system libraries on Linux."
+        )
+    if "could not find" in lowered and "cookies" in lowered:
+        # e.g. "could not find opera cookies database in ..."
+        return (
+            "The selected browser's profile was not found on this computer. "
+            "Make sure that browser is installed and has been opened at least once. "
+            "On Linux, Firefox is the most reliable choice."
+        )
+    if "dbus" in lowered or "secretservice" in lowered:
+        return (
+            "Could not access the system keyring to read browser cookies. "
+            "Try Firefox, or export a cookies.txt file manually and load it via 'Set Cookies File'."
+        )
     if "ffmpeg" in lowered and ("not installed" in lowered or "required" in lowered):
         return (
             "FFmpeg is required to merge video and audio. "

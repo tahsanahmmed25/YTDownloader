@@ -15,6 +15,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+---
+
+## [2.0.2] - 2026-04-29
+
+### Added
+- **Linux / Zorin OS support** — runs natively on any 64-bit Linux distro
+- **AppImage distribution** — single portable file for Linux, no installation needed
+- **GitHub Actions CI/CD** — automatically builds Windows installer + Linux AppImage on every version tag; no Windows machine required to ship Windows builds
+- `build_release.sh` — new Linux build script (PyInstaller → appimagetool → AppImage)
+- `ffmpeg_manager.py` — downloads BtbN static FFmpeg build on Linux (tar.xz), makes executable automatically
+- `ytdlp_exe_manager.py` — downloads `yt-dlp` binary (no .exe) on Linux, makes executable automatically
+- Platform helpers in `app_config.py`: `IS_WINDOWS`, `bin_name()`, `user_data_dir()`, `bin_dir()`
+- On Linux the app checks system PATH (`apt`-installed yt-dlp/ffmpeg) before auto-downloading its own copies
+- `_kill_browser()` now uses `pkill` on Linux (was Windows-only `taskkill`)
+- `NotReadyError` shows a friendly "yt-dlp is still setting up" toast instead of a raw traceback
+- Installer now shows a **Choose Install Directory** page so users can install to any drive (D:, E:, etc.)
+
+### Changed
+- `pyinstaller_common.py`: Windows-only imports (`ctypes.wintypes`, `keyring.backends.Windows`) guarded by platform check; Linux build uses `keyring.backends.SecretService` instead
+- `downloader.py`: `_find_local_binary()` now searches `bin_dir()` and uses platform-correct binary names (no hardcoded `.exe`)
+- `build_release.ps1`: PyArmor obfuscation is **off by default** (eliminates antivirus false positives); pass `-Obfuscate` flag to enable
+- Build script now automatically copies `yt-dlp.exe` + `ffmpeg.exe` into `dist\YTDownloader\` before Inno Setup runs
+
+### Fixed
+- Format selection changed from `height=N` (exact match) to `height<=N` — prevents silent failures when the exact requested resolution isn't available for a video
+- Removed stale `{localappdata}\YTDownloader` from `[UninstallDelete]` in `.iss` — uninstall now works correctly on non-C: drive installs
+
+---
+
 ## [2.0.1] - 2026-04-16
 
 ### Added
@@ -34,14 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - SQLite history operations now close database connections reliably
 - Format cache access is now guarded for concurrent use
 
+---
+
 ## [1.0.0] - 2026-03-17
 
 ### Added
 - Pause and resume functionality for interrupted downloads
 - Download queue with persistence across app restarts
-- Concurrent downloads (1-5 configurable)
+- Concurrent downloads (1–5 configurable)
 - System tray integration with show/quit options
-- Disk space validation before downloads (200MB safety buffer)
+- Disk space validation before downloads (200 MB safety buffer)
 - Download speed limiting (KB/s configurable, 0 = unlimited)
 - Real-time download progress with speed and size display
 - Library with search/filter by title
@@ -59,10 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## Version Support
 
 | Version | Status | Notes |
-|---------|--------|-------|
-| 2.0.1+ | Active | Current stable release |
+|---|---|---|
+| **2.0.2** | ✅ Active | Current stable — Windows + Linux |
+| 2.0.1 | Upgrade recommended | Windows only |
 | 1.0.0 | Upgrade recommended | Earlier public release |
-| 0.9.0 | EOL | No longer supported |
+| 0.9.0 | ❌ EOL | No longer supported |
 
 ---
 
@@ -70,23 +102,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 YTDownloader automatically checks for updates on startup. When an update is available:
 
-1. **Optional Update**: Will show notification, user can choose to update
-2. **Required Update**: Will prompt user to update before using the app
-3. **Auto-Download**: If enabled in Options, downloads silently in background
+1. **Optional Update** — shows a notification; you can choose to update later
+2. **Required Update** — prompts you to update before using the app
+3. **Silent background update** — yt-dlp and FFmpeg update themselves automatically once per day
 
-Users can also manually check for updates via Options → "Check Now" button.
+You can also manually check for app updates via **Preferences → Check for Updates**.
 
 ---
 
 ## Reporting Bugs
 
-Found a bug? Please help us improve by reporting it:
+Found a bug? Please help improve the app:
 
 1. Check [existing issues](https://github.com/tahsanahmmed25/YTDownloader/issues)
 2. Open a [new issue](https://github.com/tahsanahmmed25/YTDownloader/issues/new)
 3. Include:
-   - Windows version
-   - Error message (from logs)
+   - OS and version (e.g. "Zorin OS 17", "Windows 11")
+   - Error message (from logs or the app's error toast)
    - Steps to reproduce
    - Video URL (if applicable)
 
@@ -94,12 +126,12 @@ Found a bug? Please help us improve by reporting it:
 
 ## Development
 
-To run development version:
 ```bash
 git clone https://github.com/tahsanahmmed25/YTDownloader.git
 cd YTDownloader
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate          # Linux
+# venv\Scripts\activate           # Windows
+pip install PySide6 requests browser-cookie3 yt-dlp
 python app.py
 ```

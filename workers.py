@@ -13,7 +13,8 @@ from downloader import (
     get_playlist_entries,
     DownloadPaused,
     DownloadCancelled,
-    CookieLockError
+    CookieLockError,
+    NotReadyError,
 )
 from history_manager import save_history
 from app_config import THUMB_DIR, ensure_dir, local_tmp_dir
@@ -446,6 +447,9 @@ class DownloadWorker(QObject):
         except BaseException as e:
             if isinstance(e, CookieLockError):
                 self.cookie_lock.emit(self.task_id, e.browser_name, str(e))
+                return
+            if isinstance(e, NotReadyError):
+                self.error.emit(self.task_id, str(e))
                 return
             msg = str(e)
             if isinstance(e, DownloadPaused) or "DOWNLOAD_PAUSED" in msg:

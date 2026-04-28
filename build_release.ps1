@@ -1,5 +1,7 @@
 param(
-    [switch]$NoObfuscate
+    # Pass -Obfuscate to enable PyArmor code obfuscation.
+    # Obfuscation is OFF by default because it triggers AV false-positive warnings.
+    [switch]$Obfuscate
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,7 +59,8 @@ Ensure-PythonPackage "pyinstaller"
 
 $spec = "YTDownloader.spec"
 
-if (-not $NoObfuscate) {
+if ($Obfuscate) {
+    Write-Host "PyArmor obfuscation ENABLED (you passed -Obfuscate)."
     try {
         Ensure-PythonPackage "pyarmor"
         if (Test-Path "obf") {
@@ -73,10 +76,30 @@ if (-not $NoObfuscate) {
         }
         $spec = "YTDownloader.spec"
     }
+} else {
+    Write-Host "PyArmor obfuscation DISABLED (default). Pass -Obfuscate to enable."
 }
 
 Write-Host "Building spec: $spec"
 Invoke-Python -m PyInstaller --clean -y $spec
+
+# -----------------------------------------------------------------------
+# Copy runtime binaries into dist\YTDownloader\ so they are included by
+# both the PyInstaller COLLECT step and the Inno Setup [Files] section.
+# These files must be present BEFORE Inno Setup runs.
+# -----------------------------------------------------------------------
+$distApp = Join-Path $PSScriptRoot "dist\YTDownloader"
+$binaries = @("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe")
+foreach ($bin in $binaries) {
+    $src = Join-Path $PSScriptRoot $bin
+    $dst = Join-Path $distApp $bin
+    if (Test-Path $src) {
+        Write-Host "Copying $bin -> dist\YTDownloader\"
+        Copy-Item -Path $src -Destination $dst -Force
+    } else {
+        Write-Warning "$bin not found in project root ($src). Downloads may not work on a fresh install."
+    }
+}
 
 $preferredIscc = "F:\Installed Softwares\InnoSetup\ISCC.exe"
 $iscc = $null

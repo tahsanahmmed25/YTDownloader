@@ -35,6 +35,11 @@ class DownloadCancelled(Exception):
     pass
 
 
+class NotReadyError(Exception):
+    """Raised when a required binary (yt-dlp.exe) is not yet available."""
+    pass
+
+
 class CookieLockError(Exception):
     def __init__(self, browser_name, details=""):
         self.browser_name = browser_name
@@ -207,16 +212,32 @@ def _ensure_download_dir(path):
 
 
 def _find_local_binary(name):
-    candidates = []
-    which = shutil.which(name)
+    """Find a binary by name on the current platform.
+    Searches (in order): system PATH, bin_dir(), PyInstaller MEIPASS, exe dir, cwd.
+    Pass the base name without extension (e.g. 'yt-dlp', 'ffmpeg') —
+    this function adds the platform-correct suffix automatically.
+    """
+    from app_config import bin_dir, bin_name
+    platform_name = bin_name(name)   # adds .exe on Windows, nothing on Linux
+
+    # 1. System PATH
+    which = shutil.which(platform_name)
+    if not which and name != platform_name:
+        which = shutil.which(name)   # also try without suffix just in case
     if which and os.path.exists(which):
         return which
+
+    candidates = []
+    # 2. Auto-download bin_dir (yt-dlp/ffmpeg downloaded by manager modules)
+    candidates.append(os.path.join(bin_dir(), platform_name))
+    # 3. PyInstaller bundle
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", "")
         if meipass:
-            candidates.append(os.path.join(meipass, name))
-        candidates.append(os.path.join(os.path.dirname(sys.executable), name))
-    candidates.append(os.path.join(os.getcwd(), name))
+            candidates.append(os.path.join(meipass, platform_name))
+        candidates.append(os.path.join(os.path.dirname(sys.executable), platform_name))
+    # 4. Current working directory
+    candidates.append(os.path.join(os.getcwd(), platform_name))
 
     for path in candidates:
         if path and os.path.exists(path):
@@ -771,7 +792,7 @@ def _parse_progress_int(value):
 
 
 def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, cancel_check=None, legacy=False, minimal=False, oauth2_cb=None):
-    exe_path = _find_local_binary("yt-dlp.exe")
+    exe_path = _find_local_binary("yt-dlp")
     if not exe_path:
         raise RuntimeError("yt-dlp.exe not found")
 
@@ -1494,12 +1515,15 @@ def download_video(url,
 
     playlist_mode = download_playlist and _is_playlist_url(url)
     url = normalize_youtube_url(url, keep_playlist=playlist_mode)
-    ytdlp_exe = _find_local_binary("yt-dlp.exe")
+    ytdlp_exe = _find_local_binary("yt-dlp")
     if ytdlp_exe:
         _log.info("yt-dlp.exe detected at %s (cwd=%s); using subprocess download path.", ytdlp_exe, os.getcwd())
     else:
         _log.warning("yt-dlp.exe not found; subprocess download unavailable.")
-        raise RuntimeError("yt-dlp.exe not found. Please place it in the app folder.")
+        raise NotReadyError(
+            "yt-dlp is still setting up. Please wait a moment and try again.\n"
+            "If this keeps happening, restart the app."
+        )
 
     try:
         playlist_start = int(playlist_start or 1)
@@ -1569,7 +1593,7 @@ def download_video(url,
             if langs:
                 base_opts["subtitleslangs"] = langs
 
-    ffmpeg_path = _find_local_binary("ffmpeg.exe")
+    ffmpeg_path = _find_local_binary("ffmpeg")
     if ffmpeg_path:
         base_opts["ffmpeg_location"] = ffmpeg_path
 
@@ -1606,18 +1630,36 @@ def download_video(url,
              elif container_val == "webm":
                  return "bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best"
              return "bestvideo+bestaudio/best"
-        
+
         # Extract height from labels like "1080p (HD)" or "720p"
         import re
         m = re.search(r"(\d+)", q)
         h = m.group(1) if m else "1080"
-        
+
+        # Use height<= (not height=) so we pick the best available quality
+        # at or below the requested resolution instead of failing on exact match.
         if container_val == "mp4":
-            return f"bestvideo[height={h}][ext=mp4]+bestaudio[ext=m4a]/best[height={h}][ext=mp4]/best[height={h}]"
+            return (
+                f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]"
+                f"/best[height<={h}][ext=mp4]"
+                f"/bestvideo[height<={h}]+bestaudio"
+                f"/best[height<={h}]"
+                f"/best"
+            )
         elif container_val == "webm":
-            return f"bestvideo[height={h}][ext=webm]+bestaudio[ext=webm]/best[height={h}][ext=webm]/best[height={h}]"
-        
-        return f"bestvideo[height={h}]+bestaudio/best[height={h}]"
+            return (
+                f"bestvideo[height<={h}][ext=webm]+bestaudio[ext=webm]"
+                f"/best[height<={h}][ext=webm]"
+                f"/bestvideo[height<={h}]+bestaudio"
+                f"/best[height<={h}]"
+                f"/best"
+            )
+
+        return (
+            f"bestvideo[height<={h}]+bestaudio"
+            f"/best[height<={h}]"
+            f"/best"
+        )
 
     fmt_requested = _resolve_format_string(quality, container)
     fmt_best = _resolve_format_string("auto", container)

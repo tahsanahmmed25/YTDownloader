@@ -67,6 +67,7 @@ from ui.pages import PagesMixin
 from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker, FFmpegInstallWorker
 import queue_manager
 import ytdlp_exe_manager
+import ffmpeg_manager
 
 _log = get_logger()
 MAX_COOKIE_FILE_BYTES = 5 * 1024 * 1024
@@ -768,11 +769,29 @@ class Downloader(QMainWindow, PagesMixin):
         # Internal sentinel signals from background threads
         if title == "__ytdlp_ready__":
             self._ytdlp_exe_ready = True
-            self._show_toast("yt-dlp downloaded and ready!", variant="success", duration=4000)
+            self._show_toast("yt-dlp is up to date!", variant="success", duration=4000)
+            return
+        if title == "__ytdlp_updated__":
+            self._ytdlp_exe_ready = True
+            self._show_toast(f"yt-dlp updated to {message}!", variant="success", duration=5000)
             return
         if title == "__ytdlp_error__":
             self._show_toast(
-                f"yt-dlp download failed: {message}\nDownloads won't work until it's available.",
+                f"yt-dlp setup failed: {message}\nDownloads may not work.",
+                variant="error",
+                duration=8000
+            )
+            return
+        if title == "__ffmpeg_updated__":
+            self._ffmpeg_installed = True
+            self._show_toast(f"FFmpeg updated to {message}!", variant="success", duration=5000)
+            return
+        if title == "__ffmpeg_ready__":
+            self._ffmpeg_installed = True
+            return
+        if title == "__ffmpeg_error__":
+            self._show_toast(
+                f"FFmpeg setup failed: {message}\nVideo+audio merging may not work.",
                 variant="error",
                 duration=8000
             )
@@ -1445,12 +1464,17 @@ class Downloader(QMainWindow, PagesMixin):
         return "ffmpeg" in lowered and "not installed" in lowered
 
     def _find_ffmpeg(self):
+        """Find ffmpeg on the current platform."""
+        from app_config import bin_dir, bin_name
+        # 1. System PATH
         which = shutil.which("ffmpeg")
         if which and os.path.exists(which):
             return which
+        # 2. Auto-download location (bin_dir)
         candidates = [
-            os.path.join(app_dir(), "ffmpeg.exe"),
-            os.path.join(os.getcwd(), "ffmpeg.exe")
+            os.path.join(bin_dir(), bin_name("ffmpeg")),
+            os.path.join(app_dir(), bin_name("ffmpeg")),
+            os.path.join(os.getcwd(), bin_name("ffmpeg")),
         ]
         for path in candidates:
             if path and os.path.exists(path):
@@ -1458,9 +1482,19 @@ class Downloader(QMainWindow, PagesMixin):
         return None
 
     def _check_ffmpeg_on_startup(self):
-        if self._find_ffmpeg():
-            return
-        self._install_ffmpeg_background()
+        """Check for ffmpeg on startup; auto-update silently in background."""
+        def _on_done():
+            # Called from background thread — use sentinel to update UI on main thread
+            self.dialog_requested.emit("__ffmpeg_ready__", "", None)
+
+        def _on_error(msg):
+            _log.warning("FFmpeg background check failed: %s", msg)
+            self.dialog_requested.emit("__ffmpeg_error__", msg, None)
+
+        ffmpeg_manager.ensure_ffmpeg_background(
+            on_done=_on_done,
+            on_error=_on_error,
+        )
 
     def _install_ffmpeg_background(self):
         """Start FFmpeg installation in a background thread on first launch."""
@@ -1512,50 +1546,44 @@ class Downloader(QMainWindow, PagesMixin):
             return
         self._install_ffmpeg_background()
 
-    # ── yt-dlp.exe auto-download ──────────────────────────────────────────
+    # ── yt-dlp.exe auto-download / auto-update ───────────────────────────
 
     def _check_ytdlp_exe_on_startup(self):
-        """Check for yt-dlp.exe on startup; download/update in background."""
-        if ytdlp_exe_manager.is_exe_present():
-            self._ytdlp_exe_ready = True
-            _log.info("yt-dlp.exe already present at %s", ytdlp_exe_manager.get_exe_path())
-            # Still check for updates silently in background
-            ytdlp_exe_manager.ensure_ytdlp_exe_background(
-                on_done=lambda: _log.info("yt-dlp.exe is up to date."),
-                on_error=lambda e: _log.warning("yt-dlp.exe update check failed: %s", e),
+        """Check for yt-dlp.exe on startup; download if missing or update if outdated."""
+        first_run = not ytdlp_exe_manager.is_exe_present()
+
+        if first_run:
+            self._show_toast(
+                "Downloading yt-dlp for the first time... This may take a moment.",
+                variant="info",
+                duration=10000
             )
-            return
+        else:
+            self._ytdlp_exe_ready = True
+            _log.info("yt-dlp.exe present at %s; checking for updates...", ytdlp_exe_manager.get_exe_path())
 
-        # Not present — first run. Show toast and download.
-        self._show_toast(
-            "Downloading yt-dlp... This may take a moment on first launch.",
-            variant="info",
-            duration=8000
-        )
+        # Read current version before the update so we can detect if it changed
+        version_before = ytdlp_exe_manager._get_local_version()
 
-        def _progress(pct):
-            # Update toast text with live progress
-            try:
-                self.dialog_requested.emit(
-                    "__ytdlp_progress__", str(pct), None
-                )
-            except Exception:
-                pass
+        def _on_done():
+            self._ytdlp_exe_ready = True
+            version_after = ytdlp_exe_manager._get_local_version()
+            if version_after and version_after != version_before:
+                _log.info("yt-dlp.exe updated: %s -> %s", version_before or "?", version_after)
+                self.dialog_requested.emit("__ytdlp_updated__", version_after, None)
+            else:
+                _log.info("yt-dlp.exe is up to date (%s).", version_after or "?")
+                if first_run:
+                    self.dialog_requested.emit("__ytdlp_ready__", "", None)
+
+        def _on_error(msg):
+            _log.error("yt-dlp.exe setup failed: %s", msg)
+            self.dialog_requested.emit("__ytdlp_error__", msg, None)
 
         ytdlp_exe_manager.ensure_ytdlp_exe_background(
-            on_done=self._on_ytdlp_exe_ready,
-            on_error=self._on_ytdlp_exe_error,
+            on_done=_on_done,
+            on_error=_on_error,
         )
-
-    def _on_ytdlp_exe_ready(self):
-        self._ytdlp_exe_ready = True
-        _log.info("yt-dlp.exe ready at %s", ytdlp_exe_manager.get_exe_path())
-        # Signal back to UI thread via the existing queued dialog mechanism
-        self.dialog_requested.emit("__ytdlp_ready__", "", None)
-
-    def _on_ytdlp_exe_error(self, error_msg):
-        _log.error("yt-dlp.exe download failed: %s", error_msg)
-        self.dialog_requested.emit("__ytdlp_error__", error_msg, None)
 
     def _terms_text(self):
         return (
@@ -2050,28 +2078,49 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _kill_browser(self, name):
         try:
-            name_lower = name.lower()
-            if "chrome" in name_lower:
-                proc_name = "chrome.exe"
-            elif "edge" in name_lower:
-                proc_name = "msedge.exe"
-            elif "firefox" in name_lower:
-                proc_name = "firefox.exe"
-            elif "brave" in name_lower:
-                proc_name = "brave.exe"
-            elif "opera" in name_lower:
-                proc_name = "opera.exe"
-            elif "vivaldi" in name_lower:
-                proc_name = "vivaldi.exe"
-            else:
-                # Fallback: try the name directly
-                proc_name = f"{name_lower}.exe"
-            
             import subprocess
-            subprocess.run(["taskkill", "/F", "/IM", proc_name], capture_output=True, creationflags=0x08000000)
+            import sys as _sys
+            name_lower = name.lower()
+            if _sys.platform == "win32":
+                # Windows: taskkill by .exe process name
+                if "chrome" in name_lower:
+                    proc_name = "chrome.exe"
+                elif "edge" in name_lower:
+                    proc_name = "msedge.exe"
+                elif "firefox" in name_lower:
+                    proc_name = "firefox.exe"
+                elif "brave" in name_lower:
+                    proc_name = "brave.exe"
+                elif "opera" in name_lower:
+                    proc_name = "opera.exe"
+                elif "vivaldi" in name_lower:
+                    proc_name = "vivaldi.exe"
+                else:
+                    proc_name = f"{name_lower}.exe"
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", proc_name],
+                    capture_output=True,
+                    creationflags=0x08000000
+                )
+            else:
+                # Linux/macOS: pkill by process name (no .exe)
+                linux_map = {
+                    "chrome": "chrome",
+                    "edge": "msedge",
+                    "firefox": "firefox",
+                    "brave": "brave",
+                    "opera": "opera",
+                    "vivaldi": "vivaldi",
+                    "chromium": "chromium",
+                }
+                proc_name = next(
+                    (v for k, v in linux_map.items() if k in name_lower),
+                    name_lower
+                )
+                subprocess.run(["pkill", "-f", proc_name], capture_output=True)
             return True
         except Exception as e:
-            _log.error("Failed to kill browser %s: %s", name, e)
+            _log.warning("Failed to kill browser %s: %s", name, e)
             return False
 
     # ---------- DOWNLOAD ----------

@@ -1,6 +1,9 @@
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all
+
+_IS_WINDOWS = sys.platform == "win32"
 
 
 COMMON_HIDDEN_IMPORTS = [
@@ -19,7 +22,8 @@ COMMON_HIDDEN_IMPORTS = [
     "ssl",
     "hashlib",
     "ctypes",
-    "ctypes.wintypes",
+    # Windows-only — omitted on Linux builds
+    *(["ctypes.wintypes"] if _IS_WINDOWS else []),
     "PySide6",
     "PySide6.QtCore",
     "PySide6.QtGui",
@@ -36,7 +40,8 @@ COMMON_HIDDEN_IMPORTS = [
     "idna",
     "keyring",
     "keyring.backends",
-    "keyring.backends.Windows",
+    # Windows-only keyring backend — omitted on Linux builds
+    *(["keyring.backends.Windows"] if _IS_WINDOWS else ["keyring.backends.SecretService", "keyring.backends.Gnome"]),
     "keyring.backends.chainer",
     "keyring.credentials",
     "keyring.errors",
@@ -47,6 +52,7 @@ COMMON_HIDDEN_IMPORTS = [
     "zlib",
     "zipimport",
     "ytdlp_exe_manager",
+    "ffmpeg_manager",
     "downloader",
     "workers",
     "history_manager",
@@ -128,7 +134,8 @@ def make_spec_config(spec_dir, entry_script, pathex):
             "target_arch": None,
             "codesign_identity": None,
             "entitlements_file": None,
-            "icon": os.path.join(icon_dir, "download.ico"),
+            # Use .ico on Windows, .png on Linux
+            "icon": os.path.join(icon_dir, "download.ico" if _IS_WINDOWS else "download.png"),
         },
         "collect": {
             "strip": False,

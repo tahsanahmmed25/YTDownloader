@@ -1,10 +1,16 @@
 [Setup]
 AppName=YTDownloader
 AppVersion=2.0.1
+AppVerName=YTDownloader 2.0.1
 AppPublisher=Tahsan
 AppPublisherURL=https://github.com/tahsanahmmed25/YTDownloader
 AppSupportURL=https://github.com/tahsanahmmed25/YTDownloader/issues
 AppUpdatesURL=https://github.com/tahsanahmmed25/YTDownloader/releases
+AppCopyright=Copyright (C) 2024-2026 Tahsan
+VersionInfoVersion=2.0.1.0
+VersionInfoCompany=Tahsan
+VersionInfoDescription=YTDownloader - YouTube Video Downloader
+VersionInfoProductName=YTDownloader
 DefaultDirName={localappdata}\Programs\YTDownloader
 DefaultGroupName=YTDownloader
 OutputDir=dist_installer
@@ -17,6 +23,8 @@ WizardStyle=modern
 UninstallDisplayIcon={app}\YTDownloader.exe
 LicenseFile=LICENSE
 DisableProgramGroupPage=yes
+DisableDirPage=no
+DirExistsWarning=no
 CreateAppDir=yes
 ShowLanguageDialog=no
 SetupLogging=yes
@@ -26,6 +34,13 @@ DisableReadyPage=no
 [Files]
 ; Main application bundle (everything PyInstaller produced)
 Source: "dist\YTDownloader\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion createallsubdirs
+
+; yt-dlp.exe — required for all downloads (MUST be present alongside the app)
+Source: "yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; FFmpeg binaries — required for merging video+audio streams into MP4/MKV
+Source: "ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\YTDownloader"; Filename: "{app}\YTDownloader.exe"; IconFilename: "{app}\icons\download.ico"
@@ -40,4 +55,3 @@ Filename: "{app}\YTDownloader.exe"; Description: "Launch YTDownloader"; Flags: p
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.data"
-Type: filesandordirs; Name: "{localappdata}\YTDownloader"

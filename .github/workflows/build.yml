@@ -1,0 +1,192 @@
+name: Build — Windows & Linux
+
+on:
+  push:
+    branches: [main, master]
+    tags:     ['v*.*.*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  # ══════════════════════════════════════════════════════════════════════════
+  # LINUX — AppImage
+  # ══════════════════════════════════════════════════════════════════════════
+  build-linux:
+    name: Linux AppImage
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libfuse2 \
+            libxcb-xinerama0 libxcb-cursor0 \
+            libglib2.0-0 libdbus-1-3 \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libgl1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PySide6 requests browser-cookie3 yt-dlp
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --clean -y YTDownloader_linux.spec
+
+      - name: Download appimagetool
+        run: |
+          curl -L -o appimagetool-x86_64.AppImage \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          APPDIR="dist/YTDownloader.AppDir"
+          mkdir -p "$APPDIR/usr/bin"
+
+          # Copy PyInstaller bundle
+          cp -r dist/YTDownloader/. "$APPDIR/usr/bin/"
+
+          # Desktop entry
+          cat > "$APPDIR/YTDownloader.desktop" <<'EOF'
+          [Desktop Entry]
+          Name=YTDownloader
+          Exec=YTDownloader
+          Icon=YTDownloader
+          Type=Application
+          Categories=Network;Video;
+          Comment=Simple YouTube Downloader by Tahsan
+          EOF
+
+          # Icon
+          cp icons/download.png "$APPDIR/YTDownloader.png"
+
+          # AppRun
+          cat > "$APPDIR/AppRun" <<'APPRUN'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export PATH="$HERE/usr/bin:$PATH"
+          export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+          exec "$HERE/usr/bin/YTDownloader" "$@"
+          APPRUN
+          chmod +x "$APPDIR/AppRun"
+
+          mkdir -p dist_installer
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloader-linux-x86_64.AppImage"
+
+      - name: Upload Linux AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YTDownloader-linux-x86_64
+          path: dist_installer/YTDownloader-linux-x86_64.AppImage
+          retention-days: 30
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # WINDOWS — Inno Setup installer
+  # ══════════════════════════════════════════════════════════════════════════
+  build-windows:
+    name: Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PySide6 requests browser-cookie3 yt-dlp
+
+      - name: Download yt-dlp.exe
+        shell: pwsh
+        run: |
+          $url = (Invoke-RestMethod "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest").assets |
+            Where-Object { $_.name -eq "yt-dlp.exe" } |
+            Select-Object -ExpandProperty browser_download_url
+          Invoke-WebRequest -Uri $url -OutFile "yt-dlp.exe"
+          Write-Host "Downloaded yt-dlp.exe ($((Get-Item yt-dlp.exe).Length) bytes)"
+
+      - name: Download FFmpeg
+        shell: pwsh
+        run: |
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg-tmp" -Force
+          $src = Get-ChildItem -Path "ffmpeg-tmp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          Copy-Item $src.FullName "ffmpeg.exe"
+          $srcp = Get-ChildItem -Path "ffmpeg-tmp" -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
+          Copy-Item $srcp.FullName "ffprobe.exe"
+          Remove-Item "ffmpeg.zip"
+          Remove-Item "ffmpeg-tmp" -Recurse -Force
+          Write-Host "Downloaded ffmpeg.exe + ffprobe.exe"
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --clean -y YTDownloader.spec
+
+      - name: Copy binaries into dist
+        shell: pwsh
+        run: |
+          Copy-Item "yt-dlp.exe"   "dist\YTDownloader\yt-dlp.exe"   -Force
+          Copy-Item "ffmpeg.exe"   "dist\YTDownloader\ffmpeg.exe"   -Force
+          Copy-Item "ffprobe.exe"  "dist\YTDownloader\ffprobe.exe"  -Force
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "YTDownloader.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YTDownloader-windows-setup
+          path: dist_installer/YTDownloader-Setup.exe
+          retention-days: 30
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # RELEASE — only on version tags (v*.*.*)
+  # ══════════════════════════════════════════════════════════════════════════
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/YTDownloader-linux-x86_64/YTDownloader-linux-x86_64.AppImage
+            release-assets/YTDownloader-windows-setup/YTDownloader-Setup.exe

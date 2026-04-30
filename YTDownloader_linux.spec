@@ -19,6 +19,9 @@ a = Analysis(
     **cfg['analysis'],
 )
 
+# Prevent library conflicts with host GPU drivers by stripping bundled C++ stdlibs
+a.binaries = [x for x in a.binaries if not x[0].startswith('libstdc++.so') and not x[0].startswith('libgcc_s.so')]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(

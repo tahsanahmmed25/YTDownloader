@@ -10,7 +10,7 @@ def _setup_webengine_env():
     # Allow Chromium inside AppImage / restricted environments (no user namespace sandbox)
     flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
     if "--no-sandbox" not in flags:
-        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (flags + " --no-sandbox --disable-gpu-sandbox").strip()
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (flags + " --no-sandbox --disable-gpu-sandbox --disable-gpu --disable-software-rasterizer").strip()
 
     if not getattr(sys, "frozen", False):
         return  # dev environment — Qt finds its own process binary

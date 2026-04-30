@@ -30,6 +30,9 @@ COMMON_HIDDEN_IMPORTS = [
     "PySide6.QtWidgets",
     "PySide6.QtNetwork",
     "PySide6.QtSvg",
+    "PySide6.QtWebEngineWidgets",
+    "PySide6.QtWebEngineCore",
+    "PySide6.QtWebChannel",
     "shiboken6",
     "urllib3",
     "urllib3.util",
@@ -78,6 +81,7 @@ COMMON_HIDDEN_IMPORTS = [
     "ui.pages",
     "ui.widgets",
     "ui.dialogs",
+    "ui.auth_browser",
     "ui_style",
 ]
 

@@ -71,7 +71,7 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
 - **Light and dark themes**
 - **Two access modes:**
   - `Normal Mode` — for public videos (no cookies needed)
-  - `Restricted Mode` — for age-gated or members-only videos (uses your browser's session)
+  - `Restricted Mode` — for age-gated or members-only videos (uses your YouTube session)
 
 ---
 
@@ -88,13 +88,23 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
 
 ## 🔒 Restricted Mode (Cookie-based auth)
 
-Some videos require a YouTube login (age-restricted, members-only, private). To download these:
+Some videos require a YouTube login (age-restricted, members-only, private). To download these, go to **Preferences → Cookies** and choose one of three methods:
 
-1. Go to **Preferences → Cookies** in the app.
-2. Select your browser (Chrome, Firefox, Brave, etc.) — the app reads your local session.
-3. Enable **Restricted Mode** on the main page.
+### Option 1 — Connect your local browser (Easy)
+Select your browser (Chrome, Firefox, Brave, etc.) and click **Connect Browser**. The app reads your existing local session directly.
 
-> **Privacy:** Cookies never leave your computer. The app reads them locally to pass authentication to yt-dlp. Never share your exported cookie files with anyone.
+> **Linux tip:** Firefox is the most reliable choice on Linux. Chrome/Edge cookies use the GNOME system keyring which can sometimes block automated extraction.
+
+### Option 2 — Internal Login (Most Reliable 🌟)
+Click **Login to YouTube**. A built-in browser window opens — log in with your Google account, then click **Done — Save Cookies**. The app saves your session and uses it automatically. This method works 100% of the time on all platforms and bypasses all keyring/sandbox restrictions.
+
+### Option 3 — Manual Cookies File
+1. Install a cookies export extension in your browser (e.g. *Get cookies.txt LOCALLY*).
+2. Log in to YouTube, then export cookies in Netscape format as `cookies.txt`.
+3. In the Cookies tab, click **Set Cookies File** and select the file.
+4. Keep the file private — refresh it if it expires.
+
+> **Privacy:** Cookies never leave your computer. The app reads them locally to pass authentication to yt-dlp. Never share your cookies with anyone.
 
 ---
 
@@ -105,7 +115,7 @@ Some videos require a YouTube login (age-restricted, members-only, private). To 
 | OS | Any 64-bit distro (Zorin, Ubuntu 20.04+, Mint…) | Windows 10/11 (64-bit) |
 | CPU | x86_64 | x86_64 |
 | RAM | 512 MB | 512 MB |
-| Disk | 300 MB free | 300 MB free |
+| Disk | 500 MB free | 500 MB free |
 | Internet | Required | Required |
 
 ---
@@ -124,8 +134,11 @@ Some videos require a YouTube login (age-restricted, members-only, private). To 
 **FFmpeg merge failed**
 > Go to **Preferences** and click **Install FFmpeg**. Or on Linux: `sudo apt install ffmpeg`.
 
-**Download failed with "Sign in required"**
-> Enable **Restricted Mode** and connect a browser profile in the Cookies page.
+**Download failed with "Sign in required" or "Video unavailable"**
+> Enable **Restricted Mode** in the Cookies tab. Use **Option 2 (Internal Login)** for the most reliable result on all platforms.
+
+**"Failed to decrypt browser cookies" (Linux with Chrome/Edge)**
+> Chrome/Edge cookies on Linux use the GNOME system keyring, which can block automated extraction. Switch to **Firefox** in the browser selector, or use the **Internal Login** option instead.
 
 **Linux: AppImage won't open**
 > Make sure FUSE is installed: `sudo apt install libfuse2`
@@ -148,7 +161,7 @@ source venv/bin/activate          # Linux
 # venv\Scripts\activate           # Windows
 
 # 3. Install dependencies
-pip install PySide6 requests browser-cookie3 yt-dlp
+pip install -r requirements.txt
 
 # 4. Run the app
 python app.py
@@ -156,26 +169,29 @@ python app.py
 
 ### Building a release
 
-**Linux (AppImage):**
-```bash
-./build_release.sh
-# Output: dist_installer/YTDownloader-linux-x86_64.AppImage
-```
-
-**Windows (Inno Setup installer):**
-```powershell
-.\build_release.ps1
-# Output: dist_installer\YTDownloader-Setup.exe
-```
-
 **Automated (GitHub Actions — recommended):**
 ```bash
-git tag v2.0.3
-git push origin v2.0.3
+git tag v2.0.5
+git push origin v2.0.5
 # GitHub builds both Windows + Linux automatically and publishes a release
 ```
 
+**Linux (AppImage) — locally:**
+```bash
+pip install pyinstaller PySide6 PySide6-WebEngine requests browser-cookie3 yt-dlp
+python -m PyInstaller --clean -y YTDownloader_linux.spec
+# Then package the dist/ folder into an AppImage
+```
+
+**Windows (Inno Setup installer) — locally:**
+```powershell
+pip install pyinstaller PySide6 PySide6-WebEngine requests browser-cookie3 yt-dlp
+python -m PyInstaller --clean -y YTDownloader.spec
+# Then run YTDownloader.iss with Inno Setup
+```
+
 ---
+
 
 ## 📋 Changelog
 

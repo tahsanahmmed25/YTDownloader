@@ -22,6 +22,11 @@ def humanize_error(raw_message, cookies_loaded=False):
     msg = (raw_message or "").strip()
     lowered = msg.lower()
 
+    if "failed to decrypt cookie" in lowered:
+        return (
+            "Failed to decrypt browser cookies. On Linux, Chrome/Edge cookies "
+            "are often locked by the system keyring. Please use Firefox, which is much more reliable."
+        )
     if "yt-dlp is still setting up" in lowered or "still setting up" in lowered:
         return "yt-dlp is still setting up. Please wait a moment and try again."
     if "no module named" in lowered:

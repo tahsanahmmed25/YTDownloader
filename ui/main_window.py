@@ -3505,6 +3505,25 @@ class Downloader(QMainWindow, PagesMixin):
         self.update_cookie_indicator()
         self._show_message_dialog("Browser Auth", "Browser auth disconnected.")
 
+    def _open_internal_browser_login(self):
+        from ui.auth_browser import AuthBrowserDialog
+        dialog = AuthBrowserDialog(self)
+        dialog.cookies_extracted.connect(self._on_internal_cookies_extracted)
+        dialog.exec()
+
+    def _on_internal_cookies_extracted(self, cookie_path):
+        self.cookie_file_path = cookie_path
+        self.restricted_mode = True
+        self.settings.setValue("cookie_file_path", self.cookie_file_path)
+        self.settings.setValue("restricted_mode", True)
+        
+        # Disable browser auth if it was enabled, since we are using the explicit file now
+        self.browser_auth_enabled = False
+        self.settings.setValue("browser_auth_enabled", False)
+        
+        self.update_cookie_indicator()
+        self._show_message_dialog("Internal Login", "Successfully logged in and saved cookies!")
+
     def _cookie_is_valid(self, path):
         if not path or not os.path.exists(path):
             return False

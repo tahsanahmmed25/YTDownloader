@@ -627,6 +627,13 @@ class PagesMixin:
         auth_btn_row.addStretch(1)
         card_layout.addLayout(auth_btn_row)
 
+        import sys
+        if sys.platform.startswith("linux"):
+            linux_hint = QLabel("Tip: Firefox is the most reliable browser for cookie extraction on Linux.")
+            linux_hint.setObjectName("MutedText")
+            linux_hint.setWordWrap(True)
+            card_layout.addWidget(linux_hint)
+
         warn = QLabel("Do not share your cookies file with anyone.")
         warn.setObjectName("MutedText")
         warn.setWordWrap(True)
@@ -634,8 +641,28 @@ class PagesMixin:
         warn.setMinimumWidth(0)
         card_layout.addWidget(warn)
 
+        # Embedded browser section
+        internal_auth_title = QLabel("Internal login")
+        internal_auth_title.setObjectName("CardTitle")
+        internal_auth_title.setContentsMargins(0, 10, 0, 0)
+        card_layout.addWidget(internal_auth_title)
+        
+        internal_hint = QLabel("If automated extraction fails, use this built-in browser to log in securely.")
+        internal_hint.setObjectName("MutedText")
+        internal_hint.setWordWrap(True)
+        card_layout.addWidget(internal_hint)
+        
+        internal_btn_row = QHBoxLayout()
+        self.internal_login_btn = QPushButton("Login to YouTube")
+        self.internal_login_btn.setObjectName("GhostButton")
+        self.internal_login_btn.clicked.connect(self._open_internal_browser_login)
+        internal_btn_row.addWidget(self.internal_login_btn)
+        internal_btn_row.addStretch(1)
+        card_layout.addLayout(internal_btn_row)
+
         file_title = QLabel("Cookies file (optional)")
         file_title.setObjectName("CardTitle")
+        file_title.setContentsMargins(0, 10, 0, 0)
         card_layout.addWidget(file_title)
 
         btn_row = QHBoxLayout()

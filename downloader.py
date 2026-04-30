@@ -529,7 +529,17 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
     if lock_err:
         raise lock_err
 
+    logger = base_opts.get("logger")
+    cookie_warn = None
+    if logger and hasattr(logger, "warnings"):
+        for w in logger.warnings:
+            if "failed to decrypt cookie" in w.lower():
+                cookie_warn = w
+                break
+
     if last_err:
+        if cookie_warn:
+            raise RuntimeError(f"Cookie decryption failed: {cookie_warn}. Original error: {last_err}")
         raise last_err
     raise RuntimeError("Failed to extract video info")
 
@@ -1154,14 +1164,18 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
 
 
 class _SilentLogger:
+    def __init__(self):
+        self.warnings = []
+        self.errors = []
+
     def debug(self, msg):
         pass
 
     def warning(self, msg):
-        pass
+        self.warnings.append(str(msg))
 
     def error(self, msg):
-        pass
+        self.errors.append(str(msg))
 
 
 def _cookiefile_path(cookiefile=None):

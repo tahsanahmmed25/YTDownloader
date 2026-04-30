@@ -22,39 +22,66 @@ def humanize_error(raw_message, cookies_loaded=False):
     msg = (raw_message or "").strip()
     lowered = msg.lower()
 
-    if "failed to decrypt cookie" in lowered:
+    # ── Cookie / authentication failures ────────────────────────────────
+    if "failed to decrypt cookie" in lowered or "cookie decryption failed" in lowered:
         return (
-            "Failed to decrypt browser cookies. On Linux, Chrome/Edge cookies "
-            "are often locked by the system keyring. Please use Firefox, which is much more reliable."
+            "Failed to decrypt browser cookies.\n\n"
+            "On Linux, Chrome/Edge cookies are locked by the system keyring. "
+            "Options:\n"
+            "• Use Firefox instead (most reliable on Linux)\n"
+            "• Use 'Login to YouTube' (built-in browser) in the Cookies tab\n"
+            "• Export a cookies.txt file manually via a browser extension"
         )
+    if "secretstorage" in lowered or "jeepney" in lowered:
+        return (
+            "Browser cookie decryption libraries are missing on this system. "
+            "Try Firefox, or use 'Login to YouTube' in the Cookies tab for a reliable alternative."
+        )
+    if "could not find" in lowered and "cookies database" in lowered:
+        # e.g. "could not find opera cookies database in /home/.../.config/opera"
+        # Extract browser name from message if possible
+        import re as _re
+        m = _re.search(r"could not find (\w+) cookies", lowered)
+        browser = m.group(1).capitalize() if m else "That browser"
+        return (
+            f"{browser} is not installed or has no saved login.\n\n"
+            "Options:\n"
+            "• Switch to Firefox in the browser selector\n"
+            "• Use 'Login to YouTube' in the Cookies tab\n"
+            "• Or select a browser you are actually logged in to on YouTube"
+        )
+    if "dbus" in lowered or "secretservice" in lowered:
+        return (
+            "Could not access the system keyring to read browser cookies.\n\n"
+            "Options:\n"
+            "• Try Firefox (does not need the keyring)\n"
+            "• Use 'Login to YouTube' in the Cookies tab\n"
+            "• Export cookies.txt manually and load it via 'Set Cookies File'"
+        )
+
+    # ── yt-dlp setup ────────────────────────────────────────────────────
     if "yt-dlp is still setting up" in lowered or "still setting up" in lowered:
         return "yt-dlp is still setting up. Please wait a moment and try again."
     if "no module named" in lowered:
         return "A required component is missing. Please reinstall the app."
-    if "secretstorage" in lowered or "jeepney" in lowered:
-        return (
-            "Browser cookie decryption is not available on this system. "
-            "Try using Firefox instead — it works without extra system libraries on Linux."
-        )
-    if "could not find" in lowered and "cookies" in lowered:
-        # e.g. "could not find opera cookies database in ..."
-        return (
-            "The selected browser's profile was not found on this computer. "
-            "Make sure that browser is installed and has been opened at least once. "
-            "On Linux, Firefox is the most reliable choice."
-        )
-    if "dbus" in lowered or "secretservice" in lowered:
-        return (
-            "Could not access the system keyring to read browser cookies. "
-            "Try Firefox, or export a cookies.txt file manually and load it via 'Set Cookies File'."
-        )
-    if "ffmpeg" in lowered and ("not installed" in lowered or "required" in lowered):
-        return (
-            "FFmpeg is required to merge video and audio. "
-            "Install essentials from Options."
-        )
+
+    # ── Format / quality ─────────────────────────────────────────────────
     if "requested format is not available" in lowered:
-        return "That format/quality isn't available. Try Auto or a different quality."
+        if not cookies_loaded:
+            return (
+                "This video requires sign-in (age-restricted or members-only).\n\n"
+                "Go to Preferences → Cookies and choose one of:\n"
+                "• Connect Browser (select Firefox for best results on Linux)\n"
+                "• Login to YouTube (built-in browser — most reliable)\n"
+                "• Set Cookies File (manual export)"
+            )
+        return (
+            "That video format is not available at the selected quality. "
+            "Try Auto quality, or your browser auth may have expired — "
+            "reconnect in the Cookies tab."
+        )
+
+    # ── HTTP / network ────────────────────────────────────────────────────
     if "http error 403" in lowered or "forbidden" in lowered:
         hint = ""
         if not cookies_loaded:
@@ -64,9 +91,21 @@ def humanize_error(raw_message, cookies_loaded=False):
         if cookies_loaded:
             return (
                 "This video requires sign-in. Your current browser auth may be expired "
-                "or missing YouTube permissions. Reconnect and try again."
+                "or missing YouTube permissions. Reconnect in the Cookies tab and try again."
             )
-        return "This video requires sign-in. Enable Restricted Mode and connect your browser."
+        return (
+            "This video requires sign-in.\n\n"
+            "Go to Preferences → Cookies and use 'Login to YouTube' or 'Connect Browser'."
+        )
+
+    # ── FFmpeg ─────────────────────────────────────────────────────────────
+    if "ffmpeg" in lowered and ("not installed" in lowered or "required" in lowered):
+        return (
+            "FFmpeg is required to merge video and audio. "
+            "Install it from Options."
+        )
+
+    # ── Misc ────────────────────────────────────────────────────────────────
     if "file is empty" in lowered or "downloaded file is empty" in lowered:
         return "Download failed. Try again or switch format/quality."
     if "page needs to be reloaded" in lowered:

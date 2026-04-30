@@ -504,14 +504,31 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
                 with _YTDLP_LOCK:
                     with ytdlp.YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(url, download=False)
+                        # Capture any cookie-related warnings emitted by yt-dlp internals
+                        _check_ydl_cookie_warnings(ydl, base_opts)
             except Exception as e:
                 import traceback
                 tb = traceback.format_exc()
+                err_str = str(e).lower()
+
+                # ── Missing browser profile: skip this browser, try the next ──
+                # e.g. "could not find opera cookies database in /home/.../.config/opera"
+                if mode == "browser" and (
+                    "could not find" in err_str and "cookies database" in err_str
+                ):
+                    _log.warning(
+                        "Browser '%s' not found or not logged in — skipping. (%s)",
+                        value, str(e).split("\n")[0]
+                    )
+                    continue  # try next browser — do NOT mark as last_err
+
+                # ── Locked cookie DB ──
                 if "PermissionError" in tb or "[Errno 13]" in tb or "Could not copy" in tb:
-                     if mode == "browser":
-                         _log.warning("Cookie database locked for %s", value)
-                         lock_err = CookieLockError(value, str(e))
-                         continue
+                    if mode == "browser":
+                        _log.warning("Cookie database locked for %s", value)
+                        lock_err = CookieLockError(value, str(e))
+                        continue
+
                 last_err = e
                 continue
             score = _info_score(info)
@@ -529,17 +546,15 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
     if lock_err:
         raise lock_err
 
-    logger = base_opts.get("logger")
-    cookie_warn = None
-    if logger and hasattr(logger, "warnings"):
-        for w in logger.warnings:
-            if "failed to decrypt cookie" in w.lower():
-                cookie_warn = w
-                break
+    # Check captured cookie warnings from the logger
+    cookie_warn = _get_cookie_warning(base_opts)
 
     if last_err:
         if cookie_warn:
-            raise RuntimeError(f"Cookie decryption failed: {cookie_warn}. Original error: {last_err}")
+            raise RuntimeError(
+                f"Cookie decryption failed: {cookie_warn}. "
+                f"Original error: {last_err}"
+            )
         raise last_err
     raise RuntimeError("Failed to extract video info")
 
@@ -1176,6 +1191,48 @@ class _SilentLogger:
 
     def error(self, msg):
         self.errors.append(str(msg))
+
+
+# Patterns that indicate a cookie decryption or access failure
+_COOKIE_FAIL_MARKERS = (
+    "failed to decrypt cookie",
+    "secretstorage",
+    "could not decrypt",
+    "cannot decrypt",
+    "dbus",
+    "secretservice",
+    "no module named 'secretstorage'",
+    "no module named secretstorage",
+)
+
+
+def _get_cookie_warning(base_opts):
+    """Return the first cookie-related warning captured by the _SilentLogger, or None."""
+    logger = base_opts.get("logger")
+    if not (logger and hasattr(logger, "warnings")):
+        return None
+    for w in logger.warnings:
+        w_lower = w.lower()
+        if any(marker in w_lower for marker in _COOKIE_FAIL_MARKERS):
+            return w
+    for w in getattr(logger, "errors", []):
+        w_lower = w.lower()
+        if any(marker in w_lower for marker in _COOKIE_FAIL_MARKERS):
+            return w
+    return None
+
+
+def _check_ydl_cookie_warnings(ydl, base_opts):
+    """Pull any cookie warnings out of a live yt-dlp YoutubeDL instance
+    and store them in our _SilentLogger so they can be inspected later."""
+    logger = base_opts.get("logger")
+    if not (logger and hasattr(logger, "warnings")):
+        return
+    # yt-dlp stores its own _warning_list on some versions
+    for w in getattr(ydl, "_warning_list", []) or []:
+        w_str = str(w)
+        if any(marker in w_str.lower() for marker in _COOKIE_FAIL_MARKERS):
+            logger.warnings.append(w_str)
 
 
 def _cookiefile_path(cookiefile=None):

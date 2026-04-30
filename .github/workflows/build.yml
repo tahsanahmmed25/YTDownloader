@@ -50,6 +50,13 @@ jobs:
       - name: Build with PyInstaller
         run: python -m PyInstaller --clean -y YTDownloader_linux.spec
 
+      - name: Ensure QtWebEngineProcess is executable
+        run: |
+          # Find and chmod the Chromium helper process so it can be launched inside AppImage
+          find dist/YTDownloader -name "QtWebEngineProcess" -exec chmod +x {} \;
+          echo "QtWebEngineProcess executables:"
+          find dist/YTDownloader -name "QtWebEngineProcess" | xargs ls -lh 2>/dev/null || echo "(none found — WebEngine may not be bundled)"
+
       - name: Download appimagetool
         run: |
           curl -L -o appimagetool-x86_64.AppImage \

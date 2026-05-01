@@ -19,7 +19,8 @@ _YTDLP_CHECKED = False
 _YTDLP_MODULE = None
 _YTDLP_VERSION_FILE = "yt_dlp_version.txt"
 _YTDLP_LAST_CHECK_FILE = "yt_dlp_last_check.txt"
-_YTDLP_CHECK_INTERVAL = 24 * 60 * 60
+_YTDLP_CHECK_INTERVAL = 4 * 60 * 60   # check every 4 hours (was 24h) so stale versions get fixed fast
+_YTDLP_FORCE_UPDATE_DAYS = 30        # force-update if local version is this many days old
 _FORMAT_CACHE = {}
 _FORMAT_CACHE_LOCK = threading.Lock()
 
@@ -75,6 +76,23 @@ def _should_check_update(deps_dir):
         return True
 
 
+def _local_ytdlp_too_old(deps_dir):
+    """Return True if the local yt-dlp wheel version file is more than
+    _YTDLP_FORCE_UPDATE_DAYS old (based on mtime), indicating a stale install."""
+    version_path = os.path.join(deps_dir, _YTDLP_VERSION_FILE)
+    if not os.path.exists(version_path):
+        return True
+    try:
+        mtime = os.path.getmtime(version_path)
+        age_days = (time.time() - mtime) / 86400
+        if age_days > _YTDLP_FORCE_UPDATE_DAYS:
+            _log.info("yt-dlp local install is %.0f days old — forcing update", age_days)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _ensure_ytdlp_updated(force=False):
     deps_dir = _get_deps_dir()
     try:
@@ -96,7 +114,10 @@ def _ensure_ytdlp_updated(force=False):
             local_version = None
 
     if not force:
-        if not _should_check_update(deps_dir) and _local_ytdlp_present(deps_dir):
+        # Always update if the local install is very old, even if we checked recently
+        if _local_ytdlp_too_old(deps_dir):
+            _log.info("Forcing yt-dlp update: local version is too old")
+        elif not _should_check_update(deps_dir) and _local_ytdlp_present(deps_dir):
             return
 
     try:
@@ -1411,32 +1432,38 @@ def apply_restricted_mode_options(opts, cookiefile=None, browser_auth=None):
 def apply_client_fallback(opts, client):
     """Configure yt-dlp's YouTube player client.
 
-    Pass None to use yt-dlp's own default client selection, which is the most
-    up-to-date choice and handles Proof-of-Origin (PO) token negotiation
-    internally.  Pass a specific client name (e.g. 'ios', 'android') to force
+    Pass None to use yt-dlp's own default client selection.
+    Pass a specific client name (e.g. 'ios', 'android') to force
     a particular client that is known to work without PO tokens.
     """
     if client is None:
         # Remove any previous override — let yt-dlp choose its default.
         opts.pop("extractor_args", None)
     else:
-        opts["extractor_args"] = {"youtube": {"player_client": client}}
+        # Always pass as a list — some yt-dlp versions require it.
+        client_list = client if isinstance(client, list) else [client]
+        opts["extractor_args"] = {"youtube": {"player_client": client_list}}
     return opts
 
 
 def _client_fallbacks():
     """Ordered list of YouTube player clients to try.
 
-    None  = yt-dlp's own default (handles PO tokens, always tried first)
-    ios   = iOS player API — no PO token required
-    android = Android player API — no PO token required
-    tv_embedded = TV embedded player — no PO token required
+    'ios'         = iOS player API — no JS runtime / PO token required (FIRST)
+    'android'     = Android player — no PO token required
+    'tv_embedded' = TV embedded player — no PO token required
+    None          = yt-dlp's own default (requires JS runtime / deno for PO tokens)
 
-    The 'web' client is intentionally omitted: recent YouTube changes
-    require PO tokens for web-client anonymous requests, causing
-    'sign-in required' errors for public videos.
+    iOS is now FIRST because:
+    - YouTube changed in April 2025 to require PO tokens for the default 'web' client
+    - PO token generation requires a JS runtime (deno or node)
+    - AppImages and packaged builds typically don't include a JS runtime
+    - iOS client bypasses this requirement entirely and works everywhere
+
+    The 'web' client is intentionally omitted: it requires PO tokens which
+    in turn need a JS runtime, causing failures in packaged/frozen builds.
     """
-    return [None, "ios", "android", "tv_embedded"]
+    return ["ios", "android", "tv_embedded", None]
 
 
 def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True, prefer_no_auth=False):

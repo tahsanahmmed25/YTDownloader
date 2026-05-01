@@ -64,6 +64,28 @@ def humanize_error(raw_message, cookies_loaded=False):
         return "yt-dlp is still setting up. Please wait a moment and try again."
     if "no module named" in lowered:
         return "A required component is missing. Please reinstall the app."
+    if "no supported javascript runtime" in lowered or "js-runtimes" in lowered:
+        # yt-dlp warning about missing deno/node — app falls back to ios client automatically
+        return (
+            "yt-dlp could not find a JavaScript runtime (deno/node). "
+            "The app is automatically retrying with a compatible method — please wait."
+        )
+
+    # ── No downloadable formats ─────────────────────────────────────────
+    if "no video formats" in lowered or "no formats available" in lowered:
+        if not cookies_loaded:
+            return (
+                "No downloadable formats were found for this video.\n\n"
+                "This can happen if the video is:\n"
+                "\u2022 Private or geo-blocked in your region\n"
+                "\u2022 Age-restricted (needs sign-in) \u2014 go to Cookies tab and connect your browser\n"
+                "\u2022 A YouTube Short or live stream (try a different URL format)\n"
+                "\u2022 Temporarily unavailable on YouTube's end"
+            )
+        return (
+            "No downloadable formats were found. The video may be geo-blocked, private, "
+            "or your login session may have expired. Try reconnecting in the Cookies tab."
+        )
 
     # ── Format / quality ─────────────────────────────────────────────────
     if "requested format is not available" in lowered:
@@ -87,6 +109,11 @@ def humanize_error(raw_message, cookies_loaded=False):
         if not cookies_loaded:
             hint = " Try Restricted Mode and connect your browser in the Cookies tab."
         return "Access denied by YouTube." + hint
+    if "http error 429" in lowered or "too many requests" in lowered:
+        return (
+            "YouTube is rate-limiting your requests (too many downloads too fast). "
+            "Wait a few minutes and try again."
+        )
     if "sign in" in lowered or "login" in lowered or "age-restricted" in lowered:
         if cookies_loaded:
             return (

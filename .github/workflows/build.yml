@@ -39,8 +39,10 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PySide6 requests browser-cookie3 yt-dlp
+          # Always install the latest yt-dlp — important because YouTube changes APIs frequently
+          pip install --upgrade pyinstaller PySide6 requests browser-cookie3 yt-dlp
           pip install secretstorage jeepney cryptography
+          python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
       - name: Build with PyInstaller
         run: python -m PyInstaller --clean -y YTDownloader_linux.spec
@@ -113,7 +115,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PySide6 requests browser-cookie3 yt-dlp
+          # Always install the latest yt-dlp — important because YouTube changes APIs frequently
+          pip install --upgrade pyinstaller PySide6 requests browser-cookie3 yt-dlp
+          python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
       - name: Download yt-dlp.exe
         shell: pwsh

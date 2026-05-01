@@ -16,6 +16,7 @@ YouTube to reject even public video requests.
 """
 
 import os
+import sys
 import time
 import logging
 
@@ -121,6 +122,11 @@ def save_cookies_from_browser(browser_name: str) -> str:
     }
 
     auto_order = ["chrome", "firefox", "edge", "brave", "opera", "chromium"]
+    # On Linux, Firefox does NOT need the system keyring to decrypt cookies,
+    # making it far more reliable than Chrome/Edge/Brave in non-desktop environments.
+    # Reorder so Firefox is tried first on Linux.
+    if sys.platform.startswith("linux"):
+        auto_order = ["firefox", "chrome", "edge", "brave", "opera", "chromium"]
     names_to_try = auto_order if browser_name == "auto" else [browser_name.lower()]
 
     best_collected: dict = {}          # (domain, name) → cookie
@@ -163,11 +169,26 @@ def save_cookies_from_browser(browser_name: str) -> str:
             last_err = exc
 
     if best_auth_count < _MIN_AUTH_COOKIES:
+        # Check if the failure was due to a decryption error (Linux keyring issue)
+        _is_linux = sys.platform.startswith("linux")
+        _decryption_keywords = ("decrypt", "dbus", "secretstorage", "secretservice", "keyring")
+        _decrypt_failed = last_err and any(k in str(last_err).lower() for k in _decryption_keywords)
+
+        if _is_linux and _decrypt_failed:
+            raise RuntimeError(
+                "Your browser (likely Chrome or Edge) uses the system keyring to encrypt "
+                "cookies, and this app cannot access it on Linux without the keyring service running.\n\n"
+                "\u2022 Recommended fix: Use Firefox instead\n"
+                "  Firefox stores cookies without keyring encryption and works reliably.\n"
+                "  Steps: Open Firefox \u2192 Log in to YouTube \u2192 Come back and click \u2018I\u2019m Logged In\u2019.\n\n"
+                "\u2022 Alternative: In the Cookies tab, select \u2018Firefox\u2019 from the Browser drop-down,\n"
+                "  then click \u2018Connect Browser\u2019."
+            )
         detail = f"\n\nTechnical detail: {last_err}" if last_err else ""
         raise RuntimeError(
             "No YouTube login cookies were found in any browser.\n\n"
             "Please make sure you are fully logged in to YouTube in your "
-            "browser (Chrome, Firefox, etc.) and try again.\n\n"
+            "browser (Firefox is most reliable on Linux) and try again.\n\n"
             "If you recently logged in, close and reopen your browser once "
             f"to ensure cookies are saved to disk.{detail}"
         )

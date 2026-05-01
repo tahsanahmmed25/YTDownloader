@@ -3574,7 +3574,46 @@ class Downloader(QMainWindow, PagesMixin):
         self.settings.setValue("browser_auth_enabled", True)
         self.settings.setValue("restricted_mode", True)
         self.update_cookie_indicator()
-        self._show_message_dialog("Browser Auth", "Browser auth connected.")
+
+        # ── Smoke-test: verify we can actually extract cookies from this browser ──
+        # Run in a background thread so the UI stays responsive.
+        self._show_toast("Testing browser connection…", variant="info", duration=3000)
+        import threading
+        def _test_connection():
+            from PySide6.QtWidgets import QMessageBox
+            try:
+                from ui.session_manager import save_cookies_from_browser, get_auth_cookie_names_in_file
+                cookie_path = save_cookies_from_browser(source)
+                auth_names = get_auth_cookie_names_in_file(cookie_path)
+                n_auth = len(auth_names)
+                if n_auth > 0:
+                    self._show_dialog_async(
+                        "Browser Connected \u2705",
+                        f"Successfully connected to {source.title()}.\n"
+                        f"{n_auth} YouTube auth cookie(s) found.\n\n"
+                        "Age-restricted and members-only videos can now be downloaded.",
+                        QMessageBox.Information
+                    )
+                else:
+                    # Cookies extracted but no auth cookies — user not logged in
+                    self._show_dialog_async(
+                        "Browser Connected \u2014 Not Logged In",
+                        f"Connected to {source.title()}, but no YouTube login cookies were found.\n\n"
+                        "Please log in to YouTube in your browser, then click 'Connect Browser' again.",
+                        QMessageBox.Warning
+                    )
+            except Exception as exc:
+                err = str(exc)
+                _log.warning("Browser auth smoke-test failed for %s: %s", source, err)
+                self._show_dialog_async(
+                    "Browser Connection Failed",
+                    err,
+                    QMessageBox.Warning
+                )
+        t = threading.Thread(target=_test_connection, daemon=True)
+        t.start()
+
+
 
     def _disconnect_browser_auth(self):
         self.browser_auth_enabled = False

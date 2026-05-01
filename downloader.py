@@ -479,7 +479,8 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
         cookiefile,
         browser_auth,
         allow_fallback=True,
-        prefer_no_auth=False  # try authenticated first, fall back to no-auth for public videos
+        prefer_no_auth=True   # try no-auth first so public videos always work;
+                              # cookies are the second attempt for restricted videos
     )
     for client in _client_fallbacks():
         if (time.time() - started_at) >= max_probe_seconds:
@@ -1241,16 +1242,44 @@ def _check_ydl_cookie_warnings(ydl, base_opts):
 
 
 def _cookiefile_path(cookiefile=None):
-    if cookiefile and os.path.exists(cookiefile):
-        try:
-            size = os.path.getsize(cookiefile)
-        except OSError:
-            size = -1
-        _log.info("Cookie file resolved: %s (%d bytes)", cookiefile, size)
-        return cookiefile
-    if cookiefile:
+    """Resolve *cookiefile* to an absolute path, validating it contains real cookies.
+
+    Returns None (do not pass cookies) if:
+    - path is empty / None
+    - file does not exist on disk
+    - file contains no actual cookie rows (e.g. header-only file)
+    """
+    if not cookiefile:
+        return None
+    if not os.path.exists(cookiefile):
         _log.warning("Cookie file specified but not found on disk: %s", cookiefile)
-    return None
+        return None
+    # Validate the file actually has cookie rows (not just the Netscape header).
+    # A real Netscape cookies.txt row has 7 tab-separated fields.
+    has_rows = False
+    try:
+        with open(cookiefile, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if len(stripped.split("\t")) >= 7:
+                    has_rows = True
+                    break
+    except OSError:
+        pass
+    if not has_rows:
+        _log.warning(
+            "Cookie file %s exists but contains no valid cookie rows — skipping",
+            cookiefile
+        )
+        return None
+    try:
+        size = os.path.getsize(cookiefile)
+    except OSError:
+        size = -1
+    _log.info("Cookie file resolved: %s (%d bytes)", cookiefile, size)
+    return cookiefile
 
 
 def build_base_options(timeout=10, noplaylist=True, skip_download=True, logger=None):

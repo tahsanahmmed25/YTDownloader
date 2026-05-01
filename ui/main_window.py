@@ -123,16 +123,21 @@ class Downloader(QMainWindow, PagesMixin):
             self.cookie_file = ""
             self.settings.remove("cookie_file")
 
-        # Auto-restore managed YouTube session (from the system-browser login flow)
+        # Auto-restore managed YouTube session (from the system-browser login flow).
+        # Only restore if the file actually contains real YouTube auth cookies.
         if not self.cookie_file:
             from ui.session_manager import load_session
-            restored = load_session()
+            restored = load_session()   # returns '' if file has no auth cookies
             if restored:
                 self.cookie_file = restored
                 self.settings.setValue("cookie_file", restored)
                 if not self.restricted_mode:
                     self.restricted_mode = True
                     self.settings.setValue("restricted_mode", True)
+                _log.info("Auto-restored YouTube session from %s", restored)
+            else:
+                # Clear any stale cookie_file reference that might linger in settings
+                self.settings.remove("cookie_file")
 
 
         self.download_dir = self.settings.value("download_dir", "", type=str)
@@ -3571,7 +3576,33 @@ class Downloader(QMainWindow, PagesMixin):
         self._update_yt_login_ui("waiting")
 
     def _on_yt_login_success(self, cookie_path: str):
-        """Cookie extraction succeeded — wire the path into the download pipeline."""
+        """Cookie extraction completed — validate auth cookies before wiring in."""
+        from ui.session_manager import get_auth_cookie_names_in_file
+        auth_cookies = get_auth_cookie_names_in_file(cookie_path)
+        if not auth_cookies:
+            # Extraction "succeeded" but only got tracking/analytics cookies —
+            # not real login cookies.  Treat this as a login failure.
+            _log.warning(
+                "_on_yt_login_success: cookie file %s has no auth cookies — "
+                "user was probably not logged in to YouTube in their browser",
+                cookie_path
+            )
+            self._update_yt_login_ui("failed")
+            self._show_error_dialog(
+                "Login Failed",
+                "Cookies were extracted from your browser, but no YouTube login "
+                "cookies were found.\n\n"
+                "Please make sure you are fully logged in to YouTube in your "
+                "browser, then try again.\n\n"
+                "Tip: After logging in, wait a few seconds and then click "
+                "'I\u2019m Logged In \u2713'."
+            )
+            return
+
+        _log.info(
+            "_on_yt_login_success: found auth cookies %s in %s",
+            auth_cookies, cookie_path
+        )
         self.cookie_file = cookie_path
         self.settings.setValue("cookie_file", cookie_path)
         self.restricted_mode = True
@@ -3582,10 +3613,11 @@ class Downloader(QMainWindow, PagesMixin):
         self.update_cookie_indicator()
         self._update_yt_login_ui("done")
         self._show_message_dialog(
-            "Logged In",
+            "Logged In \u2705",
             "Successfully logged in to YouTube!\n"
             "Age-restricted and members-only videos can now be downloaded."
         )
+
 
     def _on_yt_login_failed(self, error: str):
         self._update_yt_login_ui("failed")
@@ -3629,6 +3661,8 @@ class Downloader(QMainWindow, PagesMixin):
 
 
     def _cookie_is_valid(self, path):
+        """Return True only if *path* is a valid, non-empty Netscape cookies file
+        that contains at least one actual cookie row."""
         if not path or not os.path.exists(path):
             return False
         try:
@@ -3637,7 +3671,19 @@ class Downloader(QMainWindow, PagesMixin):
             return False
         if size <= 0 or size > MAX_COOKIE_FILE_BYTES:
             return False
-        return True
+        # Require at least one real cookie row (7 tab-separated fields).
+        # This rejects header-only files that would confuse yt-dlp.
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    s = line.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    if len(s.split("\t")) >= 7:
+                        return True
+        except Exception:
+            pass
+        return False
 
     def show_cookies_help(self):
         self._show_message_dialog(

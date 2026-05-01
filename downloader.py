@@ -889,9 +889,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
     if proxy:
         cmd.extend(["--proxy", str(proxy)])
 
-    if ydl_opts.get("use_oauth2"):
-        cmd.append("--auth-type")
-        cmd.append("oauth2")
+    # Note: --auth-type oauth2 has been removed; it conflicts with cookie-based
+    # authentication and is not needed for standard cookie/browser-auth flows.
 
     if not minimal:
         extractor_args = ydl_opts.get("extractor_args") or {}
@@ -1410,6 +1409,7 @@ def apply_restricted_mode_options(opts, cookiefile=None, browser_auth=None):
 
 
 def apply_client_fallback(opts, client):
+    # client is a string like "android" / "web", or None for the auto bundle
     if client:
         opts["extractor_args"] = {"youtube": {"player_client": f"{client},web"}}
     else:
@@ -1418,7 +1418,10 @@ def apply_client_fallback(opts, client):
 
 
 def _client_fallbacks():
-    return [["android"], ["ios"], ["tv"], ["web"], None]
+    # Ordered from most-reliable to broadest fallback.
+    # Use plain strings, not lists, so apply_client_fallback produces
+    # valid player_client values (e.g. "web,web" not "['web'],web").
+    return ["web", "android", "tv", None]
 
 
 def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True, prefer_no_auth=False):
@@ -1493,21 +1496,24 @@ def _is_cookie_error(msg):
 
 
 def _requires_auth(msg):
+    """Return True ONLY when the error definitively indicates authentication is needed.
+
+    Deliberately narrow: generic errors like 'unavailable' or 'watch on youtube'
+    can arise from rate-limiting, invalid player clients, geo-blocks, etc. — and
+    must NOT trigger an automatic switch to cookie-auth for public videos.
+    """
     lowered = (msg or "").lower()
-    markers = (
+    definitive_markers = (
         "please sign in",
         "requires sign-in",
         "requires login",
+        "sign in to confirm your age",
         "confirm your age",
         "members only",
-        "private video",
         "this video is private",
         "account is required",
-        "sign in to confirm your age",
-        "this video is unavailable",
-        "watch video on youtube",
     )
-    return any(m in lowered for m in markers)
+    return any(m in lowered for m in definitive_markers)
 
 
 def _extract_info_with_cookies(url, base_opts, cookiefile=None):
@@ -1745,7 +1751,8 @@ def download_video(url,
     if cookiefile or browser_auth:
         restricted_opts = dict(base_opts)
         apply_restricted_mode_options(restricted_opts, cookiefile=cookiefile, browser_auth=browser_auth)
-        restricted_opts["use_oauth2"] = True
+        # NOTE: do NOT set use_oauth2 here — OAuth2 is an entirely separate flow
+        # and conflicts with cookie-based auth; it breaks downloads for public videos.
 
     container = (container or "auto").lower()
     merge_fmt = None

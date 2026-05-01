@@ -90,13 +90,20 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
 
 Some videos require a YouTube login (age-restricted, members-only, private). To download these, go to **Preferences → Cookies** and choose one of three methods:
 
-### Option 1 — Connect your local browser (Easy)
+### Option 1 — Login to YouTube (Most Reliable 🌟)
+1. Click **Open YouTube Login** — your default system browser opens to the Google sign-in page.
+2. Log in to your Google/YouTube account normally.
+3. Return to YTDownloader and click **I'm Logged In ✓**.
+4. The app automatically extracts your session cookies in the background. The status shows **✅ Logged in** when complete.
+
+Your session is saved and automatically restored next time you open the app. Click **Logout** to clear it.
+
+> **Why this works everywhere:** You log in using your own browser — no embedded Chromium, no sandbox restrictions, no GPU driver conflicts. Works 100% on Linux, Windows, and all AppImage environments.
+
+### Option 2 — Connect your local browser
 Select your browser (Chrome, Firefox, Brave, etc.) and click **Connect Browser**. The app reads your existing local session directly.
 
 > **Linux tip:** Firefox is the most reliable choice on Linux. Chrome/Edge cookies use the GNOME system keyring which can sometimes block automated extraction.
-
-### Option 2 — Internal Login (Most Reliable 🌟)
-Click **Login to YouTube**. A built-in browser window opens — log in with your Google account, then click **Done — Save Cookies**. The app saves your session and uses it automatically. This method works 100% of the time on all platforms and bypasses all keyring/sandbox restrictions.
 
 ### Option 3 — Manual Cookies File
 1. Install a cookies export extension in your browser (e.g. *Get cookies.txt LOCALLY*).

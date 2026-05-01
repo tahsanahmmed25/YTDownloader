@@ -641,24 +641,48 @@ class PagesMixin:
         warn.setMinimumWidth(0)
         card_layout.addWidget(warn)
 
-        # Embedded browser section
-        internal_auth_title = QLabel("Internal login")
-        internal_auth_title.setObjectName("CardTitle")
-        internal_auth_title.setContentsMargins(0, 10, 0, 0)
-        card_layout.addWidget(internal_auth_title)
-        
-        internal_hint = QLabel("If automated extraction fails, use this built-in browser to log in securely.")
-        internal_hint.setObjectName("MutedText")
-        internal_hint.setWordWrap(True)
-        card_layout.addWidget(internal_hint)
-        
-        internal_btn_row = QHBoxLayout()
-        self.internal_login_btn = QPushButton("Login to YouTube")
-        self.internal_login_btn.setObjectName("GhostButton")
-        self.internal_login_btn.clicked.connect(self._open_internal_browser_login)
-        internal_btn_row.addWidget(self.internal_login_btn)
-        internal_btn_row.addStretch(1)
-        card_layout.addLayout(internal_btn_row)
+        # ── System browser login section ──────────────────────────────────
+        yt_login_title = QLabel("Login to YouTube")
+        yt_login_title.setObjectName("CardTitle")
+        yt_login_title.setContentsMargins(0, 10, 0, 0)
+        card_layout.addWidget(yt_login_title)
+
+        yt_login_hint = QLabel(
+            "Open YouTube in your system browser, log in, then click "
+            "\u2018I\u2019m Logged In\u2019. Cookies are extracted automatically."
+        )
+        yt_login_hint.setObjectName("MutedText")
+        yt_login_hint.setWordWrap(True)
+        card_layout.addWidget(yt_login_hint)
+
+        # Status indicator
+        self.yt_login_status_label = QLabel("Status: Not logged in")
+        self.yt_login_status_label.setObjectName("MutedText")
+        self.yt_login_status_label.setWordWrap(True)
+        card_layout.addWidget(self.yt_login_status_label)
+
+        yt_btn_row = QHBoxLayout()
+
+        self.yt_open_login_btn = QPushButton("\U0001f310  Open YouTube Login")
+        self.yt_open_login_btn.setObjectName("GhostButton")
+        self.yt_open_login_btn.clicked.connect(self._yt_open_login)
+
+        self.yt_confirm_login_btn = QPushButton("\u2713  I\u2019m Logged In")
+        self.yt_confirm_login_btn.setObjectName("GhostButton")
+        self.yt_confirm_login_btn.setEnabled(False)
+        self.yt_confirm_login_btn.clicked.connect(self._yt_confirm_login)
+
+        self.yt_logout_btn = QPushButton("Logout")
+        self.yt_logout_btn.setObjectName("GhostButton")
+        self.yt_logout_btn.clicked.connect(self._yt_logout)
+
+        yt_btn_row.addWidget(self.yt_open_login_btn)
+        yt_btn_row.addWidget(self.yt_confirm_login_btn)
+        yt_btn_row.addWidget(self.yt_logout_btn)
+        yt_btn_row.addStretch(1)
+        card_layout.addLayout(yt_btn_row)
+        # ─────────────────────────────────────────────────────────────────
+
 
         file_title = QLabel("Cookies file (optional)")
         file_title.setObjectName("CardTitle")

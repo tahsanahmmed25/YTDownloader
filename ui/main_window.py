@@ -123,6 +123,18 @@ class Downloader(QMainWindow, PagesMixin):
             self.cookie_file = ""
             self.settings.remove("cookie_file")
 
+        # Auto-restore managed YouTube session (from the system-browser login flow)
+        if not self.cookie_file:
+            from ui.session_manager import load_session
+            restored = load_session()
+            if restored:
+                self.cookie_file = restored
+                self.settings.setValue("cookie_file", restored)
+                if not self.restricted_mode:
+                    self.restricted_mode = True
+                    self.settings.setValue("restricted_mode", True)
+
+
         self.download_dir = self.settings.value("download_dir", "", type=str)
         if not self.download_dir or not os.path.isdir(self.download_dir):
             self.download_dir = _default_download_dir()
@@ -3505,24 +3517,102 @@ class Downloader(QMainWindow, PagesMixin):
         self.update_cookie_indicator()
         self._show_message_dialog("Browser Auth", "Browser auth disconnected.")
 
-    def _open_internal_browser_login(self):
-        from ui.auth_browser import AuthBrowserDialog
-        dialog = AuthBrowserDialog(self)
-        dialog.cookies_extracted.connect(self._on_internal_cookies_extracted)
-        dialog.exec()
+    # ── YouTube system-browser login ──────────────────────────────────────
 
-    def _on_internal_cookies_extracted(self, cookie_path):
-        self.cookie_file_path = cookie_path
+    def _ensure_auth_controller(self):
+        """Lazily create the AuthController (keeps it off the import path until needed)."""
+        if not hasattr(self, "_auth_controller") or self._auth_controller is None:
+            from ui.auth_controller import AuthController
+            self._auth_controller = AuthController(parent=self)
+            self._auth_controller.login_started.connect(self._on_yt_login_started)
+            self._auth_controller.login_success.connect(self._on_yt_login_success)
+            self._auth_controller.login_failed.connect(self._on_yt_login_failed)
+            self._auth_controller.state_changed.connect(self._on_yt_login_state_changed)
+
+    def _yt_open_login(self):
+        """User clicked 'Open YouTube Login' — open system browser."""
+        self._ensure_auth_controller()
+        # Browser to extract cookies from mirrors the 'Connect Browser' selector
+        browser_name = getattr(self, "browser_auth_source", "") or "auto"
+        self._auth_controller.start_login(browser_name=browser_name)
+
+    def _yt_confirm_login(self):
+        """User clicked 'I'm Logged In' — trigger background cookie extraction."""
+        if hasattr(self, "_auth_controller") and self._auth_controller:
+            self._auth_controller.confirm_logged_in()
+
+    def _yt_logout(self):
+        """User clicked 'Logout' — clear the managed session."""
+        from ui.session_manager import clear_session
+        clear_session()
+        self.cookie_file = ""
+        self.settings.remove("cookie_file")
+        self.restricted_mode = False
+        self.settings.setValue("restricted_mode", False)
+        self.update_cookie_indicator()
+        self._update_yt_login_ui("idle")
+        self._show_message_dialog("Logged Out", "YouTube session cleared.")
+
+    def _on_yt_login_started(self):
+        self._update_yt_login_ui("waiting")
+
+    def _on_yt_login_success(self, cookie_path: str):
+        """Cookie extraction succeeded — wire the path into the download pipeline."""
+        self.cookie_file = cookie_path
+        self.settings.setValue("cookie_file", cookie_path)
         self.restricted_mode = True
-        self.settings.setValue("cookie_file_path", self.cookie_file_path)
         self.settings.setValue("restricted_mode", True)
-        
-        # Disable browser auth if it was enabled, since we are using the explicit file now
+        # Disable browser-auth mode; we now use the explicit cookies file
         self.browser_auth_enabled = False
         self.settings.setValue("browser_auth_enabled", False)
-        
         self.update_cookie_indicator()
-        self._show_message_dialog("Internal Login", "Successfully logged in and saved cookies!")
+        self._update_yt_login_ui("done")
+        self._show_message_dialog(
+            "Logged In",
+            "Successfully logged in to YouTube!\n"
+            "Age-restricted and members-only videos can now be downloaded."
+        )
+
+    def _on_yt_login_failed(self, error: str):
+        self._update_yt_login_ui("failed")
+        from errors import humanize_error
+        self._show_error_dialog("Login Failed", humanize_error(error))
+
+    def _on_yt_login_state_changed(self, state: str):
+        self._update_yt_login_ui(state)
+
+    def _update_yt_login_ui(self, state: str):
+        """Sync the Login-to-YouTube button states and status label with *state*."""
+        # Widgets may not exist if the cookies page hasn't been rendered yet
+        open_btn    = getattr(self, "yt_open_login_btn",    None)
+        confirm_btn = getattr(self, "yt_confirm_login_btn", None)
+        logout_btn  = getattr(self, "yt_logout_btn",        None)
+        status_lbl  = getattr(self, "yt_login_status_label", None)
+
+        labels = {
+            "idle":       "Status: Not logged in",
+            "waiting":    "Status: Waiting — log in to YouTube in your browser, then click 'I'm Logged In \u2713'",
+            "extracting": "Status: Extracting cookies\u2026 please wait",
+            "done":       "Status: \u2705 Logged in",
+            "failed":     "Status: Login failed. Please try again.",
+        }
+
+        if status_lbl:
+            status_lbl.setText(labels.get(state, ""))
+
+        # Open button: enabled unless actively extracting or waiting for user
+        if open_btn:
+            open_btn.setEnabled(state not in ("extracting",))
+
+        # Confirm button: only enabled while we are "waiting" for the user
+        if confirm_btn:
+            confirm_btn.setEnabled(state == "waiting")
+
+        # Logout always enabled (no-op when already logged out)
+        if logout_btn:
+            logout_btn.setEnabled(True)
+
+
 
     def _cookie_is_valid(self, path):
         if not path or not os.path.exists(path):

@@ -4,34 +4,6 @@ import os
 import traceback
 import threading
 
-# ── QtWebEngine MUST have its env vars set before QApplication is created ──
-# When frozen (AppImage / .exe), locate QtWebEngineProcess next to the bundle.
-def _setup_webengine_env():
-    # Allow Chromium inside AppImage / restricted environments (no user namespace sandbox)
-    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
-    if "--no-sandbox" not in flags:
-        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (flags + " --no-sandbox --disable-gpu-sandbox --disable-gpu --disable-software-rasterizer").strip()
-
-    if not getattr(sys, "frozen", False):
-        return  # dev environment — Qt finds its own process binary
-
-    meipass = getattr(sys, "_MEIPASS", None)
-    if not meipass:
-        return
-
-    # Try common locations inside the PyInstaller bundle
-    candidates = [
-        os.path.join(meipass, "QtWebEngineProcess"),
-        os.path.join(meipass, "PySide6", "QtWebEngineProcess"),
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            os.environ.setdefault("QTWEBENGINEPROCESS_PATH", path)
-            break
-
-_setup_webengine_env()
-# ───────────────────────────────────────────────────────────────────────────
-
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QIcon
 

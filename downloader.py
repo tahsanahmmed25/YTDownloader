@@ -1409,19 +1409,34 @@ def apply_restricted_mode_options(opts, cookiefile=None, browser_auth=None):
 
 
 def apply_client_fallback(opts, client):
-    # client is a string like "android" / "web", or None for the auto bundle
-    if client:
-        opts["extractor_args"] = {"youtube": {"player_client": f"{client},web"}}
+    """Configure yt-dlp's YouTube player client.
+
+    Pass None to use yt-dlp's own default client selection, which is the most
+    up-to-date choice and handles Proof-of-Origin (PO) token negotiation
+    internally.  Pass a specific client name (e.g. 'ios', 'android') to force
+    a particular client that is known to work without PO tokens.
+    """
+    if client is None:
+        # Remove any previous override — let yt-dlp choose its default.
+        opts.pop("extractor_args", None)
     else:
-        opts["extractor_args"] = {"youtube": {"player_client": "android,ios,web"}}
+        opts["extractor_args"] = {"youtube": {"player_client": client}}
     return opts
 
 
 def _client_fallbacks():
-    # Ordered from most-reliable to broadest fallback.
-    # Use plain strings, not lists, so apply_client_fallback produces
-    # valid player_client values (e.g. "web,web" not "['web'],web").
-    return ["web", "android", "tv", None]
+    """Ordered list of YouTube player clients to try.
+
+    None  = yt-dlp's own default (handles PO tokens, always tried first)
+    ios   = iOS player API — no PO token required
+    android = Android player API — no PO token required
+    tv_embedded = TV embedded player — no PO token required
+
+    The 'web' client is intentionally omitted: recent YouTube changes
+    require PO tokens for web-client anonymous requests, causing
+    'sign-in required' errors for public videos.
+    """
+    return [None, "ios", "android", "tv_embedded"]
 
 
 def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True, prefer_no_auth=False):

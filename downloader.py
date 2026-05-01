@@ -468,7 +468,7 @@ def _info_score(info):
 
 def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None):
     started_at = time.time()
-    max_probe_seconds = 30
+    max_probe_seconds = 45  # increased to give auth attempts enough time
     ytdlp = _get_yt_dlp()
     best_info = None
     best_score = (-1, -1, -1)
@@ -479,7 +479,7 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
         cookiefile,
         browser_auth,
         allow_fallback=True,
-        prefer_no_auth=True
+        prefer_no_auth=False  # try authenticated first, fall back to no-auth for public videos
     )
     for client in _client_fallbacks():
         if (time.time() - started_at) >= max_probe_seconds:
@@ -499,7 +499,12 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
                 auth_label = "none"
 
             apply_client_fallback(opts, client)
-            _log.info("Info extract attempt: client=%s auth=%s", client or "default", auth_label)
+            _log.info(
+                "Info extract attempt: client=%s auth=%s%s",
+                client or "default",
+                auth_label,
+                f" file={value}" if mode == "cookiefile" else ""
+            )
             try:
                 with _YTDLP_LOCK:
                     with ytdlp.YoutubeDL(opts) as ydl:
@@ -1237,7 +1242,14 @@ def _check_ydl_cookie_warnings(ydl, base_opts):
 
 def _cookiefile_path(cookiefile=None):
     if cookiefile and os.path.exists(cookiefile):
+        try:
+            size = os.path.getsize(cookiefile)
+        except OSError:
+            size = -1
+        _log.info("Cookie file resolved: %s (%d bytes)", cookiefile, size)
         return cookiefile
+    if cookiefile:
+        _log.warning("Cookie file specified but not found on disk: %s", cookiefile)
     return None
 
 
@@ -1587,6 +1599,10 @@ def download_video(url,
     playlist_mode = download_playlist and _is_playlist_url(url)
     url = normalize_youtube_url(url, keep_playlist=playlist_mode)
     ytdlp_exe = _find_local_binary("yt-dlp")
+    _log.info(
+        "download_video: url=%s quality=%s cookiefile=%s browser_auth=%s",
+        url, quality, cookiefile or "(none)", browser_auth or "(none)"
+    )
     if ytdlp_exe:
         _log.info("yt-dlp.exe detected at %s (cwd=%s); using subprocess download path.", ytdlp_exe, os.getcwd())
     else:
@@ -1617,12 +1633,15 @@ def download_video(url,
         if playlist_end <= 0 or playlist_end > computed_end:
             playlist_end = computed_end
 
-    outtmpl = os.path.join(download_dir, "%(title)s.%(ext)s")
+    # Include resolution in filename so different qualities produce different files.
+    # yt-dlp substitutes %(height)s with the actual video height (e.g. 1080, 720).
+    # For audio-only or unknown-resolution cases it falls back to just the title.
+    outtmpl = os.path.join(download_dir, "%(title)s [%(height)sp].%(ext)s")
     if playlist_mode:
         outtmpl = os.path.join(
             download_dir,
             "%(playlist_title)s",
-            "%(playlist_index)02d - %(title)s.%(ext)s"
+            "%(playlist_index)02d - %(title)s [%(height)sp].%(ext)s"
         )
 
     base_opts = build_base_options(
@@ -1635,7 +1654,6 @@ def download_video(url,
         "outtmpl": outtmpl,
         "nopart": False,
         "continuedl": True,
-        "overwrites": False,
         "noprogress": False,
         "_download_dir": download_dir,
     })

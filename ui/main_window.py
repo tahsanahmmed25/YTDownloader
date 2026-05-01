@@ -2740,6 +2740,20 @@ class Downloader(QMainWindow, PagesMixin):
         self._sync_download_button_text()
         self._maybe_finalize_reset()
 
+        # Re-enable the download button for single-video downloads so the user
+        # can immediately download the same video at a different quality without
+        # having to re-analyze the URL.
+        if not session_id and self._active_url and self._active_url == (self._active_url or ""):
+            no_active = not any(
+                self._thread_is_running(t) for t in self._download_threads.values()
+            )
+            if no_active and not self._active_tasks:
+                self._info_ready = True
+                self.download_btn.setEnabled(True)
+                self._set_config_enabled(True)
+                self._sync_download_button_text()
+
+
     def on_download_error(self, task_id, msg):
         try:
             if task_id not in self._active_tasks:

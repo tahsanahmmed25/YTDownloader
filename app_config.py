@@ -5,7 +5,7 @@ import sys
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.5"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe"

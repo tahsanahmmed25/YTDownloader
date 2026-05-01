@@ -1158,22 +1158,34 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
             _log.exception("Fallback result scan failed for %s", download_dir)
 
     if returncode != 0:
-        if (not legacy) and (returncode == 2) and (not last_error or "unknown option" in last_error.lower()):
-            _log.warning("yt-dlp exit code 2; retrying with legacy flags.")
-            return _download_with_exe(
-                url,
-                ydl_opts,
-                progress_callback=progress_callback,
-                pause_check=pause_check,
-                cancel_check=cancel_check,
-                legacy=True,
-                minimal=minimal,
-                oauth2_cb=oauth2_cb
+        # ── Exit code 2: format or option error ──
+        # Covers both "unknown option" (needs legacy retry) and format-related
+        # failures ("requested format not available").  Let the outer
+        # download_video loop handle format fallback by raising.
+        if (not legacy) and returncode == 2:
+            err_lower = (last_error or "").lower()
+            if not last_error or "unknown option" in err_lower:
+                _log.warning("yt-dlp exit code 2 (unknown option); retrying with legacy flags.")
+                return _download_with_exe(
+                    url,
+                    ydl_opts,
+                    progress_callback=progress_callback,
+                    pause_check=pause_check,
+                    cancel_check=cancel_check,
+                    legacy=True,
+                    minimal=minimal,
+                    oauth2_cb=oauth2_cb
+                )
+            # Format-related exit code 2: let it propagate as a RuntimeError
+            # so the outer loop can fall back to a safer format string.
+            _log.warning(
+                "yt-dlp exit code 2 (format/quality issue): %s",
+                last_error
             )
+
         if not results:
             if ydl_opts.get("cookiesfrombrowser") and _is_cookie_error(last_error):
                 raw_browser = ydl_opts.get("cookiesfrombrowser")
-                # Ensure we pass a clean string name back to UI (e.g. "chrome" not ("chrome",))
                 browser_name = str(raw_browser[0] if isinstance(raw_browser, (list, tuple)) else raw_browser).lower()
                 _log.warning("Cookie lock detected in downloader for %s", browser_name)
                 raise CookieLockError(browser_name, last_error or "Database locked")
@@ -1781,11 +1793,16 @@ def download_video(url,
 
     fmt_requested = _resolve_format_string(quality, container)
     fmt_best = _resolve_format_string("auto", container)
-    
+    # Ultimate safe fallback — no container or height constraints at all.
+    fmt_safe = "bestvideo+bestaudio/best"
+
     attempts = []
     if "auto" not in str(quality).lower():
         attempts.append((str(quality), fmt_requested))
     attempts.append(("best", fmt_best))
+    # Only add the safe fallback if it's different from what we already have
+    if fmt_safe != fmt_best:
+        attempts.append(("safe", fmt_safe))
 
     last_err = None
     last_non_cookie_err = None
@@ -1793,8 +1810,13 @@ def download_video(url,
     if restricted_opts is not None:
         auth_sets.append(("restricted", restricted_opts))
 
+    _skip_to_restricted = False
     for auth_label, opts_template in auth_sets:
+        if _skip_to_restricted and auth_label == "normal":
+            continue
         for client in _client_fallbacks():
+            if _skip_to_restricted:
+                _skip_to_restricted = False  # consumed: proceed with restricted
             for label, fmt in attempts:
                 ydl_opts = dict(opts_template)
                 apply_client_fallback(ydl_opts, client)
@@ -1817,15 +1839,36 @@ def download_video(url,
                 except Exception as e:
                     if isinstance(e, (DownloadPaused, DownloadCancelled, CookieLockError)):
                         raise
-                    is_cookie_err = _is_cookie_error(str(e))
+                    err_str = str(e)
+                    is_cookie_err = _is_cookie_error(err_str)
                     if not is_cookie_err:
                         last_non_cookie_err = e
                     last_err = e
-                    _log.warning("Subprocess attempt %s/%s/%s failed: %s", auth_label, client or "default", label, e)
-                    if auth_label == "restricted" and is_cookie_err:
-                        _log.warning("Cookie error detected; skipping client %s and retrying other auth.", client)
-                        break
+
+                    # ── Classify the error for better logging ──
+                    if _requires_auth(err_str):
+                        _log.warning(
+                            "Auth error during %s attempt (%s/%s): %s — switching to restricted auth",
+                            auth_label, client or "default", label, err_str
+                        )
+                        if auth_label == "normal" and restricted_opts is not None:
+                            _skip_to_restricted = True
+                            break  # break format loop → break client loop → skip to restricted
+                    elif is_cookie_err:
+                        _log.warning(
+                            "Cookie error during %s/%s/%s: %s",
+                            auth_label, client or "default", label, err_str
+                        )
+                        if auth_label == "restricted":
+                            break  # try next client
+                    else:
+                        _log.warning(
+                            "Download attempt %s/%s/%s failed: %s",
+                            auth_label, client or "default", label, err_str
+                        )
                     continue
+            if _skip_to_restricted:
+                break  # break client loop to move to restricted auth_set
 
     if last_non_cookie_err:
         raise last_non_cookie_err

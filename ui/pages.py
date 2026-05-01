@@ -141,7 +141,7 @@ class PagesMixin:
         reset_font = self.reset_btn.font()
         reset_font.setWeight(QFont.Medium)
         self.reset_btn.setFont(reset_font)
-        self.reset_btn.clicked.connect(self.reset_ui)
+        self.reset_btn.clicked.connect(self.clear_homepage_ui)
 
         bottom_row.addLayout(self._make_cookie_status_row(self.reset_btn))
         info_layout.addLayout(bottom_row)

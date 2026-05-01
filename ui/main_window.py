@@ -3069,6 +3069,52 @@ class Downloader(QMainWindow, PagesMixin):
         self.active_download_item = None
         self._update_global_progress()
 
+    def clear_homepage_ui(self):
+        """Reset the homepage input/metadata area WITHOUT affecting active downloads.
+
+        This is what the homepage "Reset" button should call — it clears the URL,
+        title, thumbnail, and format selectors so the user can paste a new link,
+        but never cancels or interferes with running download tasks.
+        """
+        # Cancel any in-progress metadata fetch (harmless if nothing is running)
+        if self._thread_is_running(self._fetch_thread):
+            worker = getattr(self, "_fetch_worker", None)
+            if worker and hasattr(worker, "request_cancel"):
+                try:
+                    worker.request_cancel()
+                except Exception:
+                    pass
+
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText("Analyze")
+        if hasattr(self, "fetch_spinner"):
+            self.fetch_spinner.setVisible(False)
+        self.download_btn.setEnabled(False)
+        self._reset_download_ui()
+        self.url_input.clear()
+        self.title.setText("Title: -")
+        self.size.setText("Estimated size: -")
+        self._last_downloaded_bytes = None
+        self._last_total_bytes = None
+        self._last_progress_value = 0
+        if getattr(self, "progress", None):
+            self.progress.setValue(0)
+            self.progress.setFormat("0%")
+        self.thumbnail.clear()
+        self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
+        self._clear_format_quality()
+        self.subs_checkbox.setChecked(False)
+        self.embed_subs_checkbox.setChecked(False)
+        self._apply_subtitle_options([])
+        self._active_url = ""
+        self._active_is_playlist = False
+        if hasattr(self, "playlist_toggle"):
+            self.playlist_toggle.setChecked(False)
+        self._info_ready = False
+        self._estimated_size_mb = None
+        self._sync_download_button_text()
+
+
     def _read_clipboard_text(self):
         try:
             return QApplication.clipboard().text().strip()

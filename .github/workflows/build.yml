@@ -8,13 +8,37 @@ on:
     branches: [main, master]
   workflow_dispatch:          # allow manual trigger from GitHub UI
 
+permissions:
+  contents: write
+
 jobs:
+  # ══════════════════════════════════════════════════════════════════════════
+  # RELEASE PREP — create the GitHub Release before platform jobs upload assets
+  # ══════════════════════════════════════════════════════════════════════════
+  prepare-release:
+    name: Prepare GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create release for version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Skip release creation for non-tag build
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: echo "Non-tag build; no GitHub Release will be created."
+
   # ══════════════════════════════════════════════════════════════════════════
   # LINUX — AppImage
   # ══════════════════════════════════════════════════════════════════════════
   build-linux:
     name: Linux AppImage
     runs-on: ubuntu-22.04
+    needs: prepare-release
 
     steps:
       - name: Checkout repository
@@ -69,7 +93,7 @@ jobs:
           Exec=YTDownloader
           Icon=YTDownloader
           Type=Application
-          Categories=Network;Video;
+          Categories=AudioVideo;Network;
           Comment=Simple YouTube Downloader by Tahsan
           EOF
 
@@ -89,12 +113,14 @@ jobs:
           mkdir -p dist_installer
           ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloader-linux-x86_64.AppImage"
 
-      - name: Upload Linux AppImage artifact
-        uses: actions/upload-artifact@v4
+      - name: Verify Linux AppImage
+        run: test -s dist_installer/YTDownloader-linux-x86_64.AppImage
+
+      - name: Upload Linux AppImage to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
         with:
-          name: YTDownloader-linux-x86_64
-          path: dist_installer/YTDownloader-linux-x86_64.AppImage
-          retention-days: 30
+          files: dist_installer/YTDownloader-linux-x86_64.AppImage
 
   # ══════════════════════════════════════════════════════════════════════════
   # WINDOWS — Inno Setup installer
@@ -102,6 +128,7 @@ jobs:
   build-windows:
     name: Windows Installer
     runs-on: windows-latest
+    needs: prepare-release
 
     steps:
       - name: Checkout repository
@@ -162,36 +189,18 @@ jobs:
           & $iscc "YTDownloader.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
-      - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: YTDownloader-windows-setup
-          path: dist_installer/YTDownloader-Setup.exe
-          retention-days: 30
+      - name: Verify Windows installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist_installer/YTDownloader-Setup.exe")) {
+            throw "Installer was not produced"
+          }
+          if ((Get-Item "dist_installer/YTDownloader-Setup.exe").Length -le 0) {
+            throw "Installer is empty"
+          }
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # RELEASE — only on version tags (v*.*.*)
-  # ══════════════════════════════════════════════════════════════════════════
-  release:
-    name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-
-      - name: Publish release
+      - name: Upload Windows installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            release-assets/YTDownloader-linux-x86_64/YTDownloader-linux-x86_64.AppImage
-            release-assets/YTDownloader-windows-setup/YTDownloader-Setup.exe
+          files: dist_installer/YTDownloader-Setup.exe

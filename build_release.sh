@@ -54,7 +54,7 @@ Name=YTDownloader
 Exec=YTDownloader
 Icon=YTDownloader
 Type=Application
-Categories=Network;Video;
+Categories=AudioVideo;Network;
 Comment=Simple YouTube Downloader by Tahsan
 EOF
 

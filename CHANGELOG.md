@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.7] - 2026-05-03
+
+### Fixed
+- Fixed GitHub release publishing when Actions artifact storage quota is full by uploading release assets directly from the platform build jobs.
+- Fixed the Linux AppImage desktop category metadata used in CI and local Linux release builds.
+
+### Changed
+- Bumped app and Windows installer metadata to `2.1.7`.
+
+---
+
 ## [2.1.6] - 2026-05-03
 
 ### Fixed
@@ -110,7 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.1.6** | ✅ Active | Current stable — Windows + Linux |
+| **2.1.7** | ✅ Active | Current stable — Windows + Linux |
+| 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |
 | 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |
 | 2.0.1 | Upgrade recommended | Windows only |
 | 1.0.0 | Upgrade recommended | Earlier public release |

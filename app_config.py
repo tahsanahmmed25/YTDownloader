@@ -5,15 +5,15 @@ import sys
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
-APP_VERSION = "2.1.5"
+APP_VERSION = "2.1.6"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
-UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe"
 
 # ── Platform flags ────────────────────────────────────────────────────────────
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX   = sys.platform.startswith("linux")
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
+UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe" if IS_WINDOWS else "YTDownloader-linux-x86_64.AppImage"
 
 
 def bin_name(name):

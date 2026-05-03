@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.6] - 2026-05-03
+
+### Fixed
+- Fixed Restricted Mode retry after locked browser cookies by calling the correct Analyze flow.
+- Fixed Auto browser authentication so fallback browsers are tried separately instead of collapsing to the first browser.
+- Fixed stalled/cancelled downloads so the `yt-dlp` subprocess can be interrupted even when no output is being produced.
+- Fixed close-to-tray behavior so the stalled-download watchdog keeps running while active downloads continue in the tray.
+- Restored persisted queued and paused downloads on startup instead of clearing the saved queue.
+- Moved history storage to the app data directory, with migration from legacy project-folder JSON/SQLite history files.
+- Fixed manual FFmpeg installation to use the cross-platform FFmpeg manager and Linux `bin/` location.
+- Fixed Linux updater downloads so AppImage updates are saved with the correct name, made executable, and opened with the desktop handler.
+- Fixed CLI mode so it no longer imports PySide6 before checking CLI arguments.
+
+### Changed
+- Bumped app and Windows installer metadata to `2.1.6`.
+- Kept yt-dlp nightly binary checks on a shorter background interval for faster YouTube compatibility updates.
+
+---
+
 ## [2.0.2] - 2026-04-29
 
 ### Added
@@ -91,7 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.0.2** | ✅ Active | Current stable — Windows + Linux |
+| **2.1.6** | ✅ Active | Current stable — Windows + Linux |
+| 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |
 | 2.0.1 | Upgrade recommended | Windows only |
 | 1.0.0 | Upgrade recommended | Earlier public release |
 | 0.9.0 | ❌ EOL | No longer supported |

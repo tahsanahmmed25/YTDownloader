@@ -66,8 +66,8 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
 - **Playlist downloads** with queue management, pause/resume, and per-item progress
 - **Subtitles:** download and optionally embed into the video file
 - **Download history** with thumbnails, re-download, and search
-- **Auto-update for yt-dlp** — checked once per day, updated silently in the background
-- **Auto-update for FFmpeg** — same silent background process
+- **Auto-update for yt-dlp** — checked regularly, updated silently in the background
+- **Auto-update for FFmpeg** — managed silently in the background
 - **Light and dark themes**
 - **Two access modes:**
   - `Normal Mode` — for public videos (no cookies needed)

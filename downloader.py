@@ -562,8 +562,16 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
             if best_info is None or score > best_score:
                 best_info = info
                 best_score = score
-                if best_score[0] >= 2 and best_score[1] >= 720:
-                    _log.info("Info extraction succeeded via client=%s auth=%s", client or "default", auth_label)
+                # Only exit early if we have a comprehensive format list:
+                # - 5+ formats (so we have multiple quality/codec options)
+                # - 720p or higher available
+                # This prevents stopping at format 18-only results (360p only)
+                # which happens with unauthenticated android client requests.
+                if best_score[0] >= 5 and best_score[1] >= 720:
+                    _log.info(
+                        "Info extraction succeeded (rich format list) via client=%s auth=%s",
+                        client or "default", auth_label
+                    )
                     return best_info
 
     if best_info is not None:
@@ -992,18 +1000,33 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
         popen_kwargs["creationflags"] = 0x08000000 # subprocess.CREATE_NO_WINDOW
 
     proc = subprocess.Popen(cmd, **popen_kwargs)
+    import queue as _queue
+    line_queue = _queue.Queue()
+
+    def _read_stdout():
+        try:
+            for raw in proc.stdout:
+                line_queue.put(raw)
+        except Exception:
+            pass
+
+    reader = threading.Thread(target=_read_stdout, daemon=True, name="yt-dlp-stdout")
+    reader.start()
     try:
         while True:
-            raw_line = proc.stdout.readline()
-            if not raw_line and proc.poll() is not None:
-                break
-            
             if cancel_check and cancel_check():
                 _terminate_process(proc)
                 raise DownloadCancelled("DOWNLOAD_CANCELLED")
             if pause_check and pause_check():
                 _terminate_process(proc)
                 raise DownloadPaused("DOWNLOAD_PAUSED")
+
+            try:
+                raw_line = line_queue.get(timeout=0.2)
+            except _queue.Empty:
+                if proc.poll() is not None and line_queue.empty():
+                    break
+                continue
 
             line = (raw_line or "").strip()
             if not line:
@@ -1449,21 +1472,24 @@ def apply_client_fallback(opts, client):
 def _client_fallbacks():
     """Ordered list of YouTube player clients to try.
 
-    'ios'         = iOS player API — no JS runtime / PO token required (FIRST)
-    'android'     = Android player — no PO token required
-    'tv_embedded' = TV embedded player — no PO token required
-    None          = yt-dlp's own default (requires JS runtime / deno for PO tokens)
+    As of April 2025, YouTube requires GVS Proof-of-Origin (PO) tokens for
+    most player clients when used without authentication cookies. The nightly
+    yt-dlp build handles this automatically for the 'android' client via
+    format 18 (360p combined), which does NOT require a PO token.
 
-    iOS is now FIRST because:
-    - YouTube changed in April 2025 to require PO tokens for the default 'web' client
-    - PO token generation requires a JS runtime (deno or node)
-    - AppImages and packaged builds typically don't include a JS runtime
-    - iOS client bypasses this requirement entirely and works everywhere
+    Without browser cookies (unauthenticated):
+      - 'android'     = returns format 18 (360p) without a PO token — use first
+      - 'ios'         = returns format 18 (360p) without a PO token — fallback
+      - 'tv_embedded' = returns format 18 (360p) without a PO token — fallback
 
-    The 'web' client is intentionally omitted: it requires PO tokens which
-    in turn need a JS runtime, causing failures in packaged/frozen builds.
+    With browser cookies (authenticated):
+      - None (default) = yt-dlp auto-selects, returns all formats (360p–1080p+)
+      - 'android'      = returns all formats
+
+    The 'web' client requires PO tokens (generated via JS/deno) and is
+    intentionally omitted for packaged builds without a JS runtime.
     """
-    return ["ios", "android", "tv_embedded", None]
+    return ["android", "ios", "tv_embedded", None]
 
 
 def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True, prefer_no_auth=False):
@@ -1857,7 +1883,18 @@ def download_video(url,
     last_non_cookie_err = None
     auth_sets = [("normal", base_opts)]
     if restricted_opts is not None:
-        auth_sets.append(("restricted", restricted_opts))
+        if cookiefile:
+            cookie_opts = dict(base_opts)
+            apply_restricted_mode_options(cookie_opts, cookiefile=cookiefile)
+            auth_sets.append(("restricted-cookiefile", cookie_opts))
+        if browser_auth:
+            browser_entries = browser_auth if isinstance(browser_auth, (list, tuple)) else [browser_auth]
+            for browser_entry in browser_entries:
+                if not browser_entry:
+                    continue
+                browser_opts = dict(base_opts)
+                apply_restricted_mode_options(browser_opts, browser_auth=browser_entry)
+                auth_sets.append((f"restricted-browser:{browser_entry}", browser_opts))
 
     _skip_to_restricted = False
     for auth_label, opts_template in auth_sets:
@@ -1908,7 +1945,7 @@ def download_video(url,
                             "Cookie error during %s/%s/%s: %s",
                             auth_label, client or "default", label, err_str
                         )
-                        if auth_label == "restricted":
+                        if auth_label.startswith("restricted"):
                             break  # try next client
                     else:
                         _log.warning(

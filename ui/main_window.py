@@ -64,7 +64,7 @@ from logging_utils import get_logger
 from ui.widgets import FadingTextButton, PasteButton, MarqueeLabel
 from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
-from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker, FFmpegInstallWorker
+from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
 import queue_manager
 import ytdlp_exe_manager
 import ffmpeg_manager
@@ -1513,9 +1513,22 @@ class Downloader(QMainWindow, PagesMixin):
             on_error=_on_error,
         )
 
+    def _ffmpeg_install_running(self):
+        thread = self._ffmpeg_install_thread
+        if not thread:
+            return False
+        if hasattr(thread, "isRunning"):
+            try:
+                return bool(thread.isRunning())
+            except RuntimeError:
+                return False
+        if hasattr(thread, "is_alive"):
+            return bool(thread.is_alive())
+        return False
+
     def _install_ffmpeg_background(self):
         """Start FFmpeg installation in a background thread on first launch."""
-        if self._ffmpeg_install_thread and self._ffmpeg_install_thread.isRunning():
+        if self._ffmpeg_install_running():
             _log.info("FFmpeg installation already in progress.")
             return
 
@@ -1524,20 +1537,19 @@ class Downloader(QMainWindow, PagesMixin):
             variant="info"
         )
 
-        from PySide6.QtCore import QThread
-        self._ffmpeg_install_thread = QThread()
-        self._ffmpeg_install_worker = FFmpegInstallWorker(app_dir())
-        self._ffmpeg_install_worker.moveToThread(self._ffmpeg_install_thread)
+        def _on_done():
+            self.dialog_requested.emit("__ffmpeg_ready__", "", None)
+            self.dialog_requested.emit("FFmpeg", "FFmpeg installed successfully.", QMessageBox.Information)
 
-        self._ffmpeg_install_thread.started.connect(self._ffmpeg_install_worker.run)
-        self._ffmpeg_install_worker.progress.connect(self._on_ffmpeg_progress)
-        self._ffmpeg_install_worker.completed.connect(self._on_ffmpeg_completed)
-        self._ffmpeg_install_worker.error.connect(self._on_ffmpeg_error)
-        self._ffmpeg_install_worker.finished.connect(self._ffmpeg_install_thread.quit)
-        self._ffmpeg_install_worker.finished.connect(self._ffmpeg_install_worker.deleteLater)
-        self._ffmpeg_install_thread.finished.connect(self._ffmpeg_install_thread.deleteLater)
+        def _on_error(msg):
+            self.dialog_requested.emit("__ffmpeg_error__", msg, None)
 
-        self._ffmpeg_install_thread.start()
+        self._ffmpeg_install_thread = ffmpeg_manager.ensure_ffmpeg_background(
+            on_done=_on_done,
+            on_error=_on_error,
+            progress_cb=self._on_ffmpeg_progress,
+            force=True
+        )
 
     def _on_ffmpeg_progress(self, percent):
         _log.debug("FFmpeg installation progress: %d%%", percent)
@@ -1555,7 +1567,7 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _run_install_essentials(self):
         """Manual FFmpeg install from Preferences page, reuses the background worker."""
-        if self._ffmpeg_install_thread and self._ffmpeg_install_thread.isRunning():
+        if self._ffmpeg_install_running():
             self._show_toast("FFmpeg installation already in progress.", variant="info")
             return
         if self._find_ffmpeg():
@@ -2061,7 +2073,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._sync_download_button_text()
 
     def _on_cookie_lock(self, browser_name, msg):
-        self._handle_browser_lock_restart(browser_name, msg, retry_cb=self._fetch_info)
+        self._handle_browser_lock_restart(browser_name, msg, retry_cb=self.fetch_info)
 
     def _on_download_cookie_lock(self, task_id, browser_name, msg):
         # We don't autostart because the task is now probably failed/stopped
@@ -2979,14 +2991,71 @@ class Downloader(QMainWindow, PagesMixin):
             })
         queue_manager.save_queue(tasks)
 
+    def _restore_queued_task(self, saved):
+        if not isinstance(saved, dict):
+            return False
+        payload = saved.get("payload")
+        if not isinstance(payload, dict) or not payload.get("url"):
+            return False
+
+        task_id = saved.get("id") or uuid.uuid4().hex
+        title_text = saved.get("title") or payload.get("url") or "Queued download"
+        saved_state = (saved.get("state") or "queued").lower()
+        state = "paused" if saved_state == "paused" else "queued"
+        task = {
+            "id": task_id,
+            "payload": payload,
+            "title": title_text,
+            "state": state,
+            "downloaded": None,
+            "total": None
+        }
+
+        item = self._create_download_item(title_text)
+        task["item"] = item
+        item["pause_btn"].setProperty("task_id", task_id)
+        if item.get("cancel_btn"):
+            item["cancel_btn"].setProperty("task_id", task_id)
+            item["cancel_btn"].setText("Cancel")
+            item["cancel_btn"].setEnabled(True)
+            item["cancel_btn"].setVisible(True)
+        if state == "paused":
+            item["status"].setText("Paused")
+            item["pause_btn"].setText("Resume")
+            item["pause_btn"].setEnabled(True)
+            self._paused_tasks[task_id] = task
+        else:
+            item["status"].setText("Queued")
+            item["pause_btn"].setText("Pause")
+            item["pause_btn"].setEnabled(False)
+            self._pending_tasks.append(task)
+
+        self.active_downloads_layout.addWidget(item["frame"])
+        return True
+
     def _load_persistent_queue(self):
         if not hasattr(queue_manager, "load_queue"):
             return
         items = queue_manager.load_queue()
         if not items:
             return
-        # Prevent placeholder history items when app restarts with a non-empty queue.
-        queue_manager.clear_queue()
+        restored = 0
+        for saved in items:
+            if self._restore_queued_task(saved):
+                restored += 1
+        if not restored:
+            queue_manager.clear_queue()
+            return
+        self._update_downloads_header()
+        self._show_downloads_panel(True)
+        self._update_global_progress()
+        self._show_toast(
+            f"Restored {restored} queued download(s).",
+            variant="info",
+            duration=2400,
+            anchor_widget=self.nav_library_btn
+        )
+        QTimer.singleShot(1200, self._start_next_downloads)
 
     def _reset_download_ui(self):
         self._animate_button_text(self.download_btn, "Start Download")
@@ -3418,7 +3487,15 @@ class Downloader(QMainWindow, PagesMixin):
         if hasattr(self, "_update_progress_dialog") and self._update_progress_dialog:
             self._update_progress_dialog.close()
         try:
-            os.startfile(path)
+            if sys.platform == "win32":
+                os.startfile(path)
+            else:
+                try:
+                    current = os.stat(path).st_mode
+                    os.chmod(path, current | 0o755)
+                except Exception:
+                    pass
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
             self._show_toast(
                 "Update downloaded. Installer opened. You can continue using the app.",
                 variant="info",
@@ -3784,12 +3861,6 @@ class Downloader(QMainWindow, PagesMixin):
         )
 
     def closeEvent(self, event):
-        if self._task_watchdog.isActive():
-            self._task_watchdog.stop()
-        if self._cancel_grace_timer.isActive():
-            self._cancel_grace_timer.stop()
-        if self._library_nav_pulse_timer.isActive():
-            self._library_nav_pulse_timer.stop()
         running_download_threads = any(
             self._thread_is_running(thread)
             for thread in self._download_threads.values()
@@ -3807,6 +3878,12 @@ class Downloader(QMainWindow, PagesMixin):
             )
             event.ignore()
             return
+        if self._task_watchdog.isActive():
+            self._task_watchdog.stop()
+        if self._cancel_grace_timer.isActive():
+            self._cancel_grace_timer.stop()
+        if self._library_nav_pulse_timer.isActive():
+            self._library_nav_pulse_timer.stop()
         for worker in (
             self._fetch_worker,
             self._update_worker,
@@ -3849,5 +3926,3 @@ class Downloader(QMainWindow, PagesMixin):
 
         self._persist_queue()
         event.accept()
-
-

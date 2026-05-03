@@ -4,12 +4,8 @@ import os
 import traceback
 import threading
 
-from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtGui import QIcon
-
 from app_config import get_icon_path
 from logging_utils import setup_logging
-from ui.main_window import Downloader
 
 
 def _build_arg_parser():
@@ -131,6 +127,10 @@ def main():
     args, _ = parser.parse_known_args()
     if args.cli or args.url or args.info:
         sys.exit(_run_cli(args))
+
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtGui import QIcon
+    from ui.main_window import Downloader
 
     app = QApplication(sys.argv)
 

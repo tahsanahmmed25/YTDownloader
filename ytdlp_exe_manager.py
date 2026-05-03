@@ -22,14 +22,15 @@ from net_utils import request_with_retry
 
 _log = get_logger()
 
-_GITHUB_RELEASES_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+_GITHUB_RELEASES_API = "https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest"
 _VERSION_FILE    = "yt-dlp.version"       # sits in bin_dir()
 _LAST_CHECK_FILE = "yt-dlp.lastcheck"     # timestamp of last GitHub API call
-_CHECK_INTERVAL  = 24 * 60 * 60           # check at most once per 24 hours
+_CHECK_INTERVAL  = 4 * 60 * 60            # check at most once per 4 hours (nightly builds drop frequently)
 
-# Platform-correct asset names in the GitHub release
-_ASSET_NAME      = "yt-dlp.exe" if IS_WINDOWS else "yt-dlp"
-_SHA_LINE_KEY    = "yt-dlp.exe" if IS_WINDOWS else "yt-dlp"
+# Platform-correct asset names in the nightly GitHub release
+# Nightly uses 'yt-dlp_linux' not 'yt-dlp' for the Linux binary
+_ASSET_NAME      = "yt-dlp.exe" if IS_WINDOWS else "yt-dlp_linux"
+_SHA_LINE_KEY    = "yt-dlp.exe" if IS_WINDOWS else "yt-dlp_linux"
 
 _EXE_NAME = bin_name("yt-dlp")
 _LOCK = threading.Lock()

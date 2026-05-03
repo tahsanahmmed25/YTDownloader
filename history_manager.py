@@ -4,19 +4,22 @@ import hashlib
 import sqlite3
 from datetime import datetime, UTC
 
+from app_config import app_data_dir
 from logging_utils import get_logger
 
 _log = get_logger()
 
-FILE = "history.json"
-DB_FILE = "history.db"
+LEGACY_FILE = "history.json"
+LEGACY_DB_FILE = "history.db"
+FILE = os.path.join(app_data_dir(), "history.json")
+DB_FILE = os.path.join(app_data_dir(), "history.db")
 
 
 def _use_sqlite():
     flag = os.environ.get("YTDL_USE_SQLITE", "").strip().lower()
     if flag in ("1", "true", "yes"):
         return True
-    return os.path.exists(DB_FILE)
+    return os.path.exists(DB_FILE) or os.path.exists(LEGACY_DB_FILE)
 
 
 def _ensure_db():
@@ -44,10 +47,13 @@ def _migrate_json_if_needed(conn):
         count = cur.fetchone()[0]
     except Exception:
         count = 0
-    if count or not os.path.exists(FILE):
+    if count:
+        return
+    source_file = FILE if os.path.exists(FILE) else LEGACY_FILE
+    if not os.path.exists(source_file):
         return
     try:
-        with open(FILE, "r", encoding="utf-8") as f:
+        with open(source_file, "r", encoding="utf-8") as f:
             raw = json.load(f)
     except Exception:
         return
@@ -68,6 +74,39 @@ def _migrate_json_if_needed(conn):
             )
         )
     conn.commit()
+
+
+def _migrate_legacy_sqlite_if_needed(conn):
+    if os.path.abspath(DB_FILE) == os.path.abspath(LEGACY_DB_FILE):
+        return
+    if not os.path.exists(LEGACY_DB_FILE):
+        return
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM history")
+        count = cur.fetchone()[0]
+    except Exception:
+        count = 0
+    if count:
+        return
+
+    legacy_conn = None
+    try:
+        legacy_conn = sqlite3.connect(LEGACY_DB_FILE)
+        rows = legacy_conn.execute(
+            "SELECT id, title, url, filepath, thumb_path, added_at FROM history"
+        ).fetchall()
+        for row in rows:
+            conn.execute(
+                "INSERT OR IGNORE INTO history (id, title, url, filepath, thumb_path, added_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                row
+            )
+        conn.commit()
+    except Exception as exc:
+        _log.warning("Failed to migrate legacy sqlite history: %s", exc)
+    finally:
+        if legacy_conn:
+            legacy_conn.close()
 
 
 def _hash_id(text):
@@ -108,9 +147,10 @@ def _normalize_item(item):
 
 
 def _load_raw():
-    if os.path.exists(FILE):
+    source_file = FILE if os.path.exists(FILE) else LEGACY_FILE
+    if os.path.exists(source_file):
         try:
-            with open(FILE, "r", encoding="utf-8") as f:
+            with open(source_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as exc:
             _log.warning("Failed to load history: %s", exc)
@@ -123,6 +163,7 @@ def load_history():
         conn = None
         try:
             conn = _ensure_db()
+            _migrate_legacy_sqlite_if_needed(conn)
             _migrate_json_if_needed(conn)
             cur = conn.execute(
                 "SELECT id, title, url, filepath, thumb_path, added_at "
@@ -160,6 +201,7 @@ def save_history(item):
         conn = None
         try:
             conn = _ensure_db()
+            _migrate_legacy_sqlite_if_needed(conn)
             _migrate_json_if_needed(conn)
             conn.execute(
                 "INSERT OR IGNORE INTO history (id, title, url, filepath, thumb_path, added_at) "

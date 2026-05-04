@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.8] - 2026-05-04
+
+### Fixed
+- Fixed Restricted Mode so browser connection only succeeds after extracting a complete YouTube + Google login session.
+- Fixed restricted video analysis/download retries to prefer the normal authenticated YouTube client before mobile fallbacks.
+- Protected saved cookie sessions from being rewritten by failed yt-dlp probes.
+- Fixed Linux/Zorin first-run downloads so split video/audio streams are not requested until FFmpeg is ready, preventing separated files.
+
+### Changed
+- Bumped app and Windows installer metadata to `2.1.8`.
+
+---
+
 ## [2.1.7] - 2026-05-03
 
 ### Fixed
@@ -121,7 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.1.7** | ✅ Active | Current stable — Windows + Linux |
+| **2.1.8** | ✅ Active | Current stable — restricted-video and Linux merge fixes |
+| 2.1.7 | Upgrade recommended | Release workflow fix; affected by restricted-session and first-run FFmpeg issues |
 | 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |
 | 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |
 | 2.0.1 | Upgrade recommended | Windows only |

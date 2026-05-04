@@ -119,7 +119,12 @@ class Downloader(QMainWindow, PagesMixin):
         self.browser_auth_profile = self.settings.value("browser_auth_profile", "", type=str)
         self.browser_auth_enabled = self.settings.value("browser_auth_enabled", False, type=bool)
         self.cookie_file = self.settings.value("cookie_file", "", type=str)
-        if self.cookie_file and not self._cookie_is_valid(self.cookie_file):
+        if self.browser_auth_enabled:
+            # Older versions marked browser auth as connected before verifying
+            # usable login cookies. Force a fresh connection check after update.
+            self.browser_auth_enabled = False
+            self.settings.setValue("browser_auth_enabled", False)
+        if self.cookie_file and not self._cookie_is_valid(self.cookie_file, require_auth=self.restricted_mode):
             self.cookie_file = ""
             self.settings.remove("cookie_file")
 
@@ -813,6 +818,33 @@ class Downloader(QMainWindow, PagesMixin):
                 duration=8000
             )
             return
+        if title == "__browser_auth_success__":
+            data = icon_obj if isinstance(icon_obj, dict) else {}
+            cookie_path = data.get("cookie_path") or message
+            source = data.get("source") or self.browser_auth_source or "browser"
+            n_auth = data.get("n_auth") or 0
+            self.cookie_file = cookie_path
+            self.settings.setValue("cookie_file", cookie_path)
+            self.restricted_mode = True
+            self.settings.setValue("restricted_mode", True)
+            # Use the extracted cookies file for downloads instead of repeatedly
+            # reading a live browser database that may be locked or keyring-gated.
+            self.browser_auth_enabled = False
+            self.settings.setValue("browser_auth_enabled", False)
+            self.update_cookie_indicator()
+            title = "Browser Connected"
+            message = (
+                f"Successfully connected to {str(source).title()}.\n"
+                f"{n_auth} YouTube/Google auth cookie(s) found.\n\n"
+                "Restricted videos can now use this saved session."
+            )
+            icon_obj = QMessageBox.Information
+        elif title == "__browser_auth_failed__":
+            self.browser_auth_enabled = False
+            self.settings.setValue("browser_auth_enabled", False)
+            self.update_cookie_indicator()
+            title = "Browser Connection Failed"
+            icon_obj = QMessageBox.Warning
 
         box = QMessageBox(self)
         box.setAttribute(Qt.WA_DeleteOnClose, True)
@@ -3529,10 +3561,11 @@ class Downloader(QMainWindow, PagesMixin):
         )
         if not path:
             return
-        if not self._cookie_is_valid(path):
+        if not self._cookie_is_valid(path, require_auth=True):
             self._show_error_dialog(
                 "Cookies",
-                "Invalid cookies file. Please select a valid cookies.txt "
+                "Invalid cookies file. Please select a Netscape cookies.txt "
+                "that contains signed-in YouTube and Google account cookies "
                 f"(max {MAX_COOKIE_FILE_BYTES // (1024 * 1024)} MB)."
             )
             return
@@ -3553,7 +3586,7 @@ class Downloader(QMainWindow, PagesMixin):
     def _effective_cookie_file(self):
         if not self.restricted_mode:
             return ""
-        if self._cookie_is_valid(self.cookie_file):
+        if self._cookie_is_valid(self.cookie_file, require_auth=True):
             return self.cookie_file
         return ""
 
@@ -3565,7 +3598,13 @@ class Downloader(QMainWindow, PagesMixin):
         if not source:
             return None
         if source == "auto":
-            return ["chrome", "edge", "firefox", "brave", "opera"]
+            try:
+                from ui.session_manager import get_browser_auto_order
+                return get_browser_auto_order()
+            except Exception:
+                if sys.platform.startswith("linux"):
+                    return ["firefox", "chrome", "edge", "brave", "opera", "chromium"]
+                return ["chrome", "firefox", "edge", "brave", "opera", "chromium"]
         if profile:
             return f"{source}:{profile}"
         return source
@@ -3644,49 +3683,45 @@ class Downloader(QMainWindow, PagesMixin):
 
         self.browser_auth_source = source
         self.browser_auth_profile = profile
-        self.browser_auth_enabled = True
         self.restricted_mode = True
         self.settings.setValue("browser_auth_source", self.browser_auth_source)
         self.settings.setValue("browser_auth_profile", self.browser_auth_profile)
-        self.settings.setValue("browser_auth_enabled", True)
+        self.browser_auth_enabled = False
+        self.settings.setValue("browser_auth_enabled", False)
         self.settings.setValue("restricted_mode", True)
         self.update_cookie_indicator()
 
-        # ── Smoke-test: verify we can actually extract cookies from this browser ──
-        # Run in a background thread so the UI stays responsive.
+        # Verify we can actually extract signed-in cookies before showing
+        # "connected". The extracted file is then used for downloads.
         self._show_toast("Testing browser connection…", variant="info", duration=3000)
         import threading
         def _test_connection():
-            from PySide6.QtWidgets import QMessageBox
             try:
                 from ui.session_manager import save_cookies_from_browser, get_auth_cookie_names_in_file
                 cookie_path = save_cookies_from_browser(source)
                 auth_names = get_auth_cookie_names_in_file(cookie_path)
                 n_auth = len(auth_names)
                 if n_auth > 0:
-                    self._show_dialog_async(
-                        "Browser Connected \u2705",
-                        f"Successfully connected to {source.title()}.\n"
-                        f"{n_auth} YouTube auth cookie(s) found.\n\n"
-                        "Age-restricted and members-only videos can now be downloaded.",
-                        QMessageBox.Information
+                    self.dialog_requested.emit(
+                        "__browser_auth_success__",
+                        cookie_path,
+                        {
+                            "source": source,
+                            "cookie_path": cookie_path,
+                            "n_auth": n_auth,
+                        }
                     )
                 else:
-                    # Cookies extracted but no auth cookies — user not logged in
-                    self._show_dialog_async(
-                        "Browser Connected \u2014 Not Logged In",
-                        f"Connected to {source.title()}, but no YouTube login cookies were found.\n\n"
+                    self.dialog_requested.emit(
+                        "__browser_auth_failed__",
+                        f"Connected to {source.title()}, but no YouTube/Google login cookies were found.\n\n"
                         "Please log in to YouTube in your browser, then click 'Connect Browser' again.",
-                        QMessageBox.Warning
+                        None
                     )
             except Exception as exc:
                 err = str(exc)
                 _log.warning("Browser auth smoke-test failed for %s: %s", source, err)
-                self._show_dialog_async(
-                    "Browser Connection Failed",
-                    err,
-                    QMessageBox.Warning
-                )
+                self.dialog_requested.emit("__browser_auth_failed__", err, None)
         t = threading.Thread(target=_test_connection, daemon=True)
         t.start()
 
@@ -3739,21 +3774,20 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _on_yt_login_success(self, cookie_path: str):
         """Cookie extraction completed — validate auth cookies before wiring in."""
-        from ui.session_manager import get_auth_cookie_names_in_file
+        from ui.session_manager import get_auth_cookie_names_in_file, has_required_auth_cookies
         auth_cookies = get_auth_cookie_names_in_file(cookie_path)
-        if not auth_cookies:
+        if not has_required_auth_cookies(cookie_path):
             # Extraction "succeeded" but only got tracking/analytics cookies —
             # not real login cookies.  Treat this as a login failure.
             _log.warning(
-                "_on_yt_login_success: cookie file %s has no auth cookies — "
-                "user was probably not logged in to YouTube in their browser",
+                "_on_yt_login_success: cookie file %s does not have a complete YouTube/Google auth session",
                 cookie_path
             )
             self._update_yt_login_ui("failed")
             self._show_error_dialog(
                 "Login Failed",
-                "Cookies were extracted from your browser, but no YouTube login "
-                "cookies were found.\n\n"
+                "Cookies were extracted from your browser, but no complete "
+                "YouTube/Google login session was found.\n\n"
                 "Please make sure you are fully logged in to YouTube in your "
                 "browser, then try again.\n\n"
                 "Tip: After logging in, wait a few seconds and then click "
@@ -3822,9 +3856,10 @@ class Downloader(QMainWindow, PagesMixin):
 
 
 
-    def _cookie_is_valid(self, path):
+    def _cookie_is_valid(self, path, require_auth=False):
         """Return True only if *path* is a valid, non-empty Netscape cookies file
-        that contains at least one actual cookie row."""
+        that contains at least one actual cookie row. When *require_auth* is
+        true, it must also contain YouTube and Google account cookies."""
         if not path or not os.path.exists(path):
             return False
         try:
@@ -3842,7 +3877,13 @@ class Downloader(QMainWindow, PagesMixin):
                     if not s or s.startswith("#"):
                         continue
                     if len(s.split("\t")) >= 7:
-                        return True
+                        if not require_auth:
+                            return True
+                        try:
+                            from ui.session_manager import has_required_auth_cookies
+                            return has_required_auth_cookies(path)
+                        except Exception:
+                            return True
         except Exception:
             pass
         return False
@@ -3853,7 +3894,7 @@ class Downloader(QMainWindow, PagesMixin):
             "Normal mode works for public videos without cookies.\n\n"
             "Manual cookies (cookies.txt):\n"
             "1. Install a cookies export extension in your browser.\n"
-            "2. Log in to YouTube and export cookies in Netscape format.\n"
+            "2. Log in to YouTube and export YouTube + Google cookies in Netscape format.\n"
             "3. Save the file as cookies.txt.\n"
             "4. In the Cookies tab, click “Set Cookies File” and select it.\n"
             "5. Keep the file private and refresh it when it expires.\n\n"

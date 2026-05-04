@@ -99,8 +99,8 @@ def humanize_error(raw_message, cookies_loaded=False):
             )
         return (
             "That video format is not available at the selected quality. "
-            "Try Auto quality, or your browser auth may have expired — "
-            "reconnect in the Cookies tab."
+            "Try Auto quality, or your saved YouTube session may be expired "
+            "or incomplete — reconnect in the Cookies tab."
         )
 
     # ── HTTP / network ────────────────────────────────────────────────────
@@ -117,8 +117,8 @@ def humanize_error(raw_message, cookies_loaded=False):
     if "sign in" in lowered or "login" in lowered or "age-restricted" in lowered:
         if cookies_loaded:
             return (
-                "This video requires sign-in. Your current browser auth may be expired "
-                "or missing YouTube permissions. Reconnect in the Cookies tab and try again."
+                "This video requires sign-in. Your current YouTube session may be expired "
+                "or missing Google account cookies. Reconnect in the Cookies tab and try again."
             )
         return (
             "This video requires sign-in.\n\n"

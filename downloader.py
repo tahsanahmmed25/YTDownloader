@@ -353,14 +353,15 @@ def get_playlist_entries(url, cookiefile=None, browser_auth=None, timeout=15, ma
 
     info = None
     last_err = None
+    has_auth = bool(_cookiefile_path(cookiefile, require_auth=True) or browser_auth)
     auth_attempts = _iter_auth_attempts(
         cookiefile,
         browser_auth,
         allow_fallback=True,
-        prefer_no_auth=True
+        prefer_no_auth=not has_auth
     )
-    for client in _client_fallbacks():
-        for mode, value in auth_attempts:
+    for mode, value in auth_attempts:
+        for client in _client_fallbacks(authenticated=(mode != "none")):
             opts = dict(base_opts)
             if mode == "cookiefile":
                 apply_restricted_mode_options(opts, cookiefile=value)
@@ -370,7 +371,9 @@ def get_playlist_entries(url, cookiefile=None, browser_auth=None, timeout=15, ma
                 apply_normal_mode_options(opts)
             apply_client_fallback(opts, client)
             _log.info("Playlist extract attempt: client=%s auth=%s", client or "default", mode)
+            runtime_cookie = None
             try:
+                runtime_cookie = _prepare_runtime_cookiefile(opts)
                 with _YTDLP_LOCK:
                     with ytdlp.YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(url, download=False)
@@ -379,6 +382,9 @@ def get_playlist_entries(url, cookiefile=None, browser_auth=None, timeout=15, ma
                 last_err = e
                 info = None
                 continue
+            finally:
+                _restore_runtime_cookiefile(opts)
+                _cleanup_runtime_cookiefile(runtime_cookie)
         if info is not None:
             break
 
@@ -496,17 +502,17 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
     last_err = None
     lock_err = None
 
+    has_auth = bool(_cookiefile_path(cookiefile, require_auth=True) or browser_auth)
     auth_attempts = _iter_auth_attempts(
         cookiefile,
         browser_auth,
         allow_fallback=True,
-        prefer_no_auth=True   # try no-auth first so public videos always work;
-                              # cookies are the second attempt for restricted videos
+        prefer_no_auth=not has_auth
     )
-    for client in _client_fallbacks():
+    for mode, value in auth_attempts:
         if (time.time() - started_at) >= max_probe_seconds:
             break
-        for mode, value in auth_attempts:
+        for client in _client_fallbacks(authenticated=(mode != "none")):
             if (time.time() - started_at) >= max_probe_seconds:
                 break
             opts = dict(base_opts)
@@ -527,7 +533,9 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
                 auth_label,
                 f" file={value}" if mode == "cookiefile" else ""
             )
+            runtime_cookie = None
             try:
+                runtime_cookie = _prepare_runtime_cookiefile(opts)
                 with _YTDLP_LOCK:
                     with ytdlp.YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(url, download=False)
@@ -558,6 +566,9 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
 
                 last_err = e
                 continue
+            finally:
+                _restore_runtime_cookiefile(opts)
+                _cleanup_runtime_cookiefile(runtime_cookie)
             score = _info_score(info)
             if best_info is None or score > best_score:
                 best_info = info
@@ -839,9 +850,15 @@ def _make_renaming_ydl(yt_dlp_mod):
 def _download_with_opts(url, ydl_opts):
     ytdlp = _get_yt_dlp()
     RenamingYDL = _make_renaming_ydl(ytdlp)
-    with _YTDLP_LOCK:
-        with RenamingYDL(ydl_opts) as ydl:
-            ydl.download([url])
+    ydl_opts = dict(ydl_opts)
+    runtime_cookie = _prepare_runtime_cookiefile(ydl_opts)
+    try:
+        with _YTDLP_LOCK:
+            with RenamingYDL(ydl_opts) as ydl:
+                ydl.download([url])
+    finally:
+        _restore_runtime_cookiefile(ydl_opts)
+        _cleanup_runtime_cookiefile(runtime_cookie)
 
 
 def _parse_progress_int(value):
@@ -856,6 +873,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
     if not exe_path:
         raise RuntimeError("yt-dlp.exe not found")
 
+    ydl_opts = dict(ydl_opts)
+    runtime_cookie = _prepare_runtime_cookiefile(ydl_opts)
     cmd = [exe_path, "--newline", "--no-color", "--continue"]
 
     if ydl_opts.get("no_warnings"):
@@ -902,6 +921,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
 
     ffmpeg_loc = ydl_opts.get("ffmpeg_location")
     if ffmpeg_loc:
+        if os.path.isfile(ffmpeg_loc):
+            ffmpeg_loc = os.path.dirname(ffmpeg_loc)
         cmd.extend(["--ffmpeg-location", ffmpeg_loc])
 
     cookiefile = ydl_opts.get("cookiefile")
@@ -999,7 +1020,12 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
         # Add CREATE_NO_WINDOW flag for Windows to suppress console window
         popen_kwargs["creationflags"] = 0x08000000 # subprocess.CREATE_NO_WINDOW
 
-    proc = subprocess.Popen(cmd, **popen_kwargs)
+    try:
+        proc = subprocess.Popen(cmd, **popen_kwargs)
+    except Exception:
+        _restore_runtime_cookiefile(ydl_opts)
+        _cleanup_runtime_cookiefile(runtime_cookie)
+        raise
     import queue as _queue
     line_queue = _queue.Queue()
 
@@ -1161,6 +1187,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
                 proc.stdout.close()
         except Exception:
             pass
+        _restore_runtime_cookiefile(ydl_opts)
+        _cleanup_runtime_cookiefile(runtime_cookie)
 
     returncode = proc.wait()
 
@@ -1296,13 +1324,15 @@ def _check_ydl_cookie_warnings(ydl, base_opts):
             logger.warnings.append(w_str)
 
 
-def _cookiefile_path(cookiefile=None):
+def _cookiefile_path(cookiefile=None, require_auth=False):
     """Resolve *cookiefile* to an absolute path, validating it contains real cookies.
 
     Returns None (do not pass cookies) if:
     - path is empty / None
     - file does not exist on disk
     - file contains no actual cookie rows (e.g. header-only file)
+    - require_auth=True and it lacks the YouTube/Google auth cookies needed
+      for restricted videos
     """
     if not cookiefile:
         return None
@@ -1329,12 +1359,60 @@ def _cookiefile_path(cookiefile=None):
             cookiefile
         )
         return None
+    if require_auth:
+        try:
+            from ui.session_manager import has_required_auth_cookies
+            if not has_required_auth_cookies(cookiefile):
+                _log.warning(
+                    "Cookie file %s lacks the YouTube/Google auth cookies required for restricted videos — skipping",
+                    cookiefile
+                )
+                return None
+        except Exception as exc:
+            _log.warning("Could not validate auth cookies in %s: %s", cookiefile, exc)
+            return None
     try:
         size = os.path.getsize(cookiefile)
     except OSError:
         size = -1
     _log.info("Cookie file resolved: %s (%d bytes)", cookiefile, size)
     return cookiefile
+
+
+def _prepare_runtime_cookiefile(ydl_opts):
+    cookiefile = ydl_opts.get("cookiefile")
+    if not cookiefile:
+        return None
+    try:
+        os.makedirs(local_tmp_dir(), exist_ok=True)
+        runtime_path = os.path.join(
+            local_tmp_dir(),
+            f"yt-cookies-{os.getpid()}-{threading.get_ident()}-{time.time_ns()}.txt"
+        )
+        shutil.copy2(cookiefile, runtime_path)
+        ydl_opts["cookiefile"] = runtime_path
+        ydl_opts["_managed_cookiefile"] = cookiefile
+        return runtime_path
+    except Exception as exc:
+        _log.warning("Could not create runtime cookie copy for %s: %s", cookiefile, exc)
+        return None
+
+
+def _restore_runtime_cookiefile(ydl_opts):
+    managed_cookiefile = ydl_opts.pop("_managed_cookiefile", None)
+    if managed_cookiefile:
+        ydl_opts["cookiefile"] = managed_cookiefile
+
+
+def _cleanup_runtime_cookiefile(path):
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        _log.debug("Could not remove runtime cookie copy %s: %s", path, exc)
 
 
 def build_base_options(timeout=10, noplaylist=True, skip_download=True, logger=None):
@@ -1442,7 +1520,7 @@ def _normalize_browser_auth_for_cli(value):
 
 
 def apply_restricted_mode_options(opts, cookiefile=None, browser_auth=None):
-    cookie_path = _cookiefile_path(cookiefile)
+    cookie_path = _cookiefile_path(cookiefile, require_auth=True)
     if cookie_path:
         opts["cookiefile"] = cookie_path
     if browser_auth:
@@ -1469,7 +1547,7 @@ def apply_client_fallback(opts, client):
     return opts
 
 
-def _client_fallbacks():
+def _client_fallbacks(authenticated=False):
     """Ordered list of YouTube player clients to try.
 
     As of April 2025, YouTube requires GVS Proof-of-Origin (PO) tokens for
@@ -1489,6 +1567,8 @@ def _client_fallbacks():
     The 'web' client requires PO tokens (generated via JS/deno) and is
     intentionally omitted for packaged builds without a JS runtime.
     """
+    if authenticated:
+        return [None, "android", "ios", "tv_embedded"]
     return ["android", "ios", "tv_embedded", None]
 
 
@@ -1496,7 +1576,7 @@ def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True,
     attempts = []
     if allow_fallback and prefer_no_auth:
         attempts.append(("none", None))
-    cookie_path = _cookiefile_path(cookiefile)
+    cookie_path = _cookiefile_path(cookiefile, require_auth=True)
     if cookie_path:
         attempts.append(("cookiefile", cookie_path))
     if browser_auth:
@@ -1586,7 +1666,7 @@ def _requires_auth(msg):
 
 def _extract_info_with_cookies(url, base_opts, cookiefile=None):
     ytdlp = _get_yt_dlp()
-    cookiefile = _cookiefile_path(cookiefile)
+    cookiefile = _cookiefile_path(cookiefile, require_auth=True)
     last_err = None
     best_info = None
     best_score = (-1, -1, -1)
@@ -1600,7 +1680,9 @@ def _extract_info_with_cookies(url, base_opts, cookiefile=None):
         ydl_opts = dict(base_opts)
         if mode == "cookiefile":
             ydl_opts["cookiefile"] = value
+        runtime_cookie = None
         try:
+            runtime_cookie = _prepare_runtime_cookiefile(ydl_opts)
             with _YTDLP_LOCK:
                 with ytdlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
@@ -1613,6 +1695,9 @@ def _extract_info_with_cookies(url, base_opts, cookiefile=None):
         except Exception as e:
             last_err = e
             continue
+        finally:
+            _restore_runtime_cookiefile(ydl_opts)
+            _cleanup_runtime_cookiefile(runtime_cookie)
 
     if best_info is not None:
         return best_info
@@ -1799,9 +1884,13 @@ def download_video(url,
 
     ffmpeg_path = _find_local_binary("ffmpeg")
     if ffmpeg_path:
-        base_opts["ffmpeg_location"] = ffmpeg_path
+        base_opts["ffmpeg_location"] = os.path.dirname(ffmpeg_path) if os.path.isfile(ffmpeg_path) else ffmpeg_path
+    else:
+        _log.warning(
+            "FFmpeg is not ready; using single-file progressive formats to avoid leaving separate audio/video files."
+        )
 
-    cookiefile = _cookiefile_path(cookiefile)
+    cookiefile = _cookiefile_path(cookiefile, require_auth=True)
     if browser_auth:
         if isinstance(browser_auth, (list, tuple)):
             cleaned = []
@@ -1824,17 +1913,23 @@ def download_video(url,
 
     container = (container or "auto").lower()
     merge_fmt = None
-    if container in ("mp4", "webm", "mkv"):
+    if ffmpeg_path and container in ("mp4", "webm", "mkv"):
         merge_fmt = container
 
     def _resolve_format_string(quality_val, container_val):
         q = str(quality_val).lower()
         if "auto" in q:
-             if container_val == "mp4":
-                 return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-             elif container_val == "webm":
-                 return "bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best"
-             return "bestvideo+bestaudio/best"
+            if not ffmpeg_path:
+                if container_val == "mp4":
+                    return "best[ext=mp4]/best"
+                if container_val == "webm":
+                    return "best[ext=webm]/best"
+                return "best"
+            if container_val == "mp4":
+                return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            elif container_val == "webm":
+                return "bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best"
+            return "bestvideo+bestaudio/best"
 
         # Extract height from labels like "1080p (HD)" or "720p"
         import re
@@ -1843,6 +1938,12 @@ def download_video(url,
 
         # Use height<= (not height=) so we pick the best available quality
         # at or below the requested resolution instead of failing on exact match.
+        if not ffmpeg_path:
+            if container_val == "mp4":
+                return f"best[height<={h}][ext=mp4]/best[height<={h}]/best"
+            if container_val == "webm":
+                return f"best[height<={h}][ext=webm]/best[height<={h}]/best"
+            return f"best[height<={h}]/best"
         if container_val == "mp4":
             return (
                 f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]"
@@ -1868,8 +1969,9 @@ def download_video(url,
 
     fmt_requested = _resolve_format_string(quality, container)
     fmt_best = _resolve_format_string("auto", container)
-    # Ultimate safe fallback — no container or height constraints at all.
-    fmt_safe = "bestvideo+bestaudio/best"
+    # Ultimate safe fallback. Without FFmpeg, never request split streams; that
+    # is what leaves separate video/audio files on Linux while setup is running.
+    fmt_safe = "bestvideo+bestaudio/best" if ffmpeg_path else "best"
 
     attempts = []
     if "auto" not in str(quality).lower():
@@ -1900,7 +2002,7 @@ def download_video(url,
     for auth_label, opts_template in auth_sets:
         if _skip_to_restricted and auth_label == "normal":
             continue
-        for client in _client_fallbacks():
+        for client in _client_fallbacks(authenticated=(auth_label != "normal")):
             if _skip_to_restricted:
                 _skip_to_restricted = False  # consumed: proceed with restricted
             for label, fmt in attempts:

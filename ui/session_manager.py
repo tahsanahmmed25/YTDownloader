@@ -7,7 +7,7 @@ Entirely I/O focused; no Qt dependency, safe to call from any thread.
 Critical design contract
 ------------------------
 A "valid session" means the cookies file ACTUALLY CONTAINS real YouTube
-authentication cookies (SID, SAPISID, __Secure-1PSID, etc.).
+and Google authentication cookies (SID, SAPISID, __Secure-1PSID, etc.).
 
 Merely having a file with the Netscape header but no auth cookies is
 treated the same as having no session at all — we NEVER pass such a file
@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import logging
+from collections import defaultdict
 
 from app_config import app_data_dir
 
@@ -47,8 +48,21 @@ _YOUTUBE_AUTH_COOKIE_NAMES = frozenset({
     "LOGIN_INFO",
 })
 
-# Minimum number of auth cookies we require before considering a session valid
-_MIN_AUTH_COOKIES = 1
+# YouTube age/membership checks can depend on both YouTube and Google account
+# cookies. A YouTube-only cookie file may look logged in but still fail
+# age-restricted videos with "Sign in to confirm your age".
+_YOUTUBE_COOKIE_DOMAINS = (".youtube.com", "youtube.com")
+_GOOGLE_COOKIE_DOMAINS = (".google.com", "google.com")
+_COOKIE_LOAD_DOMAINS = (".youtube.com", ".google.com")
+
+# Minimum number of auth cookies we require before considering a session valid.
+_MIN_AUTH_COOKIES = 2
+
+_AUTO_BROWSER_ORDER = ["chrome", "firefox", "edge", "brave", "opera", "chromium"]
+if sys.platform.startswith("linux"):
+    # Firefox does not require the Linux keyring for cookie decryption, which
+    # makes it the most reliable first attempt on Zorin/Ubuntu-like desktops.
+    _AUTO_BROWSER_ORDER = ["firefox", "chrome", "edge", "brave", "opera", "chromium"]
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +72,11 @@ _MIN_AUTH_COOKIES = 1
 def get_session_cookies_path() -> str:
     """Canonical path for the managed session cookies file."""
     return os.path.join(app_data_dir(), _COOKIES_FILENAME)
+
+
+def get_browser_auto_order() -> list:
+    """Return the browser order used by auto cookie extraction."""
+    return list(_AUTO_BROWSER_ORDER)
 
 
 def load_session() -> str:
@@ -107,10 +126,7 @@ def save_cookies_from_browser(browser_name: str) -> str:
     """
     import browser_cookie3
 
-    _YOUTUBE_DOMAINS = (
-        ".youtube.com", "youtube.com",
-        ".google.com", "google.com",
-    )
+    _YOUTUBE_DOMAINS = _YOUTUBE_COOKIE_DOMAINS + _GOOGLE_COOKIE_DOMAINS
 
     _BROWSER_LOADERS = {
         "chrome":   browser_cookie3.chrome,
@@ -121,16 +137,11 @@ def save_cookies_from_browser(browser_name: str) -> str:
         "chromium": browser_cookie3.chromium,
     }
 
-    auto_order = ["chrome", "firefox", "edge", "brave", "opera", "chromium"]
-    # On Linux, Firefox does NOT need the system keyring to decrypt cookies,
-    # making it far more reliable than Chrome/Edge/Brave in non-desktop environments.
-    # Reorder so Firefox is tried first on Linux.
-    if sys.platform.startswith("linux"):
-        auto_order = ["firefox", "chrome", "edge", "brave", "opera", "chromium"]
-    names_to_try = auto_order if browser_name == "auto" else [browser_name.lower()]
+    names_to_try = get_browser_auto_order() if browser_name == "auto" else [browser_name.lower()]
 
-    best_collected: dict = {}          # (domain, name) → cookie
+    best_collected: dict = {}          # (domain, path, name) → cookie
     best_auth_count: int = 0
+    best_has_required_auth = False
     last_err = None
 
     for name in names_to_try:
@@ -138,26 +149,36 @@ def save_cookies_from_browser(browser_name: str) -> str:
         if loader is None:
             continue
         try:
-            jar = loader(domain_name=".youtube.com")
             collected: dict = {}
-            for cookie in jar:
-                if any(cookie.domain.endswith(d) for d in _YOUTUBE_DOMAINS):
-                    collected[(cookie.domain, cookie.name)] = cookie
+            for domain_name in _COOKIE_LOAD_DOMAINS:
+                try:
+                    jar = loader(domain_name=domain_name)
+                except Exception:
+                    if domain_name == _COOKIE_LOAD_DOMAINS[-1]:
+                        raise
+                    continue
+                for cookie in jar:
+                    domain = (getattr(cookie, "domain", "") or "").lower()
+                    if any(domain.endswith(d) for d in _YOUTUBE_DOMAINS):
+                        path_val = getattr(cookie, "path", "/") or "/"
+                        collected[(cookie.domain, path_val, cookie.name)] = cookie
 
             auth_count = sum(
-                1 for (_, cname) in collected
+                1 for (*_, cname) in collected
                 if cname in _YOUTUBE_AUTH_COOKIE_NAMES
             )
+            has_required_auth = _cookies_have_required_auth(collected)
             _log.info(
-                "Browser '%s': found %d YouTube cookies, %d auth cookies",
-                name, len(collected), auth_count
+                "Browser '%s': found %d YouTube/Google cookies, %d auth cookies, required_auth=%s",
+                name, len(collected), auth_count, has_required_auth
             )
 
-            if auth_count > best_auth_count:
+            if has_required_auth or auth_count > best_auth_count:
                 best_auth_count = auth_count
                 best_collected = collected
+                best_has_required_auth = has_required_auth
 
-            if auth_count >= _MIN_AUTH_COOKIES:
+            if has_required_auth:
                 break   # found a good browser — stop searching
 
         except Exception as exc:
@@ -168,7 +189,7 @@ def save_cookies_from_browser(browser_name: str) -> str:
                 _log.warning("Browser '%s' extraction error: %s", name, exc)
             last_err = exc
 
-    if best_auth_count < _MIN_AUTH_COOKIES:
+    if not best_has_required_auth:
         # Check if the failure was due to a decryption error (Linux keyring issue)
         _is_linux = sys.platform.startswith("linux")
         _decryption_keywords = ("decrypt", "dbus", "secretstorage", "secretservice", "keyring")
@@ -185,8 +206,14 @@ def save_cookies_from_browser(browser_name: str) -> str:
                 "  then click \u2018Connect Browser\u2019."
             )
         detail = f"\n\nTechnical detail: {last_err}" if last_err else ""
+        if best_auth_count >= _MIN_AUTH_COOKIES:
+            detail = (
+                "\n\nSome account cookies were found, but the browser did not expose both "
+                "YouTube and Google login cookies. Open YouTube in that browser, confirm "
+                "you are signed in, then reconnect."
+            ) + detail
         raise RuntimeError(
-            "No YouTube login cookies were found in any browser.\n\n"
+            "No complete YouTube login session was found in any browser.\n\n"
             "Please make sure you are fully logged in to YouTube in your "
             "browser (Firefox is most reliable on Linux) and try again.\n\n"
             "If you recently logged in, close and reopen your browser once "
@@ -215,6 +242,42 @@ def get_auth_cookie_names_in_file(path: str) -> set:
     return found
 
 
+def get_auth_cookie_domain_groups_in_file(path: str) -> dict:
+    """Return auth cookie names grouped by YouTube/Google domain family."""
+    groups = defaultdict(set)
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 7:
+                    continue
+                domain = (parts[0] or "").lower()
+                cookie_name = parts[5]
+                if cookie_name not in _YOUTUBE_AUTH_COOKIE_NAMES:
+                    continue
+                if any(domain.endswith(d) for d in _YOUTUBE_COOKIE_DOMAINS):
+                    groups["youtube"].add(cookie_name)
+                elif any(domain.endswith(d) for d in _GOOGLE_COOKIE_DOMAINS):
+                    groups["google"].add(cookie_name)
+                else:
+                    groups["other"].add(cookie_name)
+    except OSError:
+        pass
+    return dict(groups)
+
+
+def has_required_auth_cookies(path: str) -> bool:
+    """True when a cookies file has enough account cookies for restricted videos."""
+    groups = get_auth_cookie_domain_groups_in_file(path)
+    youtube = groups.get("youtube") or set()
+    google = groups.get("google") or set()
+    total = sum(len(names) for names in groups.values())
+    return bool(total >= _MIN_AUTH_COOKIES and youtube and google)
+
+
 def clear_session() -> None:
     """Delete the managed cookies file."""
     path = get_session_cookies_path()
@@ -231,13 +294,40 @@ def clear_session() -> None:
 # ---------------------------------------------------------------------------
 
 def _file_has_auth_cookies(path: str) -> bool:
-    """Return True if the file contains at least one YouTube auth cookie."""
-    auth_names = get_auth_cookie_names_in_file(path)
-    if auth_names:
-        _log.info("Cookie file %s contains auth cookies: %s", path, auth_names)
+    """Return True if the file contains the auth cookies restricted videos need."""
+    groups = get_auth_cookie_domain_groups_in_file(path)
+    auth_names = set()
+    for names in groups.values():
+        auth_names.update(names)
+    if has_required_auth_cookies(path):
+        _log.info("Cookie file %s contains required auth cookies: %s", path, auth_names)
         return True
-    _log.warning("Cookie file %s has NO YouTube auth cookies", path)
+    if auth_names:
+        _log.warning(
+            "Cookie file %s has auth cookies but is missing either YouTube or Google account cookies",
+            path
+        )
+    else:
+        _log.warning("Cookie file %s has NO YouTube/Google auth cookies", path)
     return False
+
+
+def _cookies_have_required_auth(cookies: dict) -> bool:
+    groups = defaultdict(set)
+    for key in cookies:
+        if len(key) == 3:
+            domain, _path, name = key
+        else:
+            domain, name = key
+        domain = (domain or "").lower()
+        if name not in _YOUTUBE_AUTH_COOKIE_NAMES:
+            continue
+        if any(domain.endswith(d) for d in _YOUTUBE_COOKIE_DOMAINS):
+            groups["youtube"].add(name)
+        elif any(domain.endswith(d) for d in _GOOGLE_COOKIE_DOMAINS):
+            groups["google"].add(name)
+    total = sum(len(names) for names in groups.values())
+    return bool(total >= _MIN_AUTH_COOKIES and groups["youtube"] and groups["google"])
 
 
 def _write_cookies_file(cookies: dict) -> str:
@@ -247,7 +337,11 @@ def _write_cookies_file(cookies: dict) -> str:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write("# Netscape HTTP Cookie File\n")
             f.write("# Managed by YTDownloader. Do not edit.\n\n")
-            for (domain, name), cookie in cookies.items():
+            for key, cookie in cookies.items():
+                if len(key) == 3:
+                    domain, _path_key, name = key
+                else:
+                    domain, name = key
                 include_sub = "TRUE" if domain.startswith(".") else "FALSE"
                 path_val = getattr(cookie, "path", "/") or "/"
                 secure = "TRUE" if getattr(cookie, "secure", False) else "FALSE"

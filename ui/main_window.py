@@ -60,11 +60,13 @@ from app_config import (
     extract_update_info
 )
 from errors import humanize_error
+from auth.session_store import restore_proxy_secret, save_proxy_url
 from logging_utils import get_logger
 from ui.widgets import FadingTextButton, PasteButton, MarqueeLabel
 from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
 from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
+from updates.manager import custom_update_urls_enabled, validate_update_url
 import queue_manager
 import ytdlp_exe_manager
 import ffmpeg_manager
@@ -168,7 +170,11 @@ class Downloader(QMainWindow, PagesMixin):
         if self.speed_limit_kbps < 0:
             self.speed_limit_kbps = 0
 
-        self.proxy_url = self.settings.value("proxy_url", "", type=str)
+        stored_proxy = self.settings.value("proxy_url", "", type=str)
+        self.proxy_display_url = save_proxy_url(stored_proxy)
+        if self.proxy_display_url != stored_proxy:
+            self.settings.setValue("proxy_url", self.proxy_display_url)
+        self.proxy_url = restore_proxy_secret(self.proxy_display_url)
 
         self.update_manifest_url = self.settings.value(
             "update_manifest_url",
@@ -208,6 +214,9 @@ class Downloader(QMainWindow, PagesMixin):
                 self.update_url_404_disabled = False
                 self.settings.setValue("update_url_404_value", "")
                 self.settings.setValue("update_url_404_disabled", False)
+        if not custom_update_urls_enabled() and self.update_manifest_url != DEFAULT_UPDATE_MANIFEST_URL:
+            self.update_manifest_url = DEFAULT_UPDATE_MANIFEST_URL
+            self.settings.setValue("update_manifest_url", self.update_manifest_url)
 
         self._fetch_thread = None
         self._fetch_worker = None
@@ -268,7 +277,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.nav_library_btn = None
         self.nav_history_btn = None
         self._open_dialogs = []
-        self._reset_requested = False
+        self._ui_generation = 0
         self._task_last_activity = {}
         self._active_fade_removals = 0
         self._task_watchdog = QTimer(self)
@@ -761,6 +770,7 @@ class Downloader(QMainWindow, PagesMixin):
     def _reset_download_item(self, item, title):
         if not item:
             return
+        item["frame"].setVisible(True)
         item["title"].setText(title)
         item["status"].setText("Downloading...")
         self._set_status_icon(item["status_icon"], "active", "")
@@ -1361,7 +1371,6 @@ class Downloader(QMainWindow, PagesMixin):
     def _force_cleanup_active_tasks(self):
         stale_ids = list(self._active_tasks.keys())
         if not stale_ids:
-            self._maybe_finalize_reset()
             return
         for task_id in stale_ids:
             worker = self._download_workers.get(task_id)
@@ -1377,13 +1386,10 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
             self._mark_task_failed(task_id)
-        if self._reset_requested:
-            self._show_toast("Active downloads were stopped.", variant="info")
-        else:
-            self._show_error_dialog(
-                "Error",
-                "Some downloads were force-stopped because they were not responding."
-            )
+        self._show_error_dialog(
+            "Error",
+            "Some downloads were force-stopped because they were not responding."
+        )
 
     def _check_stalled_tasks(self):
         try:
@@ -2117,10 +2123,15 @@ class Downloader(QMainWindow, PagesMixin):
         msg_box = QMessageBox(self)
         display_name = browser_name.capitalize()
         msg_box.setWindowTitle(f"{display_name} Locked")
+        targets = ", ".join(self._browser_process_names(browser_name))
         msg_box.setText(f"YouTube requires cookies from {display_name}, but the browser is currently open and locking them.")
-        msg_box.setInformativeText(f"Would you like to close {display_name} now to proceed? (Make sure to save your work first!)")
+        msg_box.setInformativeText(
+            f"This will force-close all running {display_name} windows/processes"
+            f"{f' ({targets})' if targets else ''}. Save open work first.\n\n"
+            "Close the browser now and continue?"
+        )
         msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.Yes)
+        msg_box.setDefaultButton(QMessageBox.No)
         msg_box.setIcon(QMessageBox.Warning)
         
         ret = msg_box.exec()
@@ -2137,48 +2148,62 @@ class Downloader(QMainWindow, PagesMixin):
             display_name = browser_name.capitalize()
             self.on_fetch_error(f"Authentication failed because {display_name} is open.")
 
+    def _browser_process_names(self, name):
+        name_lower = (name or "").lower()
+        if sys.platform == "win32":
+            proc_map = {
+                "chrome": "chrome.exe",
+                "edge": "msedge.exe",
+                "firefox": "firefox.exe",
+                "brave": "brave.exe",
+                "opera": "opera.exe",
+                "vivaldi": "vivaldi.exe",
+                "chromium": "chromium.exe",
+            }
+        else:
+            proc_map = {
+                "chrome": "chrome",
+                "edge": "msedge",
+                "firefox": "firefox",
+                "brave": "brave",
+                "opera": "opera",
+                "vivaldi": "vivaldi",
+                "chromium": "chromium",
+            }
+        proc_name = next((v for k, v in proc_map.items() if k in name_lower), "")
+        if not proc_name and re.fullmatch(r"[A-Za-z0-9._-]+", name_lower):
+            proc_name = f"{name_lower}.exe" if sys.platform == "win32" else name_lower
+        return [proc_name] if proc_name else []
+
     def _kill_browser(self, name):
         try:
             import subprocess
             import sys as _sys
-            name_lower = name.lower()
+            proc_names = self._browser_process_names(name)
+            if not proc_names:
+                _log.warning("Refusing to force-close unknown browser process name: %s", name)
+                return False
             if _sys.platform == "win32":
-                # Windows: taskkill by .exe process name
-                if "chrome" in name_lower:
-                    proc_name = "chrome.exe"
-                elif "edge" in name_lower:
-                    proc_name = "msedge.exe"
-                elif "firefox" in name_lower:
-                    proc_name = "firefox.exe"
-                elif "brave" in name_lower:
-                    proc_name = "brave.exe"
-                elif "opera" in name_lower:
-                    proc_name = "opera.exe"
-                elif "vivaldi" in name_lower:
-                    proc_name = "vivaldi.exe"
-                else:
-                    proc_name = f"{name_lower}.exe"
-                subprocess.run(
-                    ["taskkill", "/F", "/IM", proc_name],
-                    capture_output=True,
-                    creationflags=0x08000000
-                )
+                for proc_name in proc_names:
+                    completed = subprocess.run(
+                        ["taskkill", "/F", "/IM", proc_name],
+                        capture_output=True,
+                        text=True,
+                        creationflags=0x08000000
+                    )
+                    _log.warning("Force-closed browser process %s with exit code %s", proc_name, completed.returncode)
+                    if completed.returncode not in (0, 128):
+                        return False
             else:
-                # Linux/macOS: pkill by process name (no .exe)
-                linux_map = {
-                    "chrome": "chrome",
-                    "edge": "msedge",
-                    "firefox": "firefox",
-                    "brave": "brave",
-                    "opera": "opera",
-                    "vivaldi": "vivaldi",
-                    "chromium": "chromium",
-                }
-                proc_name = next(
-                    (v for k, v in linux_map.items() if k in name_lower),
-                    name_lower
-                )
-                subprocess.run(["pkill", "-f", proc_name], capture_output=True)
+                for proc_name in proc_names:
+                    completed = subprocess.run(
+                        ["pkill", "-x", proc_name],
+                        capture_output=True,
+                        text=True,
+                    )
+                    _log.warning("Force-closed browser process %s with exit code %s", proc_name, completed.returncode)
+                    if completed.returncode not in (0, 1):
+                        return False
             return True
         except Exception as e:
             _log.warning("Failed to kill browser %s: %s", name, e)
@@ -2441,6 +2466,7 @@ class Downloader(QMainWindow, PagesMixin):
         task_id = uuid.uuid4().hex
         task = {
             "id": task_id,
+            "generation": self._ui_generation,
             "payload": payload,
             "title": title_text,
             "state": "queued",
@@ -2494,6 +2520,9 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _start_task(self, task):
         try:
+            if task.get("generation") != self._ui_generation:
+                return
+
             task_id = task["id"]
             payload = task["payload"]
             _log.info("Starting task %s for url=%s", task_id, payload.get("url"))
@@ -2701,7 +2730,7 @@ class Downloader(QMainWindow, PagesMixin):
     def on_download_paused(self, task_id):
         task = self._active_tasks.pop(task_id, None)
         self._clear_task_activity(task_id)
-        if not task:
+        if not task or task.get("generation") != self._ui_generation:
             return
         task["state"] = "paused"
         item = task.get("item") or {}
@@ -2726,7 +2755,7 @@ class Downloader(QMainWindow, PagesMixin):
     def on_download_complete(self, task_id, items):
         task = self._active_tasks.pop(task_id, None)
         self._clear_task_activity(task_id)
-        if not task:
+        if not task or task.get("generation") != self._ui_generation:
             return
         payload = task.get("payload") or {}
         session_id = payload.get("playlist_session_id") or ""
@@ -2805,10 +2834,10 @@ class Downloader(QMainWindow, PagesMixin):
 
     def on_download_error(self, task_id, msg):
         try:
-            if task_id not in self._active_tasks:
+            task = self._active_tasks.get(task_id)
+            if not task or task.get("generation") != self._ui_generation:
                 _log.info("Ignoring late error for inactive task %s: %s", task_id, msg)
                 return
-            task = self._active_tasks.get(task_id) or {}
             payload = task.get("payload") or {}
             session_id = payload.get("playlist_session_id") or ""
             clean = re.sub(r"\x1b\[[0-9;]*m", "", msg)
@@ -2858,7 +2887,6 @@ class Downloader(QMainWindow, PagesMixin):
             QTimer.singleShot(200, lambda tid=task_id: self._finalize_task_if_still_active(tid))
             return
         self._start_next_downloads()
-        self._maybe_finalize_reset()
 
     def _finalize_task_if_still_active(self, task_id):
         if task_id in self._active_tasks:
@@ -2868,7 +2896,6 @@ class Downloader(QMainWindow, PagesMixin):
             )
             self._mark_task_failed(task_id)
             return
-        self._maybe_finalize_reset()
 
     @Slot(str, float, object, object, object)
     def update_progress(self, task_id, percent, speed=None, downloaded=None, total=None):
@@ -2878,7 +2905,7 @@ class Downloader(QMainWindow, PagesMixin):
             value = 0
         value = max(0, min(100, value))
         task = self._active_tasks.get(task_id)
-        if not task:
+        if not task or task.get("generation") != self._ui_generation:
             return
         self._touch_task_activity(task_id)
         task["downloaded"] = downloaded if downloaded is not None else task.get("downloaded")
@@ -3036,6 +3063,7 @@ class Downloader(QMainWindow, PagesMixin):
         state = "paused" if saved_state == "paused" else "queued"
         task = {
             "id": task_id,
+            "generation": self._ui_generation,
             "payload": payload,
             "title": title_text,
             "state": state,
@@ -3096,13 +3124,6 @@ class Downloader(QMainWindow, PagesMixin):
             self.progress.setFormat("0%")
         self._last_progress_value = 0
 
-    def _maybe_finalize_reset(self):
-        if not self._active_tasks and self._cancel_grace_timer.isActive():
-            self._cancel_grace_timer.stop()
-        if self._reset_requested and not self._active_tasks and not self._has_running_download_threads():
-            self._reset_requested = False
-            self.reset_ui()
-
     def reset_ui(self):
         if self._thread_is_running(self._fetch_thread):
             worker = getattr(self, "_fetch_worker", None)
@@ -3112,15 +3133,16 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
             return
+
+        self._ui_generation += 1
+
         if self._active_tasks:
-            self._reset_requested = True
             # Cancel the full pipeline: active + queued + paused + playlist session state.
             self._playlist_sessions.clear()
             self._clear_non_active_downloads()
             self._request_cancel_all_downloads("Cancelling...")
             self._show_toast("Stopping active downloads...", variant="info")
-            return
-        self._reset_requested = False
+
         if self._cancel_grace_timer.isActive():
             self._cancel_grace_timer.stop()
         if self._download_reset_timer.isActive():
@@ -3257,8 +3279,10 @@ class Downloader(QMainWindow, PagesMixin):
         self.settings.setValue("speed_limit_kbps", self.speed_limit_kbps)
 
     def _on_proxy_changed(self, text):
-        self.proxy_url = text.strip()
-        self.settings.setValue("proxy_url", self.proxy_url)
+        raw = text.strip()
+        self.proxy_display_url = save_proxy_url(raw)
+        self.proxy_url = restore_proxy_secret(self.proxy_display_url)
+        self.settings.setValue("proxy_url", self.proxy_display_url)
 
     def _clear_thumbnails(self):
         if not os.path.exists(THUMB_DIR):
@@ -3320,6 +3344,11 @@ class Downloader(QMainWindow, PagesMixin):
         if not hasattr(self, "update_url_input"):
             return
         self.update_manifest_url = self.update_url_input.text().strip()
+        if not custom_update_urls_enabled() and self.update_manifest_url != DEFAULT_UPDATE_MANIFEST_URL:
+            self.update_manifest_url = DEFAULT_UPDATE_MANIFEST_URL
+            self.update_url_input.blockSignals(True)
+            self.update_url_input.setText(self.update_manifest_url)
+            self.update_url_input.blockSignals(False)
         self.settings.setValue("update_manifest_url", self.update_manifest_url)
         if self.update_url_404_disabled:
             self.update_url_404_disabled = False
@@ -3337,6 +3366,13 @@ class Downloader(QMainWindow, PagesMixin):
                     "Updates",
                     "Update manifest URL is not set yet."
                 )
+            return
+        try:
+            validate_update_url(url)
+        except Exception as exc:
+            if manual:
+                self._show_message_dialog("Updates", f"Update URL blocked:\n{exc}", QMessageBox.Warning)
+            _log.warning("Blocked update URL %s: %s", url, exc)
             return
         if (
             not manual

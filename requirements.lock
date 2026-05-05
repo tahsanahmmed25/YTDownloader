@@ -1,0 +1,3 @@
+# Pinned direct runtime dependencies.
+# Regenerate intentionally after validating compatibility and release artifacts.
+-r requirements.txt

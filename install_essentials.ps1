@@ -21,6 +21,9 @@ catch {
 
 function DownloadFile($Url, $Destination) {
     Write-Host "Downloading $Url"
+    if (-not ($Url -like "https://*")) {
+        throw "Refusing non-HTTPS download URL: $Url"
+    }
     Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
 }
 
@@ -40,6 +43,15 @@ if (Test-Path $extractDir) {
 }
 
 DownloadFile $ffmpegUrl $zipPath
+$expectedHash = $env:YTDL_FFMPEG_WIN_ZIP_SHA256
+if (-not $expectedHash -or $expectedHash -notmatch '^[a-fA-F0-9]{64}$') {
+    throw "Set YTDL_FFMPEG_WIN_ZIP_SHA256 to the expected ffmpeg-release-essentials.zip SHA256 before running this script."
+}
+$actualHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+if ($actualHash -ne $expectedHash.ToLower()) {
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    throw "FFmpeg archive SHA256 mismatch. Expected $expectedHash but got $actualHash."
+}
 Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
 $ffmpegExe = Get-ChildItem -Path $extractDir -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1

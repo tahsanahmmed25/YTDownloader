@@ -1,12 +1,13 @@
-# Professional Deployment Summary
+# Deployment Summary
 
 ## What You've Built
-✅ A production-ready YouTube downloader with:
+YTDownloader is a desktop YouTube downloader with:
 - Modern GUI (PySide6)
 - Advanced features (pause/resume, queue, concurrent downloads)
 - Professional installer (Inno Setup)
 - Auto-update system
-- Code obfuscation (PyArmor)
+
+It is not fully production-ready until release signing, signed update manifests, full third-party binary hash pinning, and broader GUI/e2e validation are complete.
 
 ---
 
@@ -24,8 +25,11 @@ YTDownloader.iss → AppVersion=2.0.1
 
 ### **Step 2: Build Installer** (5-10 minutes)
 ```powershell
-# Install runtime dependencies into the project environment
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
+# Install pinned build/test dependencies into the project environment
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
+
+# Run checks first
+.\venv\Scripts\python.exe -m pytest
 
 # Clean old builds
 Remove-Item .\build, .\dist, .\dist_installer -Recurse -Force -ErrorAction SilentlyContinue
@@ -54,8 +58,8 @@ Stop-Process -Id $proc.Id
 1. Click "Releases" tab
 2. "Create a new release"
 3. Tag: v2.0.1
-4. Upload: YTDownloader-Setup.exe
-5. Add CHANGELOG content
+4. Upload: YTDownloader-Setup.exe and SHA256SUMS-windows.txt
+5. Add CHANGELOG content and `installer_sha256: <sha256>`
 
 # Users download from: github.com/tahsanahmmed25/YTDownloader/releases
 ```
@@ -87,7 +91,7 @@ Stop-Process -Id $proc.Id
 3. Downloads: YTDownloader-Setup.exe
 4. Runs installer
 5. App auto-checks for updates (your built-in system)
-6. Users always get latest version
+6. Users can update to the latest verified eligible version
 ```
 
 ### Update Flow
@@ -169,7 +173,7 @@ git push -u origin main
 ```bash
 # 1. Update version metadata (2 min)
 # 2. Update CHANGELOG.md (5 min)
-# 3. Install deps: .\venv\Scripts\python.exe -m pip install -r requirements.txt
+# 3. Install deps: .\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
 # 4. Build: .\build_release.ps1 (10 min)
 # 5. Smoke test: Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
 # 6. Wait 8s, confirm the process is still running, then stop it

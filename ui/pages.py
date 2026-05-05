@@ -442,7 +442,9 @@ class PagesMixin:
         proxy_row = QHBoxLayout()
         proxy_row.addWidget(QLabel("Proxy URL (optional)"))
         self.proxy_input = QLineEdit()
-        if hasattr(self, "proxy_url"):
+        if hasattr(self, "proxy_display_url"):
+            self.proxy_input.setText(self.proxy_display_url)
+        elif hasattr(self, "proxy_url"):
             self.proxy_input.setText(self.proxy_url)
         self.proxy_input.setPlaceholderText("http://user:pass@127.0.0.1:1080")
         self.proxy_input.textChanged.connect(self._on_proxy_changed)
@@ -482,6 +484,11 @@ class PagesMixin:
         row.setSpacing(8)
         self.update_url_input = QLineEdit()
         self.update_url_input.setText(self.update_manifest_url)
+        try:
+            from updates.manager import custom_update_urls_enabled
+            self.update_url_input.setReadOnly(not custom_update_urls_enabled())
+        except Exception:
+            self.update_url_input.setReadOnly(True)
         self.update_url_input.setCursorPosition(0)
         self.update_url_input.setMinimumWidth(0)
         self.update_url_input.textChanged.connect(self._on_update_url_changed)

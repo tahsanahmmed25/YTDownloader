@@ -21,7 +21,12 @@ import time
 import logging
 from collections import defaultdict
 
-from app_config import app_data_dir
+from auth.session_store import (
+    clear_session_storage,
+    managed_cookie_cache_path,
+    materialize_session_cookie_file,
+    save_session_cookie_text,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -71,7 +76,7 @@ if sys.platform.startswith("linux"):
 
 def get_session_cookies_path() -> str:
     """Canonical path for the managed session cookies file."""
-    return os.path.join(app_data_dir(), _COOKIES_FILENAME)
+    return managed_cookie_cache_path()
 
 
 def get_browser_auto_order() -> list:
@@ -84,7 +89,7 @@ def load_session() -> str:
     Return the cookies path if a valid authenticated session exists, else ''.
     Validity requires the file to contain real YouTube auth cookies.
     """
-    path = get_session_cookies_path()
+    path = materialize_session_cookie_file()
     if is_session_valid(path):
         _log.info("Session restored from %s", path)
         return path
@@ -280,13 +285,8 @@ def has_required_auth_cookies(path: str) -> bool:
 
 def clear_session() -> None:
     """Delete the managed cookies file."""
-    path = get_session_cookies_path()
-    try:
-        if os.path.isfile(path):
-            os.remove(path)
-            _log.info("Session cookies deleted: %s", path)
-    except OSError as exc:
-        _log.warning("Failed to delete session file: %s", exc)
+    clear_session_storage()
+    _log.info("Session cookies deleted from managed storage")
 
 
 # ---------------------------------------------------------------------------
@@ -332,26 +332,28 @@ def _cookies_have_required_auth(cookies: dict) -> bool:
 
 def _write_cookies_file(cookies: dict) -> str:
     """Write *cookies* dict to the managed Netscape cookies.txt and return path."""
-    out_path = get_session_cookies_path()
     try:
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write("# Netscape HTTP Cookie File\n")
-            f.write("# Managed by YTDownloader. Do not edit.\n\n")
-            for key, cookie in cookies.items():
-                if len(key) == 3:
-                    domain, _path_key, name = key
-                else:
-                    domain, name = key
-                include_sub = "TRUE" if domain.startswith(".") else "FALSE"
-                path_val = getattr(cookie, "path", "/") or "/"
-                secure = "TRUE" if getattr(cookie, "secure", False) else "FALSE"
-                expires = int(getattr(cookie, "expires", 0) or 0)
-                value = getattr(cookie, "value", "") or ""
-                f.write(
-                    f"{domain}\t{include_sub}\t{path_val}\t"
-                    f"{secure}\t{expires}\t{name}\t{value}\n"
-                )
-        _log.info("Wrote %d cookies to %s", len(cookies), out_path)
+        lines = [
+            "# Netscape HTTP Cookie File",
+            "# Managed by YTDownloader. Do not edit.",
+            "",
+        ]
+        for key, cookie in cookies.items():
+            if len(key) == 3:
+                domain, _path_key, name = key
+            else:
+                domain, name = key
+            include_sub = "TRUE" if domain.startswith(".") else "FALSE"
+            path_val = getattr(cookie, "path", "/") or "/"
+            secure = "TRUE" if getattr(cookie, "secure", False) else "FALSE"
+            expires = int(getattr(cookie, "expires", 0) or 0)
+            value = getattr(cookie, "value", "") or ""
+            lines.append(
+                f"{domain}\t{include_sub}\t{path_val}\t"
+                f"{secure}\t{expires}\t{name}\t{value}"
+            )
+        out_path, keyring_saved = save_session_cookie_text("\n".join(lines) + "\n")
+        _log.info("Wrote %d cookies to managed session storage (keyring=%s)", len(cookies), keyring_saved)
     except Exception as exc:
         raise RuntimeError(f"Failed to write cookies file: {exc}") from exc
     return out_path

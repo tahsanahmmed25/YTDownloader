@@ -13,11 +13,10 @@ Binaries are saved to bin_dir().
 import os
 import stat
 import shutil
-import tarfile
-import zipfile
 import threading
 
-from app_config import bin_dir, bin_name, local_tmp_dir, ensure_dir, IS_WINDOWS
+from app_config import bin_dir, bin_name, local_tmp_dir, ensure_dir, IS_WINDOWS, is_local_dev_mode
+from core.security import assert_https_url, safe_extract_tar, safe_extract_zip, verify_sha256
 from logging_utils import get_logger
 from net_utils import request_with_retry
 
@@ -35,6 +34,8 @@ _FFMPEG_LIN_URL = (
 _FFMPEG_LIN_VERSION_URL = (
     "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
 )
+_FFMPEG_WIN_ZIP_SHA256 = os.environ.get("YTDL_FFMPEG_WIN_ZIP_SHA256", "").strip()
+_FFMPEG_LIN_TAR_SHA256 = os.environ.get("YTDL_FFMPEG_LIN_TAR_SHA256", "").strip()
 
 _VERSION_FILE = "ffmpeg.version"    # sits in bin_dir()
 _LOCK = threading.Lock()
@@ -127,6 +128,7 @@ def _download_windows(progress_cb):
     if progress_cb:
         progress_cb(2)
 
+    assert_https_url(_FFMPEG_WIN_ZIP_URL, allowed_hosts={"www.gyan.dev"})
     resp  = request_with_retry("GET", _FFMPEG_WIN_ZIP_URL, stream=True, timeout=60)
     total = int(resp.headers.get("Content-Length", 0))
     done  = 0
@@ -143,8 +145,11 @@ def _download_windows(progress_cb):
     if progress_cb:
         progress_cb(72)
 
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(extr_dir)
+    if _FFMPEG_WIN_ZIP_SHA256:
+        verify_sha256(zip_path, _FFMPEG_WIN_ZIP_SHA256)
+    else:
+        _log.warning("FFmpeg Windows archive has no pinned SHA256; relying on HTTPS source validation only.")
+    safe_extract_zip(zip_path, extr_dir, max_member_size=300 * 1024 * 1024)
 
     if progress_cb:
         progress_cb(85)
@@ -186,6 +191,7 @@ def _download_linux(progress_cb):
     if progress_cb:
         progress_cb(2)
 
+    assert_https_url(_FFMPEG_LIN_URL, allowed_hosts={"github.com"})
     resp  = request_with_retry("GET", _FFMPEG_LIN_URL, stream=True, timeout=120)
     total = int(resp.headers.get("Content-Length", 0))
     done  = 0
@@ -202,9 +208,11 @@ def _download_linux(progress_cb):
     if progress_cb:
         progress_cb(72)
 
-    os.makedirs(extr_dir, exist_ok=True)
-    with tarfile.open(tar_path, "r:xz") as tf:
-        tf.extractall(extr_dir)
+    if _FFMPEG_LIN_TAR_SHA256:
+        verify_sha256(tar_path, _FFMPEG_LIN_TAR_SHA256)
+    else:
+        _log.warning("FFmpeg Linux archive has no pinned SHA256; relying on HTTPS source validation only.")
+    safe_extract_tar(tar_path, extr_dir, max_member_size=300 * 1024 * 1024)
 
     if progress_cb:
         progress_cb(85)
@@ -252,8 +260,8 @@ def ensure_ffmpeg(force=False, progress_cb=None):
 
     import shutil as sh
 
-    # On Linux: prefer system-installed ffmpeg
-    if not IS_WINDOWS and not force:
+    # On Linux: prefer system-installed ffmpeg, UNLESS local dev mode is active
+    if not IS_WINDOWS and not force and not is_local_dev_mode():
         if sh.which("ffmpeg") and sh.which("ffprobe"):
             _log.info("Using system ffmpeg from PATH.")
             _save_local_version("system")

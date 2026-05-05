@@ -4,6 +4,8 @@
 
 **A clean, fast YouTube downloader with a desktop UI — for Windows and Linux.**
 
+**Private Beta:** This is a personal project by Tahsan, currently shared as a private beta. Builds are unsigned, may trigger OS/browser warnings, and should only be installed by testers who trust the private repository source.
+
 [![Build](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloader?label=latest)](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)
 [![License](https://img.shields.io/github/license/tahsanahmmed25/YTDownloader)](LICENSE)
@@ -12,14 +14,26 @@
 
 ---
 
-## 📥 Download
+## 📥 Private Beta Download
 
-Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)** and grab the file for your OS:
+Go to the private **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)** and grab the file for your OS:
 
 | Platform | File | Notes |
 |---|---|---|
 | 🐧 **Linux** (Zorin OS, Ubuntu, Mint…) | `YTDownloader-linux-x86_64.AppImage` | Just download & run — no installation needed |
 | 🪟 **Windows 10/11** | `YTDownloader-Setup.exe` | Run the installer, choose your install drive |
+
+> **Unsigned beta warning:** Windows SmartScreen and some Linux desktop environments may warn that this app is from an unknown publisher. That is expected for this private beta because the builds are not code-signed yet.
+
+> **Security note:** Verify release checksums when they are published. The in-app updater blocks installer downloads unless release metadata contains a valid `installer_sha256` value for the selected platform.
+
+---
+
+## Production Hardening Status
+
+This project has production-hardening in place and is prepared for private beta testing, but it is not yet fully production-grade. Current safeguards include pinned direct dependencies, automated tests, SQLite-backed queue/history storage, safer archive extraction, private cookie files, keyring-backed session/proxy secrets when available, redacted logs, and checksum-gated update installs.
+
+Known remaining work before a strict production release includes code signing for Windows/AppImage releases, signed update manifests, complete hash pinning for all third-party binary mirrors, a fully generated transitive lock file or hash-locked install workflow, and broader GUI/e2e coverage.
 
 ---
 
@@ -35,7 +49,7 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
    ./YTDownloader-linux-x86_64.AppImage
    ```
    Or right-click the file in your file manager → **Run as Program**.
-4. On first launch the app will automatically download **yt-dlp** and **FFmpeg** if they aren't already installed on your system.
+4. On first launch the app will use system **yt-dlp**/**FFmpeg** when available and may download managed copies when needed.
 
 > **Tip — install yt-dlp and FFmpeg system-wide (optional but faster):**
 > ```bash
@@ -54,7 +68,7 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
    - You can choose **any drive** as the install location (D:, E:, etc.) — the app stores everything there.
    - Windows SmartScreen may warn "Unknown publisher". Click **More info → Run anyway**. This warning appears because the app isn't code-signed yet.
 3. Launch **YTDownloader** from the Start Menu or Desktop shortcut.
-4. On first launch the app automatically downloads **yt-dlp** and **FFmpeg** in the background.
+4. On first launch the app prepares **yt-dlp** and **FFmpeg** in the background when they are not already bundled or available.
 
 ---
 
@@ -66,8 +80,8 @@ Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/relea
 - **Playlist downloads** with queue management, pause/resume, and per-item progress
 - **Subtitles:** download and optionally embed into the video file
 - **Download history** with thumbnails, re-download, and search
-- **Auto-update for yt-dlp** — checked regularly, updated silently in the background
-- **Auto-update for FFmpeg** — managed silently in the background
+- **Auto-update for yt-dlp** — checked regularly with SHA256 verification for managed binary downloads
+- **Auto-update for FFmpeg** — managed with HTTPS source validation and optional pinned SHA256 environment checks
 - **Light and dark themes**
 - **Two access modes:**
   - `Normal Mode` — for public videos (no cookies needed)
@@ -98,7 +112,9 @@ Some videos require a YouTube login (age-restricted, members-only, private). To 
 
 Your session is saved and automatically restored next time you open the app. Click **Logout** to clear it.
 
-> **Why this works everywhere:** You log in using your own browser — no embedded Chromium, no sandbox restrictions, no GPU driver conflicts. Works 100% on Linux, Windows, and all AppImage environments.
+> **Why this approach is used:** You log in using your own browser — no embedded Chromium and no password collection. Browser cookie extraction can still fail if the browser profile is locked or the OS keyring blocks access.
+
+When a browser locks its cookie database, the app may ask whether it should force-close that browser. This behavior is intentional, but it now requires explicit confirmation and warns that all matching browser windows/processes will be closed.
 
 ### Option 2 — Connect your local browser
 Select your browser (Chrome, Firefox, Brave, etc.) and click **Connect Browser**. The app reads your existing local session directly.
@@ -112,6 +128,32 @@ Select your browser (Chrome, Firefox, Brave, etc.) and click **Connect Browser**
 4. Keep the file private — refresh it if it expires.
 
 > **Privacy:** Cookies never leave your computer. The app reads them locally to pass authentication to yt-dlp. Never share your cookies with anyone.
+
+Managed session cookies are stored in the OS keyring when available and materialized to a private `cookies.txt` cache only because yt-dlp requires a file path. Proxy passwords are also kept out of QSettings where keyring support is available.
+
+---
+
+## Developer Setup
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.lock
+python -m pytest
+```
+
+The lock files currently pin direct dependencies. Treat dependency updates as release work: update deliberately, run the test suite, rebuild installers, regenerate checksums, and review vulnerability-scan output.
+
+---
+
+## Release Policy
+
+- CI must pass tests before release artifacts are built.
+- Release installers must publish SHA256 checksum files.
+- In-app update metadata must include `installer_sha256: <64 hex chars>` in the GitHub release body or manifest.
+- Custom update URLs are disabled by default. Set `YTDL_ALLOW_CUSTOM_UPDATE_URL=true` only for development/staging.
+- Windows and Linux release channels should be promoted Dev → Staging → Production with a rollback tag kept available.
 
 ---
 
@@ -167,10 +209,11 @@ python3 -m venv venv
 source venv/bin/activate          # Linux
 # venv\Scripts\activate           # Windows
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Install pinned development/build dependencies
+pip install -r requirements-dev.lock
 
-# 4. Run the app
+# 4. Run tests, then the app
+python -m pytest
 python app.py
 ```
 
@@ -185,16 +228,14 @@ git push origin v2.0.5
 
 **Linux (AppImage) — locally:**
 ```bash
-pip install pyinstaller PySide6 PySide6-WebEngine requests browser-cookie3 yt-dlp
-python -m PyInstaller --clean -y YTDownloader_linux.spec
-# Then package the dist/ folder into an AppImage
+export APPIMAGETOOL_SHA256=<verified appimagetool sha256>
+./build_release.sh
 ```
 
 **Windows (Inno Setup installer) — locally:**
 ```powershell
-pip install pyinstaller PySide6 PySide6-WebEngine requests browser-cookie3 yt-dlp
-python -m PyInstaller --clean -y YTDownloader.spec
-# Then run YTDownloader.iss with Inno Setup
+$env:YTDL_FFMPEG_WIN_ZIP_SHA256 = "<verified ffmpeg zip sha256>"
+.\build_release.ps1
 ```
 
 ---

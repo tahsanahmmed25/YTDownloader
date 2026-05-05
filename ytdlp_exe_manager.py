@@ -13,10 +13,10 @@ import os
 import sys
 import time
 import stat
-import hashlib
 import threading
 
-from app_config import app_dir, bin_dir, bin_name, local_tmp_dir, ensure_dir, IS_WINDOWS
+from app_config import bin_dir, bin_name, local_tmp_dir, ensure_dir, IS_WINDOWS, is_local_dev_mode
+from core.security import assert_https_url, verify_sha256
 from logging_utils import get_logger
 from net_utils import request_with_retry
 
@@ -45,8 +45,8 @@ def get_exe_path():
 def is_exe_present():
     """True if the yt-dlp binary exists, is non-zero, and is executable."""
     import shutil
-    # Prefer system-installed version on Linux (apt install yt-dlp)
-    if not IS_WINDOWS:
+    # Prefer system-installed version on Linux (apt install yt-dlp), UNLESS in local dev mode
+    if not IS_WINDOWS and not is_local_dev_mode():
         system = shutil.which("yt-dlp")
         if system and os.path.exists(system):
             return True
@@ -103,6 +103,7 @@ def _save_last_check():
 
 def _fetch_latest_release():
     """Returns (tag_name, download_url, sha256_or_None) for the correct platform asset."""
+    assert_https_url(_GITHUB_RELEASES_API, allowed_hosts={"api.github.com"})
     resp = request_with_retry("GET", _GITHUB_RELEASES_API, timeout=15)
     data = resp.json()
     tag = data.get("tag_name", "")
@@ -120,6 +121,7 @@ def _fetch_latest_release():
     sha256 = None
     if sha_url and exe_url:
         try:
+            assert_https_url(sha_url, allowed_hosts={"github.com"})
             sha_resp = request_with_retry("GET", sha_url, timeout=10)
             for line in sha_resp.text.splitlines():
                 if _SHA_LINE_KEY in line:
@@ -127,9 +129,11 @@ def _fetch_latest_release():
                     if parts:
                         sha256 = parts[0].lower()
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("Could not fetch yt-dlp SHA256 file: %s", exc)
 
+    if exe_url:
+        assert_https_url(exe_url, allowed_hosts={"github.com"})
     return tag, exe_url, sha256
 
 
@@ -154,19 +158,7 @@ def _download_exe(url, dest_path, sha256=None, progress_cb=None, tmp_path=None):
                     pct = min(int(downloaded * 100 / total), 99)
                     progress_cb(pct)
 
-        if sha256:
-            digest = hashlib.sha256()
-            with open(tmp_path, "rb") as f:
-                for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            actual = digest.hexdigest().lower()
-            if actual != sha256:
-                _log.error("yt-dlp hash mismatch (expected %s, got %s)", sha256, actual)
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-                raise RuntimeError("yt-dlp download hash mismatch — file discarded.")
+        verify_sha256(tmp_path, sha256)
 
         ensure_dir(os.path.dirname(dest_path))
         os.replace(tmp_path, dest_path)
@@ -204,8 +196,8 @@ def ensure_ytdlp_exe(force=False, progress_cb=None):
 
     import shutil
 
-    # On Linux: if system yt-dlp is available, prefer it
-    if not IS_WINDOWS and not force:
+    # On Linux: if system yt-dlp is available, prefer it, UNLESS local dev mode is active
+    if not IS_WINDOWS and not force and not is_local_dev_mode():
         system = shutil.which("yt-dlp")
         if system and os.path.exists(system):
             _log.info("Using system yt-dlp at %s", system)
@@ -250,6 +242,9 @@ def ensure_ytdlp_exe(force=False, progress_cb=None):
 
         if not exe_url:
             _log.error("No yt-dlp download URL found in GitHub release.")
+            return False
+        if not sha256:
+            _log.error("No yt-dlp SHA256 found in GitHub release. Download blocked.")
             return False
 
         tmp_dir = local_tmp_dir()

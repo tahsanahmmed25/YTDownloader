@@ -35,7 +35,7 @@ def run_preflight():
         print(f"  - {package_name} ({module_name}): {exc}")
 
     print("Install them into this interpreter before building:")
-    print(f'  "{sys.executable}" -m pip install -r requirements.txt')
+    print(f'  "{sys.executable}" -m pip install -r requirements-dev.lock')
     return 1
 
 

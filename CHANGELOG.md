@@ -17,6 +17,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.9-beta.1] - 2026-05-05
+
+### Added
+- Prepared the app for private beta release with beta documentation, unsigned-build warnings, support/security docs, release checklist, and local/manual test separation.
+- Added pytest coverage for URL validation, session/cookie validation, storage migration, update manifests, import smoke checks, and security helpers.
+- Added SQLite-backed history and queue storage wrappers with WAL mode, transactions, and JSON migration support.
+
+### Changed
+- Hardened release/build scripts and CI so tests run before packaging and release artifacts include SHA256 checksum files.
+- Tightened managed download/update paths with safer URL validation, archive extraction, checksum verification hooks, and redacted logging.
+- Updated local Linux release builds to use the project `.venv` without requiring development-mode app paths.
+
+### Security
+- Added private file/directory helpers, atomic write helpers, safe archive extraction, and keyring-backed session/proxy secret storage where available.
+- Restricted production update URLs to trusted GitHub release hosts unless `YTDL_ALLOW_CUSTOM_UPDATE_URL=true` is explicitly set.
+
+### Known Limitations
+- Builds are unsigned and may trigger Windows SmartScreen or Linux desktop security warnings.
+- Update manifests are checksum-gated but not signed yet.
+- Private GitHub release update checks can return `404` without authenticated GitHub API access.
+- AppImage build tooling was verified by a locally computed SHA256 for this beta build; a separately pinned upstream checksum policy is still needed.
+
+---
+
 ## [2.1.8] - 2026-05-04
 
 ### Fixed
@@ -134,7 +158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.1.8** | ✅ Active | Current stable — restricted-video and Linux merge fixes |
+| **2.1.9-beta.1** | ✅ Private beta | Current beta — production hardening, tests, docs, and Linux AppImage checksum |
+| 2.1.8 | Active stable | Restricted-video and Linux merge fixes |
 | 2.1.7 | Upgrade recommended | Release workflow fix; affected by restricted-session and first-run FFmpeg issues |
 | 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |
 | 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |

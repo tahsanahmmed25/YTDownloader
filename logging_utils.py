@@ -3,6 +3,7 @@ from logging.handlers import RotatingFileHandler
 import os
 
 from app_config import LOG_DIR, ensure_dir
+from core.security import RedactingFormatter, set_private_file_permissions
 
 _LOGGER = None
 
@@ -19,9 +20,10 @@ def setup_logging():
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-        )
+        class _Formatter(RedactingFormatter, logging.Formatter):
+            pass
+
+        formatter = _Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 
         file_handler = RotatingFileHandler(
             log_path,
@@ -29,6 +31,7 @@ def setup_logging():
             backupCount=3,
             encoding="utf-8"
         )
+        set_private_file_permissions(log_path)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 

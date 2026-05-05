@@ -76,11 +76,16 @@ celerybeat-schedule
 # Environments
 .env
 .venv
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+env.sh
+env.ps1
+setup_tools.sh
+get-pip.py
 
 # Spyder project settings
 .spyderproject
@@ -109,6 +114,7 @@ dmypy.json
 Thumbs.db
 
 # App-specific
+Extra by Tahsan/
 cookies.txt
 links.txt
 out.txt
@@ -117,14 +123,28 @@ obf/
 *.bak
 history.json
 queue.json
+app_state.db
+*.db-wal
+*.db-shm
 .localappdata/
 ffmpeg.exe
 ffprobe.exe
 yt-dlp.exe
+yt-dlp_test
+tmp_venv/
+tools/bin/
+tools/cache/
+tools/objdump_env/
+tools/pkg/
+tools/hashes.txt
+*.AppImage
+SHA256SUMS*
+appimagetool-*.AppImage
 
 # Build artifacts
-/.git
-.git
+*.zip
+*.tar
+*.tar.xz
 
 # Temp downloads
 tmp_downloads/

@@ -14,10 +14,14 @@ if not defined PYTHON_EXE (
 
 :python_ready
 echo Using Python interpreter: %PYTHON_EXE%
+"%PYTHON_EXE%" -m pip install -r "%~dp0requirements-dev.lock"
+if errorlevel 1 exit /b %errorlevel%
 "%PYTHON_EXE%" "%~dp0build_release_support.py" preflight
 if errorlevel 1 exit /b %errorlevel%
 
 call :ensure_package pyinstaller
+if errorlevel 1 exit /b %errorlevel%
+"%PYTHON_EXE%" -m pytest
 if errorlevel 1 exit /b %errorlevel%
 
 set SPEC=YTDownloader.spec
@@ -58,13 +62,17 @@ if not defined ISCC (
 "%ISCC%" YTDownloader.iss
 if errorlevel 1 exit /b %errorlevel%
 
+if exist "dist_installer\YTDownloader-Setup.exe" (
+  for /f "tokens=1" %%H in ('certutil -hashfile "dist_installer\YTDownloader-Setup.exe" SHA256 ^| findstr /r "^[0-9A-Fa-f][0-9A-Fa-f]"') do (
+    echo %%H  YTDownloader-Setup.exe> "dist_installer\SHA256SUMS-windows.txt"
+  )
+)
+
 endlocal
 goto :eof
 
 :ensure_package
 "%PYTHON_EXE%" -m pip show %~1 >nul 2>&1
 if not errorlevel 1 exit /b 0
-echo Installing %~1 into the selected interpreter...
-"%PYTHON_EXE%" -m pip install %~1
-if errorlevel 1 exit /b 1
-exit /b 0
+echo %~1 is missing. Install pinned dependencies first: "%PYTHON_EXE%" -m pip install -r requirements-dev.lock
+exit /b 1

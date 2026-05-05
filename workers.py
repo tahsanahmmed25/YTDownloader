@@ -1,7 +1,6 @@
 import hashlib
 import os
 import shutil
-import zipfile
 from datetime import datetime, UTC
 
 from PySide6.QtCore import QObject, Signal
@@ -18,8 +17,10 @@ from downloader import (
 )
 from history_manager import save_history
 from app_config import THUMB_DIR, ensure_dir, local_tmp_dir
+from core.security import assert_https_url, safe_extract_zip
 from logging_utils import get_logger
 from net_utils import request_with_retry, get_bytes
+from updates.manager import TRUSTED_UPDATE_HOSTS, validate_update_url, verify_update_file
 
 _log = get_logger()
 
@@ -31,6 +32,7 @@ class FFmpegInstallWorker(QObject):
     finished = Signal()
 
     FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    FFMPEG_SHA256 = os.environ.get("YTDL_FFMPEG_WIN_ZIP_SHA256", "").strip()
 
     def __init__(self, target_dir):
         super().__init__()
@@ -50,6 +52,7 @@ class FFmpegInstallWorker(QObject):
 
             self.progress.emit(5)
             _log.info("Downloading FFmpeg essentials...")
+            assert_https_url(self.FFMPEG_URL, allowed_hosts={"www.gyan.dev"})
             resp = request_with_retry("GET", self.FFMPEG_URL, stream=True, timeout=30)
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
@@ -66,8 +69,11 @@ class FFmpegInstallWorker(QObject):
 
             self.progress.emit(60)
             _log.info("Extracting FFmpeg essentials...")
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(extract_dir)
+            if self.FFMPEG_SHA256:
+                verify_update_file(zip_path, self.FFMPEG_SHA256)
+            else:
+                _log.warning("FFmpeg worker archive has no pinned SHA256; relying on HTTPS source validation only.")
+            safe_extract_zip(zip_path, extract_dir, max_member_size=300 * 1024 * 1024)
 
             self.progress.emit(80)
             ffmpeg_src = None
@@ -90,10 +96,11 @@ class FFmpegInstallWorker(QObject):
             self.progress.emit(100)
             _log.info("FFmpeg installed successfully to %s", self.target_dir)
 
-            # Clean up local tmp
             try:
-                if os.path.exists(local_tmp):
-                    shutil.rmtree(local_tmp, ignore_errors=True)
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+                if os.path.exists(extract_dir):
+                    shutil.rmtree(extract_dir, ignore_errors=True)
             except Exception:
                 pass
 
@@ -130,6 +137,7 @@ class UpdateWorker(QObject):
                 return
             if self._cancel_requested:
                 return
+            validate_update_url(self.manifest_url)
             resp = request_with_retry("GET", self.manifest_url, timeout=10)
             if self._cancel_requested:
                 return
@@ -178,42 +186,40 @@ class UpdateDownloadWorker(QObject):
         self._cancel_requested = True
 
     def run(self):
+        tmp_path = self.dest_path + ".tmp"
         try:
+            assert_https_url(self.url, allowed_hosts=TRUSTED_UPDATE_HOSTS)
+            if not self.expected_sha256:
+                raise RuntimeError("Update hash is missing. Download blocked.")
             resp = request_with_retry("GET", self.url, stream=True, timeout=20)
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
-            with open(self.dest_path, "wb") as f:
+            with open(tmp_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=8192):
                     if self._cancel_requested:
                         try:
                             resp.close()
                         except Exception:
                             pass
-                        return
+                        raise RuntimeError("Update download cancelled.")
                     if not chunk:
                         continue
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total:
                         self.progress.emit(int(downloaded * 100 / total))
-            if self.expected_sha256:
-                sha = hashlib.sha256()
-                with open(self.dest_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                        sha.update(chunk)
-                actual = sha.hexdigest().lower()
-                if actual != self.expected_sha256:
-                    try:
-                        os.remove(self.dest_path)
-                    except Exception:
-                        pass
-                    self.error.emit("Update hash mismatch. Download blocked.")
-                    return
+            verify_update_file(tmp_path, self.expected_sha256)
+            os.replace(tmp_path, self.dest_path)
             self.completed.emit(self.dest_path)
         except Exception as e:
             _log.exception("Update download failed for %s", self.url)
             self.error.emit(str(e))
         finally:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
             self.finished.emit()
 
 
@@ -253,7 +259,13 @@ class FetchWorker(QObject):
             thumb_bytes = None
             if thumb:
                 try:
-                    thumb_bytes = get_bytes(thumb, timeout=10, retries=2)
+                    thumb_bytes = get_bytes(
+                        thumb,
+                        timeout=10,
+                        retries=2,
+                        max_bytes=5 * 1024 * 1024,
+                        allowed_content_types={"image/jpeg", "image/png", "image/webp"},
+                    )
                 except Exception:
                     _log.warning("Thumbnail fetch failed for %s", thumb)
                     thumb_bytes = None
@@ -374,7 +386,13 @@ class DownloadWorker(QObject):
         name = video_id or hashlib.md5(thumb_url.encode("utf-8", errors="ignore")).hexdigest()
         thumb_path = os.path.join(THUMB_DIR, f"{name}.jpg")
         try:
-            content = get_bytes(thumb_url, timeout=10, retries=2)
+            content = get_bytes(
+                thumb_url,
+                timeout=10,
+                retries=2,
+                max_bytes=5 * 1024 * 1024,
+                allowed_content_types={"image/jpeg", "image/png", "image/webp"},
+            )
             with open(thumb_path, "wb") as f:
                 f.write(content)
             return thumb_path

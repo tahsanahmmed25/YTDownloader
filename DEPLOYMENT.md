@@ -1,4 +1,6 @@
-# 🚀 Professional Deployment Guide for YTDownloader
+# Deployment Guide for YTDownloader
+
+This project is hardened for safer releases, but it should not be treated as fully production-ready until code signing, signed update manifests, complete third-party binary hash pinning, and broader GUI/e2e validation are complete.
 
 ## Table of Contents
 1. [Pre-Release Checklist](#pre-release-checklist)
@@ -23,12 +25,13 @@
 
 ### Code Quality
 ```bash
-# Run linter
-pip install pylint
-pylint ui/*.py downloader.py workers.py *.py --disable=too-many-lines,too-many-arguments
+# Install pinned build/test dependencies
+python -m pip install -r requirements-dev.lock
 
-# Remove test files before build
-rm -Force tmp_*.py, out.txt, links.txt, cookies.txt, history.json
+# Run syntax checks and tests
+python -m py_compile $(git ls-files '*.py')
+python -m pytest
+python -m pip_audit -r requirements.txt -r requirements-dev.txt
 ```
 
 ### Testing
@@ -36,9 +39,22 @@ rm -Force tmp_*.py, out.txt, links.txt, cookies.txt, history.json
 - [ ] Verify installer works (install/uninstall)
 - [ ] Test core features (download, pause, resume)
 - [ ] Check queue persistence
-- [ ] Verify update check works
+- [ ] Verify update check works and rejects missing/bad SHA256 metadata
 - [ ] Test with/without cookies
+- [ ] Test browser-lock handling and explicit force-close confirmation
 - [ ] Test concurrent downloads
+- [ ] Verify logs redact cookies, proxy credentials, tokens, and sensitive paths
+
+### Required CI/Repository Variables
+
+Set these before production release builds:
+
+```text
+APPIMAGETOOL_SHA256=<sha256 of the exact appimagetool-x86_64.AppImage used by CI>
+YTDL_FFMPEG_WIN_ZIP_SHA256=<sha256 of ffmpeg-release-essentials.zip>
+```
+
+If these are missing, CI should fail rather than building from unverifiable external binaries.
 
 ### Documentation
 ```markdown
@@ -62,8 +78,8 @@ Remove-Item .\obf -Recurse -Force -ErrorAction SilentlyContinue
 
 ### Step 2: Build Executable
 ```powershell
-# Install runtime dependencies into the project environment
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
+# Install pinned build/test dependencies into the project environment
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
 
 # Run in PowerShell from the repo root
 .\build_release.ps1
@@ -74,10 +90,10 @@ Remove-Item .\obf -Recurse -Force -ErrorAction SilentlyContinue
 
 This will:
 1. Select `.\venv\Scripts\python.exe` when present, otherwise use the active Python
-2. Fail fast if `PySide6`, `requests`, `browser_cookie3`, or `yt_dlp` are missing
-3. Install build tools (`PyInstaller`, `PyArmor`) into that same interpreter if needed
-4. Optionally obfuscate code with PyArmor
-5. Build executable with PyInstaller
+2. Install only pinned direct dependencies from the lock files
+3. Run tests before release artifacts are built
+4. Build executable with PyInstaller
+5. Generate SHA256 checksums for release artifacts
 6. Create Windows installer with Inno Setup
 
 ### Step 3: Verify Build
@@ -328,7 +344,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m venv venv
-      - run: .\venv\Scripts\python.exe -m pip install -r requirements.txt
+      - run: .\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
       - run: .\build_release.ps1 -NoObfuscate
       - uses: ncipollo/release-action@v1
         with:
@@ -350,7 +366,7 @@ This automatically builds & releases when you push a git tag like `git push orig
 # Edit: CHANGELOG.md
 
 # 3. Install deps into the project environment
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
 
 # 4. Build
 .\build_release.ps1

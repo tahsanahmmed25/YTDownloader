@@ -3,7 +3,6 @@ import re
 import time
 import sys
 import shutil
-import zipfile
 import importlib
 import subprocess
 import threading
@@ -12,6 +11,7 @@ import requests
 from urllib.parse import urlparse, parse_qs
 
 from app_config import app_data_dir, local_tmp_dir
+from core.security import assert_https_url, safe_extract_zip, verify_sha256
 from logging_utils import get_logger
 from net_utils import request_with_retry
 
@@ -137,10 +137,12 @@ def _ensure_ytdlp_updated(force=False):
         return
 
     wheel_url = None
+    wheel_sha256 = None
     for item in data.get("releases", {}).get(latest, []):
         name = item.get("filename") or ""
         if name.endswith("py3-none-any.whl"):
             wheel_url = item.get("url")
+            wheel_sha256 = (item.get("digests") or {}).get("sha256")
             break
 
     if not wheel_url:
@@ -149,9 +151,13 @@ def _ensure_ytdlp_updated(force=False):
     tmpdir = local_tmp_dir()
     wheel_path = os.path.join(tmpdir, "yt_dlp.whl")
     try:
+        assert_https_url(wheel_url, allowed_hosts={"files.pythonhosted.org"})
+        if not wheel_sha256:
+            raise RuntimeError("PyPI yt-dlp wheel hash is missing")
         r = request_with_retry("GET", wheel_url, timeout=20)
         with open(wheel_path, "wb") as f:
             f.write(r.content)
+        verify_sha256(wheel_path, wheel_sha256)
 
         for name in os.listdir(deps_dir):
             if name.startswith("yt_dlp") or name.startswith("yt_dlp-"):
@@ -164,8 +170,7 @@ def _ensure_ytdlp_updated(force=False):
                 except Exception:
                     _log.warning("Failed to remove old yt-dlp: %s", path)
 
-        with zipfile.ZipFile(wheel_path, "r") as zf:
-            zf.extractall(deps_dir)
+        safe_extract_zip(wheel_path, deps_dir, max_member_size=100 * 1024 * 1024)
 
         with open(version_path, "w", encoding="utf-8") as f:
             f.write(latest)
@@ -234,35 +239,36 @@ def _ensure_download_dir(path):
 
 def _find_local_binary(name):
     """Find a binary by name on the current platform.
-    Searches (in order): system PATH, bin_dir(), PyInstaller MEIPASS, exe dir, cwd.
+    Searches managed/bundled locations first, then system PATH. The current
+    working directory is ignored unless YTDL_ALLOW_CWD_TOOLS is explicitly set.
     Pass the base name without extension (e.g. 'yt-dlp', 'ffmpeg') —
     this function adds the platform-correct suffix automatically.
     """
     from app_config import bin_dir, bin_name
     platform_name = bin_name(name)   # adds .exe on Windows, nothing on Linux
 
-    # 1. System PATH
-    which = shutil.which(platform_name)
-    if not which and name != platform_name:
-        which = shutil.which(name)   # also try without suffix just in case
-    if which and os.path.exists(which):
-        return which
-
     candidates = []
-    # 2. Auto-download bin_dir (yt-dlp/ffmpeg downloaded by manager modules)
+    # 1. Auto-download bin_dir (yt-dlp/ffmpeg downloaded by manager modules)
     candidates.append(os.path.join(bin_dir(), platform_name))
-    # 3. PyInstaller bundle
+    # 2. PyInstaller bundle / executable directory
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", "")
         if meipass:
             candidates.append(os.path.join(meipass, platform_name))
         candidates.append(os.path.join(os.path.dirname(sys.executable), platform_name))
-    # 4. Current working directory
-    candidates.append(os.path.join(os.getcwd(), platform_name))
+    # 3. Optional development override for local tool testing only.
+    if os.environ.get("YTDL_ALLOW_CWD_TOOLS", "").strip().lower() in {"1", "true", "yes"}:
+        candidates.append(os.path.join(os.getcwd(), platform_name))
 
     for path in candidates:
         if path and os.path.exists(path):
             return path
+    # 4. System PATH. This remains useful on Linux package-managed systems.
+    which = shutil.which(platform_name)
+    if not which and name != platform_name:
+        which = shutil.which(name)
+    if which and os.path.exists(which):
+        return which
     return None
 
 
@@ -1132,7 +1138,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
                                     elif "k" in unit: total_bytes = num * 1000
                                     elif "m" in unit: total_bytes = num * 1000 * 1000
                                     elif "g" in unit: total_bytes = num * 1000 * 1000 * 1000
-                            except Exception: pass
+                            except Exception as exc:
+                                _log.debug("Could not parse yt-dlp progress size %r: %s", size_str, exc)
 
                         downloaded_bytes = None
                         if total_bytes:
@@ -1203,8 +1210,14 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
             download_dir = os.getcwd()
         try:
             candidates = []
+            max_scan_files = 5000
+            scanned = 0
             for root, _, files in os.walk(download_dir):
                 for name in files:
+                    scanned += 1
+                    if scanned > max_scan_files:
+                        _log.warning("Fallback result scan stopped after %d files in %s", max_scan_files, download_dir)
+                        raise RuntimeError("Download completed, but the output file could not be identified quickly.")
                     if name.endswith(".part") or name.endswith(".ytdl"):
                         continue
                     path = os.path.join(root, name)

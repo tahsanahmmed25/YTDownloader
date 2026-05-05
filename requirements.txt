@@ -1,5 +1,8 @@
-PySide6>=6.2.0,<7.0.0
-requests>=2.28.0,<3.0.0
-browser-cookie3>=0.19.0
-yt-dlp>=2024.1.1
-
+PySide6==6.11.0
+requests==2.33.1
+browser-cookie3==0.20.1
+yt-dlp==2026.3.17
+keyring==25.7.0
+secretstorage==3.5.0
+jeepney==0.9.0
+cryptography==47.0.0

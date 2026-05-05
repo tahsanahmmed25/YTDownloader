@@ -47,15 +47,16 @@ function Ensure-PythonPackage {
         return
     }
 
-    Write-Host "Installing $Package into the selected interpreter..."
-    Invoke-Python -m pip install $Package
+    throw "$Package is missing. Install pinned dependencies first: $script:PythonExe -m pip install -r requirements-dev.lock"
 }
 
 $PythonExe = Resolve-BuildPython
 Write-Host "Using Python interpreter: $PythonExe"
 
+Invoke-Python -m pip install -r "$PSScriptRoot\requirements-dev.lock"
 Invoke-Python "$PSScriptRoot\build_release_support.py" preflight
 Ensure-PythonPackage "pyinstaller"
+Invoke-Python -m pytest
 
 $spec = "YTDownloader.spec"
 
@@ -117,3 +118,12 @@ if (-not $iscc) {
 }
 
 & $iscc "$PSScriptRoot\YTDownloader.iss"
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup failed with exit code $LASTEXITCODE"
+}
+
+$installer = Join-Path $PSScriptRoot "dist_installer\YTDownloader-Setup.exe"
+if (Test-Path $installer) {
+    $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+    "$hash  YTDownloader-Setup.exe" | Set-Content -Encoding ascii (Join-Path $PSScriptRoot "dist_installer\SHA256SUMS-windows.txt")
+}

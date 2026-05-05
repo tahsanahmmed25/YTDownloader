@@ -1,11 +1,11 @@
-import sys
 import logging
 import traceback
 
-logging.basicConfig(level=logging.DEBUG)
 
-try:
-    from downloader import get_video_info, _YTDLP_LOCK, _YTDLP_MODULE, init_ytdlp_background, update_ytdlp
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+    from downloader import get_video_info, update_ytdlp
+
     print("yt-dlp initializing...")
     update_ytdlp()
     print("get_video_info running...")
@@ -14,6 +14,11 @@ try:
         browser_auth="chrome"
     )
     print(f"Success! Title: {title}")
-except Exception as e:
-    print(f"Exception: {e}")
-    traceback.print_exc()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"Exception: {e}")
+        traceback.print_exc()

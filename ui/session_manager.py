@@ -18,7 +18,6 @@ YouTube to reject even public video requests.
 import os
 import sys
 import time
-import logging
 from collections import defaultdict
 
 from auth.session_store import (
@@ -27,8 +26,9 @@ from auth.session_store import (
     materialize_session_cookie_file,
     save_session_cookie_text,
 )
+from logging_utils import get_logger
 
-_log = logging.getLogger(__name__)
+_log = get_logger()
 
 # File name for the managed session cookie store
 _COOKIES_FILENAME = "yt_session_cookies.txt"
@@ -91,12 +91,11 @@ def load_session() -> str:
     """
     path = materialize_session_cookie_file()
     if is_session_valid(path):
-        _log.info("Session restored from %s", path)
+        _log.info("Managed YouTube session restored")
         return path
     if os.path.isfile(path):
         _log.warning(
-            "Session file exists at %s but contains no valid auth cookies — ignoring",
-            path
+            "Managed session file exists but contains no valid auth cookies — ignoring"
         )
     return ""
 
@@ -300,15 +299,14 @@ def _file_has_auth_cookies(path: str) -> bool:
     for names in groups.values():
         auth_names.update(names)
     if has_required_auth_cookies(path):
-        _log.info("Cookie file %s contains required auth cookies: %s", path, auth_names)
+        _log.info("Cookie file contains required auth cookies: %s", auth_names)
         return True
     if auth_names:
         _log.warning(
-            "Cookie file %s has auth cookies but is missing either YouTube or Google account cookies",
-            path
+            "Cookie file has auth cookies but is missing either YouTube or Google account cookies"
         )
     else:
-        _log.warning("Cookie file %s has NO YouTube/Google auth cookies", path)
+        _log.warning("Cookie file has NO YouTube/Google auth cookies")
     return False
 
 

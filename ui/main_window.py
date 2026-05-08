@@ -67,6 +67,16 @@ from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
 from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
 from updates.manager import custom_update_urls_enabled, validate_update_url
+from core.models import (
+    TASK_STATE_ACTIVE,
+    TASK_STATE_CANCELLING,
+    TASK_STATE_COMPLETED,
+    TASK_STATE_FAILED,
+    TASK_STATE_FINALIZING,
+    TASK_STATE_PAUSED,
+    TASK_STATE_QUEUED,
+    TASK_STATE_STARTING,
+)
 import queue_manager
 import ytdlp_exe_manager
 import ffmpeg_manager
@@ -141,7 +151,7 @@ class Downloader(QMainWindow, PagesMixin):
                 if not self.restricted_mode:
                     self.restricted_mode = True
                     self.settings.setValue("restricted_mode", True)
-                _log.info("Auto-restored YouTube session from %s", restored)
+                _log.info("Auto-restored YouTube session from managed storage")
             else:
                 # Clear any stale cookie_file reference that might linger in settings
                 self.settings.remove("cookie_file")
@@ -278,6 +288,8 @@ class Downloader(QMainWindow, PagesMixin):
         self.nav_history_btn = None
         self._open_dialogs = []
         self._ui_generation = 0
+        self._cancel_cleanup_pending = False
+        self._reset_requested = False
         self._task_last_activity = {}
         self._active_fade_removals = 0
         self._task_watchdog = QTimer(self)
@@ -344,8 +356,8 @@ class Downloader(QMainWindow, PagesMixin):
         self.pages.addWidget(self.page_about)
         self.pages.currentChanged.connect(self._on_page_changed)
 
-        self._add_nav_button(sidebar_layout, "Downloader", self.page_downloader, True)
-        self.nav_library_btn = self._add_nav_button(sidebar_layout, "Library", self.page_library, False)
+        self._add_nav_button(sidebar_layout, "Homepage", self.page_downloader, True)
+        self.nav_library_btn = self._add_nav_button(sidebar_layout, "Downloads", self.page_library, False)
         self.nav_history_btn = self._add_nav_button(sidebar_layout, "History", self.page_history, False)
         self._add_nav_button(sidebar_layout, "Preferences", self.page_options, False)
         self._add_nav_button(sidebar_layout, "Cookies", self.page_cookies, False)
@@ -565,7 +577,7 @@ class Downloader(QMainWindow, PagesMixin):
             self._downloads_anim.setEasingCurve(QEasingCurve.OutCubic)
             self._downloads_anim.start()
         else:
-            # Keep the downloads card visible in Library with empty-state text.
+            # Keep the active-downloads card visible on the Downloads page with empty-state text.
             if hasattr(self, "library_empty_label"):
                 self.downloads_panel.setVisible(True)
                 self._sync_downloads_panel_height()
@@ -621,6 +633,23 @@ class Downloader(QMainWindow, PagesMixin):
             if self._thread_is_running(thread):
                 return True
         return False
+
+    def _is_cancel_cleanup_blocking(self):
+        return bool(self._cancel_cleanup_pending and self._has_running_download_threads())
+
+    def _release_cancel_gate_if_safe(self, start_pending=True):
+        if not self._cancel_cleanup_pending:
+            return False
+        if self._has_running_download_threads():
+            return False
+        self._cancel_cleanup_pending = False
+        self._reset_requested = False
+        if self._cancel_grace_timer.isActive():
+            self._cancel_grace_timer.stop()
+        self._sync_download_button_text()
+        if start_pending and self._pending_tasks:
+            QTimer.singleShot(0, self._start_next_downloads)
+        return True
 
     def _flash_library_nav(self):
         self._update_library_nav_state()
@@ -1053,7 +1082,7 @@ class Downloader(QMainWindow, PagesMixin):
             return
         self._reorder_download_rows()
         total = self._layout_widget_count(self.active_downloads_layout) + self._layout_widget_count(self.completed_downloads_layout)
-        self.downloads_header.setText(f"Downloads ({total})")
+        self.downloads_header.setText(f"Active downloads ({total})")
         if hasattr(self, "library_empty_label") and self.library_empty_label:
             self.library_empty_label.setVisible(total == 0)
         if hasattr(self, "downloads_panel") and self.downloads_panel:
@@ -1171,7 +1200,12 @@ class Downloader(QMainWindow, PagesMixin):
     def _update_library_nav_state(self):
         if not getattr(self, "nav_library_btn", None):
             return
-        active = bool(self._active_tasks or self._pending_tasks or self._paused_tasks)
+        active = bool(
+            self._active_tasks
+            or self._pending_tasks
+            or self._paused_tasks
+            or self._is_cancel_cleanup_blocking()
+        )
         in_library = self.pages.currentWidget() == self.page_library
         should_pulse = active and not in_library
 
@@ -1314,7 +1348,9 @@ class Downloader(QMainWindow, PagesMixin):
         task = self._active_tasks.pop(task_id, None)
         self._clear_task_activity(task_id)
         if not task:
+            self._release_cancel_gate_if_safe()
             return False
+        task["state"] = TASK_STATE_FAILED
         payload = task.get("payload") or {}
         session_id = payload.get("playlist_session_id") or ""
         item = task.get("item") or {}
@@ -1344,10 +1380,13 @@ class Downloader(QMainWindow, PagesMixin):
             self._pump_playlist_session(session_id)
         else:
             self._start_next_downloads()
+        self._release_cancel_gate_if_safe()
         self._maybe_finalize_reset()
         return True
 
     def _request_cancel_all_downloads(self, reason_text=""):
+        if self._active_tasks or self._has_running_download_threads():
+            self._cancel_cleanup_pending = True
         for worker in list(self._download_workers.values()):
             if worker and hasattr(worker, "request_cancel"):
                 try:
@@ -1355,6 +1394,7 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
         for task in self._active_tasks.values():
+            task["state"] = TASK_STATE_CANCELLING
             item = task.get("item") or {}
             status = item.get("status")
             pause_btn = item.get("pause_btn")
@@ -1367,10 +1407,27 @@ class Downloader(QMainWindow, PagesMixin):
                 cancel_btn.setEnabled(False)
         if self._active_tasks:
             self._cancel_grace_timer.start(self._CANCEL_GRACE_MS)
+        self._sync_download_button_text()
 
     def _force_cleanup_active_tasks(self):
         stale_ids = list(self._active_tasks.keys())
         if not stale_ids:
+            if self._cancel_cleanup_pending:
+                for task_id, worker in list(self._download_workers.items()):
+                    if worker and hasattr(worker, "request_cancel"):
+                        try:
+                            worker.request_cancel()
+                        except Exception:
+                            pass
+                    thread = self._download_threads.get(task_id)
+                    if self._thread_is_running(thread):
+                        try:
+                            _log.warning("Force terminating stuck cancelled download thread %s.", task_id)
+                            thread.terminate()
+                            thread.wait(1000)
+                        except Exception:
+                            pass
+            self._release_cancel_gate_if_safe()
             return
         for task_id in stale_ids:
             worker = self._download_workers.get(task_id)
@@ -1386,6 +1443,7 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
             self._mark_task_failed(task_id)
+        self._release_cancel_gate_if_safe()
         self._show_error_dialog(
             "Error",
             "Some downloads were force-stopped because they were not responding."
@@ -1428,6 +1486,8 @@ class Downloader(QMainWindow, PagesMixin):
             for task_id in stale:
                 task = self._active_tasks.get(task_id)
                 if task:
+                    if task.get("state") == TASK_STATE_CANCELLING:
+                        continue
                     task["state"] = "stalled"
                     item = task.get("item") or {}
                     pause_btn = item.get("pause_btn")
@@ -2443,7 +2503,7 @@ class Downloader(QMainWindow, PagesMixin):
             self._show_downloads_panel(True)
             self._flash_library_nav()
             self._show_toast(
-                f"Playlist queued: {len(entries)} videos. Downloads will continue in Library.",
+                f"Playlist queued: {len(entries)} videos. Progress will continue in Downloads.",
                 variant="info",
                 duration=2800,
                 anchor_widget=self.nav_library_btn
@@ -2469,7 +2529,7 @@ class Downloader(QMainWindow, PagesMixin):
             "generation": self._ui_generation,
             "payload": payload,
             "title": title_text,
-            "state": "queued",
+            "state": TASK_STATE_QUEUED,
             "downloaded": None,
             "total": None
         }
@@ -2493,7 +2553,7 @@ class Downloader(QMainWindow, PagesMixin):
         if announce:
             self._flash_library_nav()
             self._show_toast(
-                "Download started. Progress is in Library.",
+                "Download started. Progress is in Downloads.",
                 variant="info",
                 duration=2200,
                 anchor_widget=self.nav_library_btn
@@ -2503,6 +2563,11 @@ class Downloader(QMainWindow, PagesMixin):
             self._start_next_downloads()
 
     def _start_next_downloads(self):
+        if self._is_cancel_cleanup_blocking():
+            self._update_global_progress()
+            self._persist_queue()
+            return
+        self._release_cancel_gate_if_safe(start_pending=False)
         has_playlist_pipeline = any(
             (task.get("payload") or {}).get("playlist_session_id")
             for task in self._pending_tasks
@@ -2527,10 +2592,10 @@ class Downloader(QMainWindow, PagesMixin):
             payload = task["payload"]
             _log.info("Starting task %s for url=%s", task_id, payload.get("url"))
 
-            task["state"] = "active"
+            task["state"] = TASK_STATE_STARTING
             self._touch_task_activity(task_id)
             item = task["item"]
-            item["status"].setText("Downloading...")
+            item["status"].setText("Starting...")
             self._set_status_icon(item["status_icon"], "active", "")
             item["pause_btn"].setText("Pause")
             item["pause_btn"].setEnabled(True)
@@ -2585,6 +2650,8 @@ class Downloader(QMainWindow, PagesMixin):
 
             _log.info("About to start QThread for task %s", task_id)
             thread.start()
+            task["state"] = TASK_STATE_ACTIVE
+            item["status"].setText("Downloading...")
             _log.info("QThread started for task %s", task_id)
             self._update_global_progress()
 
@@ -2638,7 +2705,7 @@ class Downloader(QMainWindow, PagesMixin):
             worker = self._download_workers.get(task_id)
             task = self._active_tasks.get(task_id)
             if worker and task:
-                task["state"] = "pausing"
+                task["state"] = TASK_STATE_PAUSED
                 task["item"]["status"].setText("Pausing...")
                 task["item"]["pause_btn"].setText("Resume")
                 task["item"]["pause_btn"].setEnabled(False)
@@ -2646,7 +2713,7 @@ class Downloader(QMainWindow, PagesMixin):
             return
         if task_id in self._paused_tasks:
             task = self._paused_tasks.pop(task_id)
-            task["state"] = "queued"
+            task["state"] = TASK_STATE_QUEUED
             task["item"]["status"].setText("Queued")
             task["item"]["pause_btn"].setText("Pause")
             task["item"]["pause_btn"].setEnabled(False)
@@ -2675,6 +2742,8 @@ class Downloader(QMainWindow, PagesMixin):
             task = self._active_tasks.get(task_id)
             worker = self._download_workers.get(task_id)
             if task:
+                task["state"] = TASK_STATE_CANCELLING
+                self._cancel_cleanup_pending = True
                 item = task.get("item") or {}
                 if item.get("status"):
                     item["status"].setText("Cancelling...")
@@ -2688,7 +2757,9 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
             title = (task or {}).get("title") or "Download"
-            self._mark_task_failed(task_id)
+            if self._active_tasks:
+                self._cancel_grace_timer.start(self._CANCEL_GRACE_MS)
+            self._sync_download_button_text()
             self._show_toast(
                 f"Cancelled: {title}",
                 variant="warning",
@@ -2732,7 +2803,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._clear_task_activity(task_id)
         if not task or task.get("generation") != self._ui_generation:
             return
-        task["state"] = "paused"
+        task["state"] = TASK_STATE_PAUSED
         item = task.get("item") or {}
         try:
             if item.get("status"):
@@ -2757,6 +2828,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._clear_task_activity(task_id)
         if not task or task.get("generation") != self._ui_generation:
             return
+        task["state"] = TASK_STATE_COMPLETED
         payload = task.get("payload") or {}
         session_id = payload.get("playlist_session_id") or ""
         try:
@@ -2886,6 +2958,7 @@ class Downloader(QMainWindow, PagesMixin):
             )
             QTimer.singleShot(200, lambda tid=task_id: self._finalize_task_if_still_active(tid))
             return
+        self._release_cancel_gate_if_safe(start_pending=False)
         self._start_next_downloads()
 
     def _finalize_task_if_still_active(self, task_id):
@@ -2896,6 +2969,7 @@ class Downloader(QMainWindow, PagesMixin):
             )
             self._mark_task_failed(task_id)
             return
+        self._release_cancel_gate_if_safe()
 
     @Slot(str, float, object, object, object)
     def update_progress(self, task_id, percent, speed=None, downloaded=None, total=None):
@@ -2914,8 +2988,8 @@ class Downloader(QMainWindow, PagesMixin):
         try:
             if item.get("progress"):
                 item["progress"].setValue(value)
-            if value >= 100 and task.get("state") in ("active", "pausing"):
-                task["state"] = "finalizing"
+            if value >= 100 and task.get("state") in (TASK_STATE_ACTIVE, TASK_STATE_PAUSED):
+                task["state"] = TASK_STATE_FINALIZING
                 task["finalizing_since"] = time.time()
                 status = item.get("status")
                 if status and status.text().strip() in ("Downloading...", "Not responding..."):
@@ -3007,7 +3081,9 @@ class Downloader(QMainWindow, PagesMixin):
     def _sync_download_button_text(self):
         if not hasattr(self, "download_btn") or self.download_btn is None:
             return
-        if self._info_ready and self.download_btn.isEnabled():
+        if self._is_cancel_cleanup_blocking():
+            target = "Stopping..."
+        elif self._info_ready and self.download_btn.isEnabled():
             target = "Download"
         else:
             has_pipeline = bool(self._active_tasks or self._pending_tasks or self._paused_tasks)
@@ -3032,21 +3108,21 @@ class Downloader(QMainWindow, PagesMixin):
                 "id": task["id"],
                 "title": task["title"],
                 "payload": task["payload"],
-                "state": task.get("state", "queued")
+                "state": task.get("state", TASK_STATE_QUEUED)
             })
         for task in self._paused_tasks.values():
             tasks.append({
                 "id": task["id"],
                 "title": task["title"],
                 "payload": task["payload"],
-                "state": "paused"
+                "state": TASK_STATE_PAUSED,
             })
         for task in self._active_tasks.values():
             tasks.append({
                 "id": task["id"],
                 "title": task["title"],
                 "payload": task["payload"],
-                "state": "active"
+                "state": task.get("state", TASK_STATE_ACTIVE),
             })
         queue_manager.save_queue(tasks)
 
@@ -3060,7 +3136,7 @@ class Downloader(QMainWindow, PagesMixin):
         task_id = saved.get("id") or uuid.uuid4().hex
         title_text = saved.get("title") or payload.get("url") or "Queued download"
         saved_state = (saved.get("state") or "queued").lower()
-        state = "paused" if saved_state == "paused" else "queued"
+        state = TASK_STATE_PAUSED if saved_state == TASK_STATE_PAUSED else TASK_STATE_QUEUED
         task = {
             "id": task_id,
             "generation": self._ui_generation,
@@ -3079,7 +3155,7 @@ class Downloader(QMainWindow, PagesMixin):
             item["cancel_btn"].setText("Cancel")
             item["cancel_btn"].setEnabled(True)
             item["cancel_btn"].setVisible(True)
-        if state == "paused":
+        if state == TASK_STATE_PAUSED:
             item["status"].setText("Paused")
             item["pause_btn"].setText("Resume")
             item["pause_btn"].setEnabled(True)
@@ -3136,14 +3212,14 @@ class Downloader(QMainWindow, PagesMixin):
 
         self._ui_generation += 1
 
-        if self._active_tasks:
+        if self._active_tasks or self._has_running_download_threads():
             # Cancel the full pipeline: active + queued + paused + playlist session state.
             self._playlist_sessions.clear()
             self._clear_non_active_downloads()
             self._request_cancel_all_downloads("Cancelling...")
             self._show_toast("Stopping active downloads...", variant="info")
 
-        if self._cancel_grace_timer.isActive():
+        if self._cancel_grace_timer.isActive() and not self._cancel_cleanup_pending:
             self._cancel_grace_timer.stop()
         if self._download_reset_timer.isActive():
             self._download_reset_timer.stop()
@@ -3185,6 +3261,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._download_workers = {
             tid: w for tid, w in self._download_workers.items() if tid in self._download_threads
         }
+        self._release_cancel_gate_if_safe(start_pending=False)
         queue_manager.clear_queue()
         self._show_downloads_panel(False)
         self._expand_details()
@@ -3458,8 +3535,10 @@ class Downloader(QMainWindow, PagesMixin):
             self._show_message_dialog("Updates", "You're on the latest version.")
 
     def _on_update_error(self, msg):
-        _log.error("Update error: %s", msg)
         if "404" in (msg or ""):
+            _log.info(
+                "Update endpoint returned 404; pausing startup checks for the current release endpoint."
+            )
             self.update_url_404_disabled = True
             self.update_url_404_value = (self.update_manifest_url or "").strip()
             self.settings.setValue("update_url_404_disabled", True)
@@ -3468,19 +3547,16 @@ class Downloader(QMainWindow, PagesMixin):
             self.settings.setValue("check_updates_on_startup", False)
             if hasattr(self, "check_updates_cb"):
                 self.check_updates_cb.setChecked(False)
-            self._show_toast(
-                "Update URL is not reachable (404). Startup update checks are paused.",
-                variant="warning",
-                duration=5000
-            )
             if getattr(self, "_update_manual", False):
                 self._show_message_dialog(
                     "Updates",
                     "Update endpoint returned 404.\n"
-                    "If your GitHub repo is private, make it public before testing updates.",
+                    "This can happen when release metadata is private or unavailable. "
+                    "Startup update checks are paused for this URL.",
                     QMessageBox.Warning
                 )
             return
+        _log.warning("Update error: %s", msg)
         if getattr(self, "_update_manual", False):
             self._show_message_dialog("Updates", f"Update check failed:\n{msg}", QMessageBox.Warning)
 
@@ -3816,8 +3892,7 @@ class Downloader(QMainWindow, PagesMixin):
             # Extraction "succeeded" but only got tracking/analytics cookies —
             # not real login cookies.  Treat this as a login failure.
             _log.warning(
-                "_on_yt_login_success: cookie file %s does not have a complete YouTube/Google auth session",
-                cookie_path
+                "_on_yt_login_success: managed cookie file does not have a complete YouTube/Google auth session"
             )
             self._update_yt_login_ui("failed")
             self._show_error_dialog(
@@ -3832,8 +3907,8 @@ class Downloader(QMainWindow, PagesMixin):
             return
 
         _log.info(
-            "_on_yt_login_success: found auth cookies %s in %s",
-            auth_cookies, cookie_path
+            "_on_yt_login_success: found auth cookies %s in managed cookie storage",
+            auth_cookies
         )
         self.cookie_file = cookie_path
         self.settings.setValue("cookie_file", cookie_path)

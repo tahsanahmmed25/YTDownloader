@@ -13,16 +13,20 @@
 ## Staging
 
 - [ ] Build Windows and Linux artifacts in CI.
-- [ ] Verify `APPIMAGETOOL_SHA256` and `YTDL_FFMPEG_WIN_ZIP_SHA256` repository variables are set.
+- [ ] Verify `APPIMAGETOOL_SHA256`, `YTDL_FFMPEG_WIN_ZIP_SHA256`, and any enabled Linux FFmpeg SHA variables are set.
 - [ ] Verify release assets have matching `SHA256SUMS-*` files.
 - [ ] Publish release notes with `installer_sha256: <sha256>` for the platform installer.
+- [ ] Include unsigned-beta warning, SHA256 verification instructions, and no-warranty/use-at-own-risk language.
+- [ ] Mark beta, alpha, and release-candidate tags as GitHub prereleases.
+- [ ] Optionally publish detached GPG signatures if practical.
 - [ ] Test update checks against staging metadata.
 
-## Production
+## Public Unsigned Beta
 
-- [ ] Promote the staging tag or create a final signed tag.
+- [ ] Promote the staging tag or create a final unsigned beta tag.
 - [ ] Confirm CI tests passed before artifacts were uploaded.
 - [ ] Confirm artifacts launch on clean Windows and Linux machines.
+- [ ] Confirm AppImage smoke checks pass and Linux dependency notes are current.
 - [ ] Keep the previous release available for rollback.
 - [ ] Monitor privacy-safe logs and issue reports after release.
 

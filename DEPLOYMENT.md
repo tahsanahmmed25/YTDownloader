@@ -1,6 +1,6 @@
 # Deployment Guide for YTDownloader
 
-This project is hardened for safer releases, but it should not be treated as fully production-ready until code signing, signed update manifests, complete third-party binary hash pinning, and broader GUI/e2e validation are complete.
+This project is hardened for unsigned beta releases, but it should not be treated as production-ready. Paid code signing is not a blocker for public unsigned beta builds; users must instead get clear unsigned-app warnings, SHA256 checksums, transparent release notes, and no-warranty language.
 
 ## Table of Contents
 1. [Pre-Release Checklist](#pre-release-checklist)
@@ -47,14 +47,15 @@ python -m pip_audit -r requirements.txt -r requirements-dev.txt
 
 ### Required CI/Repository Variables
 
-Set these before production release builds:
+Set these before release builds:
 
 ```text
 APPIMAGETOOL_SHA256=<sha256 of the exact appimagetool-x86_64.AppImage used by CI>
 YTDL_FFMPEG_WIN_ZIP_SHA256=<sha256 of ffmpeg-release-essentials.zip>
+YTDL_FFMPEG_LIN_TAR_SHA256=<sha256 of ffmpeg-master-latest-linux64-gpl.tar.xz, if managed Linux FFmpeg is enabled>
 ```
 
-If these are missing, CI should fail rather than building from unverifiable external binaries.
+If these are missing, CI or runtime managed downloads should fail closed rather than consuming unverifiable external binaries. `YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS=true` is for local development only.
 
 ### Documentation
 ```markdown
@@ -181,21 +182,26 @@ Create `CHANGELOG.md`:
 4. Fill details (see below)
 
 # Method B: Via GitHub CLI
-gh release create v2.0.1 \
+gh release create v2.0.1-beta.1 \
   ./dist_installer/YTDownloader-Setup.exe \
-  --title "YTDownloader v2.0.1" \
-  --notes "See CHANGELOG.md for details"
+  --title "YTDownloader v2.0.1-beta.1" \
+  --prerelease \
+  --notes "Unsigned beta. Verify SHA256 before running. See CHANGELOG.md for details."
 ```
 
 ### Step 2: Release Details Template
 
-**Tag:** `v2.0.1`
+**Tag:** `v2.0.1-beta.1`
 
-**Title:** `YTDownloader v2.0.1 - Release`
+**Title:** `YTDownloader v2.0.1-beta.1 - Unsigned Beta`
 
 **Description:**
 ```markdown
-## YTDownloader v2.0.1
+## YTDownloader v2.0.1-beta.1
+
+This is an unsigned beta release of a personal project. Your system may show security warnings because the app is not signed with a paid certificate. Please verify the SHA256 checksum before running.
+
+No warranty is provided. Use at your own risk.
 
 ### ✨ Features
 - Modern UI with dark mode
@@ -206,10 +212,9 @@ gh release create v2.0.1 \
 - Speed limiting
 
 ### 📥 Installation
-1. Download `YTDownloader-Setup.exe`
-2. Run installer
-3. Follow prompts
-4. Done! App starts automatically
+1. Download the installer or AppImage for your OS.
+2. Verify SHA256 against the matching checksum file.
+3. Run the installer/AppImage.
 
 ### 🔧 System Requirements
 - Windows 10 or later
@@ -225,6 +230,8 @@ Report it: [Open Issue](https://github.com/tahsanahmmed25/YTDownloader/issues)
 ### 🔐 Verification
 SHA256: `<paste hash here>`
 
+`installer_sha256: <paste 64-char platform installer hash here>`
+
 To verify installer integrity:
 \`\`\`powershell
 Get-FileHash YTDownloader-Setup.exe -Algorithm SHA256
@@ -234,9 +241,9 @@ Get-FileHash YTDownloader-Setup.exe -Algorithm SHA256
 ### Step 3: Upload Installer
 
 **Files to upload:**
-1. `YTDownloader-Setup.exe` - Main installer
-2. `YTDownloader-v2.0.1-portable.zip` (optional) - No installation needed
-3. `SHA256-Checksums.txt` - Security verification
+1. `YTDownloader-Setup.exe` - Windows installer
+2. `YTDownloader-linux-x86_64.AppImage` - Linux AppImage
+3. `SHA256SUMS-windows.txt` and `SHA256SUMS-linux.txt` - Security verification
 
 ### Step 4: Generate SHA256 Checksum
 ```powershell
@@ -258,7 +265,7 @@ Your app expects JSON with:
 {
   "tag_name": "v2.0.1",
   "name": "v2.0.1",
-  "prerelease": false,
+  "prerelease": true,
   "assets": [
     {
       "name": "YTDownloader-Setup.exe",
@@ -318,7 +325,7 @@ Examples:
 
 **Low-effort, high-value additions:**
 - [ ] Keyboard shortcuts (Ctrl+V, Ctrl+Q)
-- [ ] Delete file from library
+- [ ] Delete file from Downloads
 - [ ] Tray notifications
 - [ ] Remember last quality preference
 - [ ] Estimated time remaining
@@ -389,7 +396,7 @@ git push origin main --tags
 # - Go to GitHub.com
 # - Create Release from tag
 # - Upload installer
-# - Add release notes
+# - Add release notes with unsigned beta warning, SHA256 checksum, and no-warranty text
 
 # 9. Users get auto-update notification
 # Done! 🎉
@@ -407,4 +414,4 @@ git push origin main --tags
 
 ---
 
-**Your app is ready for professional distribution!** 🚀
+**Unsigned beta rule:** release only after tests, checksums, AppImage smoke checks, and release notes pass. Do not call the app production-ready.

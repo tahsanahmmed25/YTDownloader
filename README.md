@@ -4,7 +4,7 @@
 
 **A clean, fast YouTube downloader with a desktop UI — for Windows and Linux.**
 
-**Private Beta:** This is a personal project by Tahsan, currently shared as a private beta. Builds are unsigned, may trigger OS/browser warnings, and should only be installed by testers who trust the private repository source.
+**Unsigned Beta:** This is a personal project by Tahsan. Builds are beta-quality and unsigned, may trigger OS/browser warnings, and should only be installed if you trust the release source and verify the SHA256 checksum.
 
 [![Build](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloader?label=latest)](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)
@@ -14,26 +14,38 @@
 
 ---
 
-## 📥 Private Beta Download
+## Unsigned Beta Download
 
-Go to the private **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)** and grab the file for your OS:
+Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)** and grab the file for your OS:
 
 | Platform | File | Notes |
 |---|---|---|
 | 🐧 **Linux** (Zorin OS, Ubuntu, Mint…) | `YTDownloader-linux-x86_64.AppImage` | Just download & run — no installation needed |
 | 🪟 **Windows 10/11** | `YTDownloader-Setup.exe` | Run the installer, choose your install drive |
 
-> **Unsigned beta warning:** Windows SmartScreen and some Linux desktop environments may warn that this app is from an unknown publisher. That is expected for this private beta because the builds are not code-signed yet.
+> **Unsigned beta warning:** Windows SmartScreen and some Linux desktop environments may warn that this app is from an unknown publisher. That is expected because the app is not signed with a paid certificate.
 
-> **Security note:** Verify release checksums when they are published. The in-app updater blocks installer downloads unless release metadata contains a valid `installer_sha256` value for the selected platform.
+> **Security note:** Verify the SHA256 checksum before running the app. The in-app updater blocks installer downloads unless release metadata contains a valid `installer_sha256` value for the selected platform.
+
+```bash
+sha256sum YTDownloader-linux-x86_64.AppImage
+cat SHA256SUMS-linux.txt
+```
+
+```powershell
+Get-FileHash .\YTDownloader-Setup.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-windows.txt
+```
+
+No warranty is provided. Use this beta at your own risk.
 
 ---
 
-## Production Hardening Status
+## Beta Readiness Status
 
-This project has production-hardening in place and is prepared for private beta testing, but it is not yet fully production-grade. Current safeguards include pinned direct dependencies, automated tests, SQLite-backed queue/history storage, safer archive extraction, private cookie files, keyring-backed session/proxy secrets when available, redacted logs, and checksum-gated update installs.
+This project has hardening in place for beta testing, but it is not production-ready. Current safeguards include pinned direct dependencies, automated tests, SQLite-backed queue/history storage, safer archive extraction, private cookie files, keyring-backed session/proxy secrets when available, redacted logs, and checksum-gated update installs.
 
-Known remaining work before a strict production release includes code signing for Windows/AppImage releases, signed update manifests, complete hash pinning for all third-party binary mirrors, a fully generated transitive lock file or hash-locked install workflow, and broader GUI/e2e coverage.
+Paid code signing is not required for this unsigned beta. Trust is handled through SHA256 checksums, transparent release notes, strict update hash checks, and optional GPG signing when practical. Remaining work before a strict production release includes signed update manifests, stronger third-party binary hash pinning, a fully generated transitive lock file or hash-locked install workflow, and broader GUI/e2e coverage.
 
 ---
 
@@ -49,7 +61,7 @@ Known remaining work before a strict production release includes code signing fo
    ./YTDownloader-linux-x86_64.AppImage
    ```
    Or right-click the file in your file manager → **Run as Program**.
-4. On first launch the app will use system **yt-dlp**/**FFmpeg** when available and may download managed copies when needed.
+4. On first launch the app will use system **yt-dlp**/**FFmpeg** when available. Public beta builds fail closed for managed FFmpeg downloads unless a trusted SHA256 is configured.
 
 > **Tip — install yt-dlp and FFmpeg system-wide (optional but faster):**
 > ```bash
@@ -74,14 +86,15 @@ Known remaining work before a strict production release includes code signing fo
 
 ## ✨ Features
 
-- **Paste a YouTube URL** → instantly shows title, thumbnail, estimated size, and available qualities
+- **Homepage:** paste a YouTube URL, analyze metadata, choose quality/format, and start downloads
 - **Video qualities:** Auto (Best), 720p, 1080p, 2K, 4K
 - **Formats:** MP4, MKV, WEBM, or Auto
 - **Playlist downloads** with queue management, pause/resume, and per-item progress
 - **Subtitles:** download and optionally embed into the video file
-- **Download history** with thumbnails, re-download, and search
+- **Downloads page** for active, queued, paused, and completed downloads
+- **History** with thumbnails, re-download, and search
 - **Auto-update for yt-dlp** — checked regularly with SHA256 verification for managed binary downloads
-- **Auto-update for FFmpeg** — managed with HTTPS source validation and optional pinned SHA256 environment checks
+- **FFmpeg support** — uses system FFmpeg when available; managed FFmpeg downloads require a trusted SHA256 in beta builds
 - **Light and dark themes**
 - **Two access modes:**
   - `Normal Mode` — for public videos (no cookies needed)
@@ -150,10 +163,12 @@ The lock files currently pin direct dependencies. Treat dependency updates as re
 ## Release Policy
 
 - CI must pass tests before release artifacts are built.
+- Beta version tags containing `-beta`, `-alpha`, or `-rc` must be published as prereleases.
 - Release installers must publish SHA256 checksum files.
 - In-app update metadata must include `installer_sha256: <64 hex chars>` in the GitHub release body or manifest.
 - Custom update URLs are disabled by default. Set `YTDL_ALLOW_CUSTOM_UPDATE_URL=true` only for development/staging.
-- Windows and Linux release channels should be promoted Dev → Staging → Production with a rollback tag kept available.
+- Optional GPG signatures may be published alongside SHA256 files when practical.
+- Windows and Linux release channels should be promoted Dev -> Staging -> Public Beta with a rollback tag kept available.
 
 ---
 
@@ -175,13 +190,13 @@ The lock files currently pin direct dependencies. Treat dependency updates as re
 > The app downloads yt-dlp automatically on first launch. Wait a few seconds and try again.
 
 **"This file is unknown and dangerous" (Windows SmartScreen)**
-> This is a false positive — the app isn't code-signed yet. Click **More info → Run anyway** to proceed. The app is safe.
+> This warning is expected for unsigned beta builds. Verify the SHA256 checksum, then run the installer only if you trust the release source.
 
 **Video won't download / quality not available**
 > Try a lower quality or use **Auto**. The app automatically picks the best available quality at or below your selected resolution.
 
 **FFmpeg merge failed**
-> Go to **Preferences** and click **Install FFmpeg**. Or on Linux: `sudo apt install ffmpeg`.
+> Go to **Preferences** and click **Install FFmpeg** if the release has a trusted FFmpeg SHA256 configured. On Linux, the simplest fix is usually: `sudo apt install ffmpeg`.
 
 **Download failed with "Sign in required" or "Video unavailable"**
 > Enable **Restricted Mode** in the Cookies tab. Use **Option 2 (Internal Login)** for the most reliable result on all platforms.
@@ -191,6 +206,9 @@ The lock files currently pin direct dependencies. Treat dependency updates as re
 
 **Linux: AppImage won't open**
 > Make sure FUSE is installed: `sudo apt install libfuse2`
+
+**Linux: missing desktop/runtime libraries**
+> Install the common AppImage/PySide runtime libraries: `sudo apt install libfuse2 libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0 libgl1`.
 
 **Linux: double-clicking does nothing**
 > In your file manager, right-click the AppImage → Properties → Permissions → enable "Allow executing as program".
@@ -224,6 +242,7 @@ python app.py
 git tag v2.0.5
 git push origin v2.0.5
 # GitHub builds both Windows + Linux automatically and publishes a release
+# Tags with -beta, -alpha, or -rc are marked as prerelease
 ```
 
 **Linux (AppImage) — locally:**

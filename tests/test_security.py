@@ -79,3 +79,25 @@ def test_redact_sensitive_hides_proxy_and_cookie_values():
     assert "abc123" not in redacted
     assert "cookies.txt" not in redacted
     assert "[redacted]" in redacted
+
+
+def test_redact_sensitive_hides_auth_headers_cookie_values_and_local_paths():
+    text = (
+        "Authorization: Bearer super-secret-token "
+        "Cookie: SID=secret_sid; LOGIN_INFO=secret_login "
+        "cookiefile=/home/tahsan/private/cookies.txt "
+        "proxy=https://user:proxy-pass@example.test:8443 "
+        "profile=C:\\Users\\Tahsan\\AppData\\Local\\Browser\\Cookies"
+    )
+
+    redacted = redact_sensitive(text)
+
+    assert "super-secret-token" not in redacted
+    assert "secret_sid" not in redacted
+    assert "secret_login" not in redacted
+    assert "proxy-pass" not in redacted
+    assert "tahsan" not in redacted.lower()
+    assert "Tahsan" not in redacted
+    assert "cookies.txt" not in redacted
+    assert "[redacted]" in redacted
+    assert "[local-path]" in redacted

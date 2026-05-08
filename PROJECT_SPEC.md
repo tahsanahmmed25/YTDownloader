@@ -57,8 +57,8 @@ Use a left sidebar and a main content area.
 
 Sidebar pages:
 
-- Downloader
-- Library
+- Homepage
+- Downloads
 - History
 - Options
 - Cookies
@@ -76,7 +76,7 @@ Layout goals:
 - Hover states on clickable buttons except where intentionally avoided
 - Modern, readable, eye-resting look
 
-## Downloader Page
+## Homepage Page
 
 ### Top Controls
 
@@ -215,11 +215,11 @@ When a row fails:
 - show a clear failed state
 - continue playlist flow where appropriate
 
-## Library and History Rules
+## Downloads and History Rules
 
-### Library
+### Downloads
 
-Library is for non-completed pipeline items only:
+Downloads are for non-completed pipeline items only:
 
 - active downloads
 - queued downloads
@@ -400,7 +400,7 @@ The app is considered successful when:
 - single video downloads work reliably
 - playlist downloads are stable and understandable
 - cookies workflow is clear and useful
-- Library cleanly reflects active queue state
+- Downloads cleanly reflects active queue state
 - History cleanly reflects completed downloads
 - tray behavior is sensible
 - packaging works

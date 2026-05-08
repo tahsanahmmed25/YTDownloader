@@ -7,7 +7,7 @@ YTDownloader is a desktop YouTube downloader with:
 - Professional installer (Inno Setup)
 - Auto-update system
 
-It is not fully production-ready until release signing, signed update manifests, full third-party binary hash pinning, and broader GUI/e2e validation are complete.
+It is not production-ready. Public unsigned beta releases are acceptable without a paid signing certificate, but release notes must clearly warn that builds are unsigned, provide SHA256 checksums, and say there is no warranty.
 
 ---
 
@@ -59,7 +59,7 @@ Stop-Process -Id $proc.Id
 2. "Create a new release"
 3. Tag: v2.0.1
 4. Upload: YTDownloader-Setup.exe and SHA256SUMS-windows.txt
-5. Add CHANGELOG content and `installer_sha256: <sha256>`
+5. Add CHANGELOG content, unsigned beta warning, no-warranty text, and `installer_sha256: <sha256>`
 
 # Users download from: github.com/tahsanahmmed25/YTDownloader/releases
 ```
@@ -133,7 +133,7 @@ User clicks "Update" → Downloads & installs
 - [ ] GitHub repo created & code pushed
 - [ ] GitHub Release created with installer
 - [ ] Release notes include changelog
-- [ ] SHA256 hash added (optional but professional)
+- [ ] SHA256 hash and checksum file added (required)
 - [ ] Update manifest URL pointing to GitHub
 
 ---
@@ -197,14 +197,14 @@ git push origin main
 
 ## Professional Touches
 
-✅ Already have:
+Already have:
 - Installer with shortcuts
 - Auto-update system
 - Code obfuscation
 - Professional UI
 - Proper error handling
 
-🎯 Add for extra polish:
+Add for extra polish:
 - GitHub repository page (good description)
 - README with screenshots
 - CHANGELOG visible to users

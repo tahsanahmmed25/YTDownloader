@@ -246,7 +246,7 @@ class PagesMixin:
         downloads_layout.setSpacing(6)
 
         downloads_header_row = QHBoxLayout()
-        downloads_header = QLabel("Downloads (0)")
+        downloads_header = QLabel("Active downloads (0)")
         downloads_header.setObjectName("CardTitle")
         self.downloads_header = downloads_header
         downloads_header_row.addWidget(downloads_header)
@@ -298,7 +298,7 @@ class PagesMixin:
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(12)
 
-        title = QLabel("Library")
+        title = QLabel("Downloads")
         title.setObjectName("SectionTitle")
         layout.addWidget(title)
 
@@ -404,7 +404,7 @@ class PagesMixin:
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        title = QLabel("Downloads")
+        title = QLabel("Download settings")
         title.setObjectName("CardTitle")
         layout.addWidget(title)
 

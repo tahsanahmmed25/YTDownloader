@@ -22,6 +22,11 @@ _SECRET_PATTERNS = (
     re.compile(r"(?i)(SAPISID|SID|HSID|SSID|APISID|LOGIN_INFO|__Secure-[13]P?APISID|__Secure-[13]PSID)=([^\s;]+)"),
 )
 
+_LOCAL_PATH_PATTERNS = (
+    re.compile(r"(?<![\w.-])/(?:home|Users)/[^/\s,;:)]+/[^\s,;)]*"),
+    re.compile(r"(?i)(?<![\w.-])[A-Z]:\\Users\\[^\\\s,;:)]+\\[^\s,;)]*"),
+)
+
 
 def redact_url(value):
     if not value:
@@ -61,6 +66,8 @@ def redact_sensitive(value):
                 return f"{match.group(1)}{match.group(2) or ''}{SENSITIVE_REPLACEMENT}"
             return f"{match.group(1)}={SENSITIVE_REPLACEMENT}" if "=" in match.group(0) else f"{match.group(1)}{SENSITIVE_REPLACEMENT}"
         text = pattern.sub(_replace, text)
+    for pattern in _LOCAL_PATH_PATTERNS:
+        text = pattern.sub("[local-path]", text)
     return text
 
 

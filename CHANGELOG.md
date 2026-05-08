@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Planned
 - Keyboard shortcuts (Ctrl+V, Ctrl+Q, Enter)
-- Delete downloaded files from library
+- Delete downloaded files from Downloads
 - Tray notifications on download completion
 - Remember last quality/format preference
 - Estimated time remaining during download
@@ -17,10 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.9-beta.2] - 2026-05-08
+
+### Added
+- Added safer download task states for queued, starting, active, cancelling, paused, finalizing, completed, and failed work.
+- Added automated lifecycle tests for reset during active downloads, reset spam, cancel-then-new-download behavior, app close during active tasks, concurrent download limits, fake yt-dlp progress, fake yt-dlp errors, hangs, and cancellation.
+
+### Changed
+- Renamed the main download setup area to **Homepage** and the saved/active download area to **Downloads** in visible UI copy.
+- Paused new download starts while cancellation cleanup is still waiting on old download threads.
+- Marked beta/alpha/rc tags as prereleases in the GitHub release workflow and added a headless AppImage smoke test.
+- Updated public unsigned beta documentation with checksum verification, unsigned-app warnings, no-warranty language, and Linux AppImage troubleshooting.
+
+### Security
+- FFmpeg managed downloads now fail closed unless a trusted SHA256 is configured or an explicit development override is set.
+- Update checks for private/unavailable GitHub release endpoints now pause quietly on 404 instead of telling users to make the repo public.
+- Expanded log redaction tests for cookie values, auth headers, proxy passwords, and local user paths.
+
+---
+
 ## [2.1.9-beta.1] - 2026-05-05
 
 ### Added
-- Prepared the app for private beta release with beta documentation, unsigned-build warnings, support/security docs, release checklist, and local/manual test separation.
+- Prepared the app for beta release with beta documentation, unsigned-build warnings, support/security docs, release checklist, and local/manual test separation.
 - Added pytest coverage for URL validation, session/cookie validation, storage migration, update manifests, import smoke checks, and security helpers.
 - Added SQLite-backed history and queue storage wrappers with WAL mode, transactions, and JSON migration support.
 
@@ -142,14 +161,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Disk space validation before downloads (200 MB safety buffer)
 - Download speed limiting (KB/s configurable, 0 = unlimited)
 - Real-time download progress with speed and size display
-- Library with search/filter by title
+- Downloads section with search/filter by title
 - Download history with thumbnails
 - Multi-file queue management system
 - Toast notifications for user feedback
 - Dark mode toggle
 - Download folder selection
 - Quality/format selection
-- Local library management
+- Local downloads management
 - Settings persistence
 
 ---
@@ -158,7 +177,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.1.9-beta.1** | ✅ Private beta | Current beta — production hardening, tests, docs, and Linux AppImage checksum |
+| **2.1.9-beta.2** | Unsigned beta | Current beta — UI rename, task cancellation hardening, public-beta docs, and Linux AppImage checksum |
+| 2.1.9-beta.1 | Unsigned beta | Earlier beta — hardening, tests, docs, and Linux AppImage checksum |
 | 2.1.8 | Active stable | Restricted-video and Linux merge fixes |
 | 2.1.7 | Upgrade recommended | Release workflow fix; affected by restricted-session and first-run FFmpeg issues |
 | 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |

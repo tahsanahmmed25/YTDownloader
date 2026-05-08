@@ -57,7 +57,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           generate_release_notes: true
 
       - name: Skip release creation for non-tag build
@@ -160,6 +160,18 @@ jobs:
           test -s dist_installer/YTDownloader-linux-x86_64.AppImage
           file dist_installer/YTDownloader-linux-x86_64.AppImage | grep -E "ELF|AppImage"
           sha256sum dist_installer/YTDownloader-linux-x86_64.AppImage | tee dist_installer/SHA256SUMS-linux.txt
+
+      - name: Smoke test Linux AppImage
+        run: |
+          set +e
+          QT_QPA_PLATFORM=offscreen timeout 15s dist_installer/YTDownloader-linux-x86_64.AppImage
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 124 ]; then
+            echo "AppImage smoke test failed with exit code $code" >&2
+            exit "$code"
+          fi
+          echo "AppImage smoke test passed (exit code $code)."
 
       - name: Upload Linux AppImage to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

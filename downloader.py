@@ -534,10 +534,9 @@ def _extract_best_video_info(url, base_opts, cookiefile=None, browser_auth=None)
 
             apply_client_fallback(opts, client)
             _log.info(
-                "Info extract attempt: client=%s auth=%s%s",
+                "Info extract attempt: client=%s auth=%s",
                 client or "default",
                 auth_label,
-                f" file={value}" if mode == "cookiefile" else ""
             )
             runtime_cookie = None
             try:
@@ -1350,7 +1349,7 @@ def _cookiefile_path(cookiefile=None, require_auth=False):
     if not cookiefile:
         return None
     if not os.path.exists(cookiefile):
-        _log.warning("Cookie file specified but not found on disk: %s", cookiefile)
+        _log.warning("Cookie file specified but not found on disk")
         return None
     # Validate the file actually has cookie rows (not just the Netscape header).
     # A real Netscape cookies.txt row has 7 tab-separated fields.
@@ -1368,8 +1367,7 @@ def _cookiefile_path(cookiefile=None, require_auth=False):
         pass
     if not has_rows:
         _log.warning(
-            "Cookie file %s exists but contains no valid cookie rows — skipping",
-            cookiefile
+            "Cookie file exists but contains no valid cookie rows — skipping"
         )
         return None
     if require_auth:
@@ -1377,18 +1375,17 @@ def _cookiefile_path(cookiefile=None, require_auth=False):
             from ui.session_manager import has_required_auth_cookies
             if not has_required_auth_cookies(cookiefile):
                 _log.warning(
-                    "Cookie file %s lacks the YouTube/Google auth cookies required for restricted videos — skipping",
-                    cookiefile
+                    "Cookie file lacks the YouTube/Google auth cookies required for restricted videos — skipping"
                 )
                 return None
         except Exception as exc:
-            _log.warning("Could not validate auth cookies in %s: %s", cookiefile, exc)
+            _log.warning("Could not validate auth cookies: %s", exc)
             return None
     try:
         size = os.path.getsize(cookiefile)
     except OSError:
         size = -1
-    _log.info("Cookie file resolved: %s (%d bytes)", cookiefile, size)
+    _log.info("Cookie file resolved (%d bytes)", size)
     return cookiefile
 
 
@@ -1407,7 +1404,7 @@ def _prepare_runtime_cookiefile(ydl_opts):
         ydl_opts["_managed_cookiefile"] = cookiefile
         return runtime_path
     except Exception as exc:
-        _log.warning("Could not create runtime cookie copy for %s: %s", cookiefile, exc)
+        _log.warning("Could not create runtime cookie copy: %s", exc)
         return None
 
 
@@ -1814,7 +1811,10 @@ def download_video(url,
     ytdlp_exe = _find_local_binary("yt-dlp")
     _log.info(
         "download_video: url=%s quality=%s cookiefile=%s browser_auth=%s",
-        url, quality, cookiefile or "(none)", browser_auth or "(none)"
+        url,
+        quality,
+        "set" if cookiefile else "none",
+        browser_auth or "(none)",
     )
     if ytdlp_exe:
         _log.info("yt-dlp.exe detected at %s (cwd=%s); using subprocess download path.", ytdlp_exe, os.getcwd())

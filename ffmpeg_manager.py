@@ -40,6 +40,30 @@ _FFMPEG_LIN_TAR_SHA256 = os.environ.get("YTDL_FFMPEG_LIN_TAR_SHA256", "").strip(
 _VERSION_FILE = "ffmpeg.version"    # sits in bin_dir()
 _LOCK = threading.Lock()
 _DOWNLOAD_IN_PROGRESS = False
+_LAST_SETUP_ERROR = ""
+
+
+def _allow_unverified_ffmpeg_downloads():
+    return (
+        is_local_dev_mode()
+        or os.environ.get("YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS", "").strip().lower()
+        in {"1", "true", "yes"}
+    )
+
+
+def _require_ffmpeg_sha(expected_sha256, platform_label):
+    if expected_sha256:
+        return
+    if _allow_unverified_ffmpeg_downloads():
+        _log.warning(
+            "FFmpeg %s archive has no pinned SHA256; dev override allows HTTPS-only download.",
+            platform_label,
+        )
+        return
+    raise RuntimeError(
+        f"FFmpeg {platform_label} archive SHA256 is not configured. "
+        "Public beta builds fail closed instead of downloading unverified FFmpeg binaries."
+    )
 
 
 # ── Path helpers ──────────────────────────────────────────────────────────────
@@ -128,6 +152,7 @@ def _download_windows(progress_cb):
     if progress_cb:
         progress_cb(2)
 
+    _require_ffmpeg_sha(_FFMPEG_WIN_ZIP_SHA256, "Windows")
     assert_https_url(_FFMPEG_WIN_ZIP_URL, allowed_hosts={"www.gyan.dev"})
     resp  = request_with_retry("GET", _FFMPEG_WIN_ZIP_URL, stream=True, timeout=60)
     total = int(resp.headers.get("Content-Length", 0))
@@ -147,8 +172,6 @@ def _download_windows(progress_cb):
 
     if _FFMPEG_WIN_ZIP_SHA256:
         verify_sha256(zip_path, _FFMPEG_WIN_ZIP_SHA256)
-    else:
-        _log.warning("FFmpeg Windows archive has no pinned SHA256; relying on HTTPS source validation only.")
     safe_extract_zip(zip_path, extr_dir, max_member_size=300 * 1024 * 1024)
 
     if progress_cb:
@@ -191,6 +214,7 @@ def _download_linux(progress_cb):
     if progress_cb:
         progress_cb(2)
 
+    _require_ffmpeg_sha(_FFMPEG_LIN_TAR_SHA256, "Linux")
     assert_https_url(_FFMPEG_LIN_URL, allowed_hosts={"github.com"})
     resp  = request_with_retry("GET", _FFMPEG_LIN_URL, stream=True, timeout=120)
     total = int(resp.headers.get("Content-Length", 0))
@@ -210,8 +234,6 @@ def _download_linux(progress_cb):
 
     if _FFMPEG_LIN_TAR_SHA256:
         verify_sha256(tar_path, _FFMPEG_LIN_TAR_SHA256)
-    else:
-        _log.warning("FFmpeg Linux archive has no pinned SHA256; relying on HTTPS source validation only.")
     safe_extract_tar(tar_path, extr_dir, max_member_size=300 * 1024 * 1024)
 
     if progress_cb:
@@ -256,7 +278,7 @@ def ensure_ffmpeg(force=False, progress_cb=None):
     progress_cb(int 0-100) — optional UI callback.
     Returns True if binaries are ready, False on failure.
     """
-    global _DOWNLOAD_IN_PROGRESS
+    global _DOWNLOAD_IN_PROGRESS, _LAST_SETUP_ERROR
 
     import shutil as sh
 
@@ -272,6 +294,7 @@ def ensure_ffmpeg(force=False, progress_cb=None):
             _log.info("FFmpeg download already in progress.")
             return False
         _DOWNLOAD_IN_PROGRESS = True
+        _LAST_SETUP_ERROR = ""
 
     try:
         already_present = is_ffmpeg_present()
@@ -296,7 +319,7 @@ def ensure_ffmpeg(force=False, progress_cb=None):
                 return True
             _log.info("Updating FFmpeg: %s → %s", local_version or "?", latest)
         else:
-            _log.info("FFmpeg not found. Downloading...")
+            _log.info("FFmpeg not found; checking managed install policy.")
 
         if IS_WINDOWS:
             _download_windows(progress_cb)
@@ -309,10 +332,11 @@ def ensure_ffmpeg(force=False, progress_cb=None):
         if progress_cb:
             progress_cb(100)
 
-        _log.info("FFmpeg installed/updated to %s in %s", latest or "?", bin_dir())
+        _log.info("FFmpeg installed/updated to %s.", latest or "?")
         return True
 
     except Exception as e:
+        _LAST_SETUP_ERROR = str(e)
         _log.error("FFmpeg setup failed: %s", e)
         return False
     finally:
@@ -333,7 +357,7 @@ def ensure_ffmpeg_background(on_done=None, on_error=None, progress_cb=None, forc
             if ok and on_done:
                 on_done()
             elif not ok and on_error:
-                on_error("FFmpeg could not be downloaded. Check your internet connection.")
+                on_error(_LAST_SETUP_ERROR or "FFmpeg could not be downloaded. Check your internet connection.")
         except Exception as e:
             if on_error:
                 on_error(str(e))

@@ -50,6 +50,18 @@ class FFmpegInstallWorker(QObject):
             if os.path.exists(extract_dir):
                 shutil.rmtree(extract_dir, ignore_errors=True)
 
+            if not self.FFMPEG_SHA256:
+                allow_unverified = os.environ.get(
+                    "YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS",
+                    "",
+                ).strip().lower() in {"1", "true", "yes"}
+                if not allow_unverified:
+                    raise RuntimeError(
+                        "FFmpeg archive SHA256 is not configured. "
+                        "Public beta builds fail closed instead of downloading unverified FFmpeg binaries."
+                    )
+                _log.warning("FFmpeg worker archive has no pinned SHA256; dev override allows HTTPS-only download.")
+
             self.progress.emit(5)
             _log.info("Downloading FFmpeg essentials...")
             assert_https_url(self.FFMPEG_URL, allowed_hosts={"www.gyan.dev"})
@@ -71,8 +83,6 @@ class FFmpegInstallWorker(QObject):
             _log.info("Extracting FFmpeg essentials...")
             if self.FFMPEG_SHA256:
                 verify_update_file(zip_path, self.FFMPEG_SHA256)
-            else:
-                _log.warning("FFmpeg worker archive has no pinned SHA256; relying on HTTPS source validation only.")
             safe_extract_zip(zip_path, extract_dir, max_member_size=300 * 1024 * 1024)
 
             self.progress.emit(80)
@@ -94,7 +104,7 @@ class FFmpegInstallWorker(QObject):
                 shutil.copy2(ffprobe_src, os.path.join(self.target_dir, "ffprobe.exe"))
 
             self.progress.emit(100)
-            _log.info("FFmpeg installed successfully to %s", self.target_dir)
+            _log.info("FFmpeg installed successfully.")
 
             try:
                 if os.path.exists(zip_path):
@@ -161,7 +171,10 @@ class UpdateWorker(QObject):
         except Exception as e:
             if isinstance(e, HTTPError):
                 code = getattr(getattr(e, "response", None), "status_code", None)
-                _log.warning("Update check failed for %s (HTTP %s)", self.manifest_url, code)
+                if code == 404:
+                    _log.info("Update check endpoint returned 404; release metadata is not accessible.")
+                else:
+                    _log.warning("Update check failed for %s (HTTP %s)", self.manifest_url, code)
             else:
                 _log.exception("Update check failed for %s", self.manifest_url)
             self.error.emit(str(e))

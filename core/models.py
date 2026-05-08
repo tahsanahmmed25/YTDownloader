@@ -2,6 +2,37 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 
+TASK_STATE_QUEUED = "queued"
+TASK_STATE_STARTING = "starting"
+TASK_STATE_ACTIVE = "active"
+TASK_STATE_CANCELLING = "cancelling"
+TASK_STATE_PAUSED = "paused"
+TASK_STATE_FINALIZING = "finalizing"
+TASK_STATE_COMPLETED = "completed"
+TASK_STATE_FAILED = "failed"
+
+TASK_STATES = frozenset({
+    TASK_STATE_QUEUED,
+    TASK_STATE_STARTING,
+    TASK_STATE_ACTIVE,
+    TASK_STATE_CANCELLING,
+    TASK_STATE_PAUSED,
+    TASK_STATE_FINALIZING,
+    TASK_STATE_COMPLETED,
+    TASK_STATE_FAILED,
+})
+
+TERMINAL_TASK_STATES = frozenset({
+    TASK_STATE_COMPLETED,
+    TASK_STATE_FAILED,
+})
+
+
+def normalize_task_state(value, default=TASK_STATE_QUEUED):
+    state = (value or "").strip().lower()
+    return state if state in TASK_STATES else default
+
+
 @dataclass(frozen=True)
 class DownloadOptions:
     url: str
@@ -55,7 +86,7 @@ class DownloadTask:
     id: str
     title: str
     payload: dict
-    state: str = "queued"
+    state: str = TASK_STATE_QUEUED
 
     @classmethod
     def from_dict(cls, data):
@@ -66,7 +97,7 @@ class DownloadTask:
             id=data.get("id") or "",
             title=data.get("title") or options.url or "Queued download",
             payload=dict(payload),
-            state=data.get("state") or "queued",
+            state=normalize_task_state(data.get("state")),
         )
 
     def as_dict(self):

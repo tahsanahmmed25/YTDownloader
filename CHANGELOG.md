@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [2.2.4] - 2026-05-13
+## [2.2.5] - 2026-05-13
 
 ### Fixed
 - **"Unhandled Error: `_maybe_finalize_reset`" crash after every download completes** —

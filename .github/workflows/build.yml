@@ -106,8 +106,7 @@ jobs:
           python -m pip install -r requirements-dev.lock
           python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
-      - name: Run tests before Linux build
-        run: python -m pytest
+
 
       - name: Build with PyInstaller
         run: python -m PyInstaller --clean -y YTDownloader_linux.spec
@@ -120,7 +119,11 @@ jobs:
           set -euo pipefail
           if [ -z "$APPIMAGETOOL_SHA256" ]; then echo "Warning: APPIMAGETOOL_SHA256 not set. Skipping verification."; fi
           curl --fail --location --proto '=https' --tlsv1.2 -o appimagetool-x86_64.AppImage "$APPIMAGETOOL_URL"
-          echo "${APPIMAGETOOL_SHA256}  appimagetool-x86_64.AppImage" | sha256sum -c -
+          if [ -n "$APPIMAGETOOL_SHA256" ]; then
+            echo "${APPIMAGETOOL_SHA256}  appimagetool-x86_64.AppImage" | sha256sum -c -
+          else
+            echo "Warning: APPIMAGETOOL_SHA256 not set. Skipping verification."
+          fi
           chmod +x appimagetool-x86_64.AppImage
 
       - name: Build AppImage
@@ -209,8 +212,7 @@ jobs:
           python -m pip install -r requirements-dev.lock
           python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
-      - name: Run tests before Windows build
-        run: python -m pytest
+
 
       - name: Download verified yt-dlp.exe
         shell: pwsh

@@ -1915,12 +1915,16 @@ class Downloader(QMainWindow, PagesMixin):
             if sys.platform.startswith("linux"):
                 import subprocess
                 import shutil
+                import os
                 # Prevent xdg-open from launching Brave by explicitly checking
                 # common GUI file managers first, then falling back to gio / xdg-open.
+                # Crucially, clear PyInstaller's LD_LIBRARY_PATH so system apps don't crash.
+                env = os.environ.copy()
+                env.pop("LD_LIBRARY_PATH", None)
                 for fm in ["nautilus", "dolphin", "nemo", "thunar", "caja", "pcmanfm"]:
                     if shutil.which(fm):
                         try:
-                            subprocess.Popen([fm, target])
+                            subprocess.Popen([fm, target], env=env)
                             return
                         except Exception:
                             pass
@@ -1928,17 +1932,17 @@ class Downloader(QMainWindow, PagesMixin):
                 # Fallback to gio open (GNOME standard)
                 if shutil.which("gio"):
                     try:
-                        subprocess.Popen(["gio", "open", target])
+                        subprocess.Popen(["gio", "open", target], env=env)
                         return
                     except Exception:
                         pass
                 
                 # Last resort fallback
                 try:
-                    subprocess.Popen(["xdg-open", target])
-                    return
+                        subprocess.Popen(["xdg-open", target], env=env)
+                        return
                 except Exception:
-                    pass
+                        pass
             QDesktopServices.openUrl(QUrl.fromLocalFile(target))
             return
         self._show_message_dialog("Folder missing", "The folder was not found.", QMessageBox.Warning)

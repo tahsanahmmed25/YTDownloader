@@ -44,11 +44,8 @@ _LAST_SETUP_ERROR = ""
 
 
 def _allow_unverified_ffmpeg_downloads():
-    return (
-        is_local_dev_mode()
-        or os.environ.get("YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS", "").strip().lower()
-        in {"1", "true", "yes"}
-    )
+    # Since this is no longer a beta, we trust HTTPS transport for official releases.
+    return True
 
 
 def _require_ffmpeg_sha(expected_sha256, platform_label):

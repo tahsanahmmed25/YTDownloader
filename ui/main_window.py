@@ -1580,21 +1580,8 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _find_ffmpeg(self):
         """Find ffmpeg on the current platform."""
-        from app_config import bin_dir, bin_name
-        # 1. System PATH
-        which = shutil.which("ffmpeg")
-        if which and os.path.exists(which):
-            return which
-        # 2. Auto-download location (bin_dir)
-        candidates = [
-            os.path.join(bin_dir(), bin_name("ffmpeg")),
-            os.path.join(app_dir(), bin_name("ffmpeg")),
-            os.path.join(os.getcwd(), bin_name("ffmpeg")),
-        ]
-        for path in candidates:
-            if path and os.path.exists(path):
-                return path
-        return None
+        import ffmpeg_manager
+        return ffmpeg_manager.is_ffmpeg_present()
 
     def _check_ffmpeg_on_startup(self):
         """Check for ffmpeg on startup; auto-update silently in background."""
@@ -1927,6 +1914,26 @@ class Downloader(QMainWindow, PagesMixin):
         if target and os.path.exists(target):
             if sys.platform.startswith("linux"):
                 import subprocess
+                import shutil
+                # Prevent xdg-open from launching Brave by explicitly checking
+                # common GUI file managers first, then falling back to gio / xdg-open.
+                for fm in ["nautilus", "dolphin", "nemo", "thunar", "caja", "pcmanfm"]:
+                    if shutil.which(fm):
+                        try:
+                            subprocess.Popen([fm, target])
+                            return
+                        except Exception:
+                            pass
+                
+                # Fallback to gio open (GNOME standard)
+                if shutil.which("gio"):
+                    try:
+                        subprocess.Popen(["gio", "open", target])
+                        return
+                    except Exception:
+                        pass
+                
+                # Last resort fallback
                 try:
                     subprocess.Popen(["xdg-open", target])
                     return

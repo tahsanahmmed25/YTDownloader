@@ -6,7 +6,7 @@ from core.security import ensure_private_dir
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.2.3"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 
@@ -113,10 +113,11 @@ def get_icon_path():
     # On Linux prefer .png; on Windows prefer .ico
     icon_names = ("download.png", "download.ico") if IS_LINUX else ("download.ico", "download.png")
     for base in base_dirs:
-        for name in icon_names:
-            path = os.path.join(base, "icons", name)
-            if os.path.exists(path):
-                return path
+        for folder in ("", "icons"):
+            for icon_name in icon_names:
+                path = os.path.join(base, folder, icon_name) if folder else os.path.join(base, icon_name)
+                if os.path.exists(path):
+                    return path
     return None
 
 

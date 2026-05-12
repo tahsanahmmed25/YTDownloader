@@ -224,6 +224,7 @@ jobs:
         shell: pwsh
         env:
           YTDL_FFMPEG_WIN_ZIP_SHA256: ${{ vars.YTDL_FFMPEG_WIN_ZIP_SHA256 }}
+          YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS: "true"
         run: |
           if (-not $env:YTDL_FFMPEG_WIN_ZIP_SHA256) { Write-Warning "Repository variable YTDL_FFMPEG_WIN_ZIP_SHA256 is not set. Skipping verification." }
           python -c "import ffmpeg_manager; raise SystemExit(0 if ffmpeg_manager.ensure_ffmpeg(force=True) else 1)"

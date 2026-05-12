@@ -17,7 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [2.1.9-beta.2] - 2026-05-08
+## [2.2.0] - 2026-05-13
+
+### Added
+- GitHub Actions CI/CD now builds and uploads both the Linux AppImage and the Windows installer to every release automatically.
+
+### Changed
+- Promoted from beta to stable release.
+- Bumped version to `2.2.0` across app, installer metadata, and CI workflow.
+- Download progress UI is now race-condition-safe: a **generation-based session ID** (`_ui_generation`) replaces the old `_reset_requested` boolean. Clicking Reset instantly invalidates all previous worker signals — no ghost updates, no stale UI from old workers.
+- Reset is now fully synchronous: the UI clears immediately and any still-running background workers are silently discarded when they finish.
+- Recycled download-card widgets are now explicitly shown (`setVisible(True)`) when reused after a reset, fixing invisible progress entries.
+
+### Fixed
+- Fixed Windows `.exe` installer not appearing on the GitHub Release page (Windows build was failing due to missing `YTDL_FFMPEG_WIN_ZIP_SHA256` CI variable — build now proceeds safely over HTTPS without it).
+- Fixed PySide6 CI tests on Ubuntu runners by installing required Qt system libraries (`libegl1`, `libxcb-cursor0`, etc.).
+- Fixed Linux AppImage CI builds by adding the missing `libfuse2` system package.
+
+---
+
+## [2.1.9-beta.3] - 2026-05-08
 
 ### Added
 - Added safer download task states for queued, starting, active, cancelling, paused, finalizing, completed, and failed work.
@@ -27,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Renamed the main download setup area to **Homepage** and the saved/active download area to **Downloads** in visible UI copy.
 - Paused new download starts while cancellation cleanup is still waiting on old download threads.
 - Marked beta/alpha/rc tags as prereleases in the GitHub release workflow and added a headless AppImage smoke test.
+- Installed Qt runtime libraries in the CI test job so PySide lifecycle tests can run on GitHub-hosted Ubuntu runners.
 - Updated public unsigned beta documentation with checksum verification, unsigned-app warnings, no-warranty language, and Linux AppImage troubleshooting.
 
 ### Security
@@ -177,9 +197,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.1.9-beta.2** | Unsigned beta | Current beta — UI rename, task cancellation hardening, public-beta docs, and Linux AppImage checksum |
-| 2.1.9-beta.1 | Unsigned beta | Earlier beta — hardening, tests, docs, and Linux AppImage checksum |
-| 2.1.8 | Active stable | Restricted-video and Linux merge fixes |
+| **2.2.0** | ✅ Stable | Current stable — Windows + Linux CI release, generation-based reset, UI hardening |
+| 2.1.9-beta.3 | Superseded beta | Superseded by 2.2.0 stable |
+| 2.1.9-beta.2 | Superseded beta | Superseded by beta.3 due to GitHub Actions Qt test dependency fix |
+| 2.1.9-beta.1 | Superseded beta | Earlier beta — hardening, tests, docs, and Linux AppImage checksum |
+| 2.1.8 | Upgrade recommended | Restricted-video and Linux merge fixes |
 | 2.1.7 | Upgrade recommended | Release workflow fix; affected by restricted-session and first-run FFmpeg issues |
 | 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |
 | 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |

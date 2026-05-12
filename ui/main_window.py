@@ -318,6 +318,7 @@ class Downloader(QMainWindow, PagesMixin):
             QTimer.singleShot(250, self.start_update_check)
         QTimer.singleShot(400, self._maybe_show_cookie_reminder)
         QTimer.singleShot(600, self._check_ffmpeg_on_startup)
+        QTimer.singleShot(700, self._refresh_essentials_status)
         QTimer.singleShot(800, self._check_ytdlp_exe_on_startup)
 
     def _build_ui(self):
@@ -1651,10 +1652,29 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _on_ffmpeg_progress(self, percent):
         _log.debug("FFmpeg installation progress: %d%%", percent)
+        # Update the preferences page progress bar on the main thread
+        def _update():
+            if hasattr(self, "essentials_progress"):
+                self.essentials_progress.setVisible(True)
+                self.essentials_progress.setValue(int(percent))
+            if hasattr(self, "essentials_status_label"):
+                self.essentials_status_label.setText("Installing essentials...")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, _update)
 
     def _on_ffmpeg_completed(self):
         self._ffmpeg_installed = True
         self._show_toast("FFmpeg installed successfully.", variant="success")
+        def _update():
+            if hasattr(self, "essentials_progress"):
+                self.essentials_progress.setValue(100)
+                self.essentials_progress.setVisible(False)
+            if hasattr(self, "essentials_status_label"):
+                self.essentials_status_label.setText("✅ Essentials are installed.")
+            if hasattr(self, "install_essentials_btn"):
+                self.install_essentials_btn.setEnabled(False)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, _update)
 
     def _on_ffmpeg_error(self, error_msg):
         _log.error("FFmpeg installation failed: %s", error_msg)
@@ -1662,18 +1682,106 @@ class Downloader(QMainWindow, PagesMixin):
             f"FFmpeg installation failed: {error_msg}",
             variant="error"
         )
+        def _update():
+            if hasattr(self, "essentials_progress"):
+                self.essentials_progress.setVisible(False)
+            if hasattr(self, "essentials_status_label"):
+                self.essentials_status_label.setText(f"❌ Installation failed: {error_msg}")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, _update)
 
     def _run_install_essentials(self):
-        """Manual FFmpeg install from Preferences page, reuses the background worker."""
+        """Manual FFmpeg install from Preferences page."""
         if self._ffmpeg_install_running():
             self._show_toast("FFmpeg installation already in progress.", variant="info")
             return
         if self._find_ffmpeg():
+            if hasattr(self, "essentials_status_label"):
+                self.essentials_status_label.setText("✅ Essentials are already installed.")
+            if hasattr(self, "install_essentials_btn"):
+                self.install_essentials_btn.setEnabled(False)
             self._show_toast("FFmpeg is already installed.", variant="success")
             return
+        if hasattr(self, "essentials_status_label"):
+            self.essentials_status_label.setText("Downloading essentials...")
+        if hasattr(self, "essentials_progress"):
+            self.essentials_progress.setValue(0)
+            self.essentials_progress.setVisible(True)
         self._install_ffmpeg_background()
 
+    def _run_reinstall_essentials(self):
+        """Force re-download and re-install FFmpeg regardless of current state."""
+        if self._ffmpeg_install_running():
+            self._show_toast("FFmpeg installation already in progress.", variant="info")
+            return
+        if hasattr(self, "essentials_status_label"):
+            self.essentials_status_label.setText("Reinstalling essentials...")
+        if hasattr(self, "essentials_progress"):
+            self.essentials_progress.setValue(0)
+            self.essentials_progress.setVisible(True)
+        self._show_toast("Reinstalling FFmpeg essentials...", variant="info")
+        def _on_done():
+            self.dialog_requested.emit("__ffmpeg_ready__", "", None)
+        def _on_error(msg):
+            self.dialog_requested.emit("__ffmpeg_error__", msg, None)
+        self._ffmpeg_install_thread = ffmpeg_manager.ensure_ffmpeg_background(
+            on_done=_on_done,
+            on_error=_on_error,
+            progress_cb=self._on_ffmpeg_progress,
+            force=True
+        )
+
+    def _run_update_essentials(self):
+        """Check if FFmpeg needs updating; update if outdated, report if current."""
+        if self._ffmpeg_install_running():
+            self._show_toast("FFmpeg installation already in progress.", variant="info")
+            return
+        if hasattr(self, "essentials_status_label"):
+            self.essentials_status_label.setText("Checking for updates...")
+        if hasattr(self, "update_essentials_btn"):
+            self.update_essentials_btn.setEnabled(False)
+
+        import threading
+        def _check():
+            try:
+                is_latest = ffmpeg_manager.is_ffmpeg_latest()
+            except Exception:
+                is_latest = None
+            def _report():
+                if hasattr(self, "update_essentials_btn"):
+                    self.update_essentials_btn.setEnabled(True)
+                if is_latest is True:
+                    if hasattr(self, "essentials_status_label"):
+                        self.essentials_status_label.setText("✅ Essentials are already the latest version.")
+                    self._show_toast("FFmpeg is already up to date.", variant="success")
+                elif is_latest is False:
+                    if hasattr(self, "essentials_status_label"):
+                        self.essentials_status_label.setText("Update available. Downloading...")
+                    if hasattr(self, "essentials_progress"):
+                        self.essentials_progress.setValue(0)
+                        self.essentials_progress.setVisible(True)
+                    self._run_reinstall_essentials()
+                else:
+                    if hasattr(self, "essentials_status_label"):
+                        self.essentials_status_label.setText("Could not check for update. Check your connection.")
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, _report)
+        threading.Thread(target=_check, daemon=True).start()
+
     # ── yt-dlp.exe auto-download / auto-update ───────────────────────────
+
+    def _refresh_essentials_status(self):
+        """Set the essentials status label to reflect current FFmpeg state on startup."""
+        if not hasattr(self, "essentials_status_label"):
+            return
+        if self._find_ffmpeg():
+            self.essentials_status_label.setText("✅ Essentials are installed.")
+            if hasattr(self, "install_essentials_btn"):
+                self.install_essentials_btn.setEnabled(False)
+        else:
+            self.essentials_status_label.setText("FFmpeg is not installed. Click 'Install Essentials' to download it.")
+            if hasattr(self, "install_essentials_btn"):
+                self.install_essentials_btn.setEnabled(True)
 
     def _check_ytdlp_exe_on_startup(self):
         """Check for yt-dlp.exe on startup; download if missing or update if outdated."""
@@ -1818,6 +1926,13 @@ class Downloader(QMainWindow, PagesMixin):
         if os.path.isfile(path):
             target = os.path.dirname(path)
         if target and os.path.exists(target):
+            if sys.platform.startswith("linux"):
+                import subprocess
+                try:
+                    subprocess.Popen(["xdg-open", target])
+                    return
+                except Exception:
+                    pass
             QDesktopServices.openUrl(QUrl.fromLocalFile(target))
             return
         self._show_message_dialog("Folder missing", "The folder was not found.", QMessageBox.Warning)

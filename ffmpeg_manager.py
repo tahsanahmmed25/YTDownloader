@@ -138,6 +138,24 @@ def _fetch_latest_version_linux():
     return data.get("tag_name", "latest")
 
 
+def is_ffmpeg_latest() -> bool:
+    """
+    Return True if local FFmpeg version matches the latest available,
+    False if an update is available, or raise Exception on network failure.
+    """
+    local = _get_local_version()
+    if not local:
+        return False  # not installed — treat as needs update
+    try:
+        if IS_WINDOWS:
+            remote = _fetch_latest_version_windows()
+        else:
+            remote = _fetch_latest_version_linux()
+    except Exception as exc:
+        raise RuntimeError(f"Could not reach update server: {exc}") from exc
+    return local.strip() == remote.strip()
+
+
 # ── Download helpers ──────────────────────────────────────────────────────────
 
 def _download_windows(progress_cb):

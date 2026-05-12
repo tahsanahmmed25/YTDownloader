@@ -17,6 +17,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.1] - 2026-05-13
+
+### Fixed
+- **History "Open Folder" opens file manager instead of Brave browser** — On Linux,
+  `_open_folder()` now calls `xdg-open` directly via subprocess instead of routing
+  through `QDesktopServices`, which was honoring the default URL handler (Brave).
+- **Firefox browser auth fails with "Could not find Firefox profile directory"** — On
+  Zorin OS and other distros where Firefox stores its profile under
+  `~/.config/mozilla/firefox/` (XDG path) instead of the standard `~/.mozilla/firefox/`,
+  `browser_cookie3` failed silently. The session manager now scans all known Firefox
+  profile locations (`~/.mozilla/`, `~/.config/mozilla/`, Flatpak path) and passes the
+  resolved `cookies.sqlite` path directly to the loader.
+- **Restricted video downloads failing** — Caused by the Firefox auth bug above; once
+  cookies are correctly extracted the restricted download pipeline works normally.
+
+### Changed
+- **Essentials (FFmpeg) UI in Preferences** — The single "Install Essentials" button is
+  replaced with a full-featured section including:
+  - A **status label** that shows install state on startup (✅ installed / prompt if missing).
+  - A **progress bar** that fills left → right with percentage text while downloading.
+  - **Reinstall** button to force a fresh download at any time.
+  - **Check for Update** button that compares local vs upstream version and triggers an
+    update download if one is available.
+- Added `is_ffmpeg_latest()` to `ffmpeg_manager.py` to support the update check.
+
+---
+
 ## [2.2.0] - 2026-05-13
 
 ### Added
@@ -197,13 +224,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.2.0** | ✅ Stable | Current stable — Windows + Linux CI release, generation-based reset, UI hardening |
+| **2.2.1** | ✅ Stable | Current stable — open-folder fix, Firefox auth fix, restricted video fix, FFmpeg progress UI |
+| 2.2.0 | Upgrade recommended | CI release pipeline fix, generation-based reset |
 | 2.1.9-beta.3 | Superseded beta | Superseded by 2.2.0 stable |
-| 2.1.9-beta.2 | Superseded beta | Superseded by beta.3 due to GitHub Actions Qt test dependency fix |
-| 2.1.9-beta.1 | Superseded beta | Earlier beta — hardening, tests, docs, and Linux AppImage checksum |
 | 2.1.8 | Upgrade recommended | Restricted-video and Linux merge fixes |
-| 2.1.7 | Upgrade recommended | Release workflow fix; affected by restricted-session and first-run FFmpeg issues |
-| 2.1.6 | Upgrade recommended | Runtime fixes; GitHub release workflow failed before assets were published |
+| 2.1.7 | Upgrade recommended | Release workflow fix |
+| 2.1.6 | Upgrade recommended | Runtime fixes |
 | 2.0.2 | Upgrade recommended | Earlier Windows + Linux release |
 | 2.0.1 | Upgrade recommended | Windows only |
 | 1.0.0 | Upgrade recommended | Earlier public release |

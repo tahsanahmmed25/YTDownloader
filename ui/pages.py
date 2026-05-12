@@ -451,10 +451,46 @@ class PagesMixin:
         proxy_row.addWidget(self.proxy_input, 1)
         layout.addLayout(proxy_row)
 
-        install_btn = QPushButton("Install Essentials (ffmpeg)")
-        install_btn.setObjectName("GhostButton")
-        install_btn.clicked.connect(self._run_install_essentials)
-        layout.addWidget(install_btn)
+        # ── Essentials (FFmpeg) section ──────────────────────────────────
+        essentials_label = QLabel("Essentials (FFmpeg)")
+        essentials_label.setObjectName("CardTitle")
+        layout.addWidget(essentials_label)
+
+        self.essentials_status_label = QLabel("")
+        self.essentials_status_label.setObjectName("MutedText")
+        self.essentials_status_label.setWordWrap(True)
+        layout.addWidget(self.essentials_status_label)
+
+        self.essentials_progress = QProgressBar()
+        self.essentials_progress.setObjectName("FetchBar")
+        self.essentials_progress.setRange(0, 100)
+        self.essentials_progress.setValue(0)
+        self.essentials_progress.setTextVisible(True)
+        self.essentials_progress.setFixedHeight(10)
+        self.essentials_progress.setVisible(False)
+        layout.addWidget(self.essentials_progress)
+
+        essentials_btn_row = QHBoxLayout()
+        essentials_btn_row.setSpacing(8)
+
+        self.install_essentials_btn = QPushButton("Install Essentials")
+        self.install_essentials_btn.setObjectName("GhostButton")
+        self.install_essentials_btn.clicked.connect(self._run_install_essentials)
+        essentials_btn_row.addWidget(self.install_essentials_btn)
+
+        self.reinstall_essentials_btn = QPushButton("Reinstall")
+        self.reinstall_essentials_btn.setObjectName("GhostButton")
+        self.reinstall_essentials_btn.clicked.connect(self._run_reinstall_essentials)
+        essentials_btn_row.addWidget(self.reinstall_essentials_btn)
+
+        self.update_essentials_btn = QPushButton("Check for Update")
+        self.update_essentials_btn.setObjectName("GhostButton")
+        self.update_essentials_btn.clicked.connect(self._run_update_essentials)
+        essentials_btn_row.addWidget(self.update_essentials_btn)
+
+        essentials_btn_row.addStretch(1)
+        layout.addLayout(essentials_btn_row)
+        # ─────────────────────────────────────────────────────────────────
 
         return card
 

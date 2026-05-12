@@ -143,6 +143,36 @@ def save_cookies_from_browser(browser_name: str) -> str:
 
     names_to_try = get_browser_auto_order() if browser_name == "auto" else [browser_name.lower()]
 
+    # On some Linux distros (e.g. Zorin OS), Firefox stores its profile under
+    # ~/.config/mozilla/firefox instead of the standard ~/.mozilla/firefox.
+    # browser_cookie3 only knows about the standard path, so we detect the
+    # alternate location and pass it explicitly as cookie_file.
+    _firefox_custom_profile = None
+    if sys.platform.startswith("linux"):
+        _std = os.path.expanduser("~/.mozilla/firefox")
+        _alt = os.path.expanduser("~/.config/mozilla/firefox")
+        _flt = os.path.expanduser("~/.var/app/org.mozilla.firefox/config/mozilla/firefox")
+        if not os.path.isdir(_std):
+            for _candidate in (_alt, _flt):
+                if os.path.isdir(_candidate):
+                    import glob as _glob, configparser as _cp
+                    _ini_hits = _glob.glob(os.path.join(_candidate, "profiles.ini"))
+                    if _ini_hits:
+                        _cfg = _cp.ConfigParser()
+                        _cfg.read(_ini_hits[0], encoding="utf-8")
+                        for _sec in _cfg.sections():
+                            if _cfg.get(_sec, "Default", fallback="") == "1" or _cfg.has_option(_sec, "Path"):
+                                _rel = _cfg.get(_sec, "Path", fallback="")
+                                if _rel:
+                                    _full = os.path.join(_candidate, _rel)
+                                    _cookie_db = os.path.join(_full, "cookies.sqlite")
+                                    if os.path.isfile(_cookie_db):
+                                        _firefox_custom_profile = _cookie_db
+                                        _log.info("Firefox custom profile cookies found at: %s", _firefox_custom_profile)
+                                        break
+                    if _firefox_custom_profile:
+                        break
+
     best_collected: dict = {}          # (domain, path, name) → cookie
     best_auth_count: int = 0
     best_has_required_auth = False
@@ -156,7 +186,11 @@ def save_cookies_from_browser(browser_name: str) -> str:
             collected: dict = {}
             for domain_name in _COOKIE_LOAD_DOMAINS:
                 try:
-                    jar = loader(domain_name=domain_name)
+                    # For Firefox on non-standard Linux paths, pass cookie_file explicitly
+                    if name == "firefox" and _firefox_custom_profile and os.path.isfile(_firefox_custom_profile):
+                        jar = loader(cookie_file=_firefox_custom_profile, domain_name=domain_name)
+                    else:
+                        jar = loader(domain_name=domain_name)
                 except Exception:
                     if domain_name == _COOKIE_LOAD_DOMAINS[-1]:
                         raise

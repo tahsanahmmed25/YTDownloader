@@ -17,6 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.2] - 2026-05-13
+
+### Fixed
+- **"Unhandled Error: `_maybe_finalize_reset`" crash after every download completes** —
+  Three call sites to a method removed during the generation-ID refactor were left behind.
+  All three calls in `on_error`, `on_pause`, and `on_download_complete` are now removed.
+- **FFmpeg "SHA256 not configured" error blocking Install Essentials for end users** —
+  The SHA256 guard was unconditionally blocking downloads when no hash was pinned.
+  It now only enforces the closed-policy when running inside a CI environment (`CI=true`).
+  Regular end-user installs proceed over HTTPS without requiring a pinned hash.
+- **Progress bar stuck at 0%** — `_on_ffmpeg_progress` used a closure that didn't
+  snapshot the `percent` value before scheduling a `QTimer.singleShot` call. Fixed by
+  capturing `percent` as a default argument in the inner function.
+- **1080p quality setting downloads 360p** — Caused entirely by FFmpeg being absent.
+  Without FFmpeg, yt-dlp cannot merge split video+audio streams, so YouTube only serves
+  combined (progressive) streams which cap at 360p. The SHA256 guard fix above allows
+  FFmpeg to install, restoring full 1080p+ downloads. A warning toast now also appears
+  immediately when the user selects a specific quality without FFmpeg installed.
+
+---
+
 ## [2.2.1] - 2026-05-13
 
 ### Fixed

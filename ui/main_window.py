@@ -1382,7 +1382,6 @@ class Downloader(QMainWindow, PagesMixin):
         else:
             self._start_next_downloads()
         self._release_cancel_gate_if_safe()
-        self._maybe_finalize_reset()
         return True
 
     def _request_cancel_all_downloads(self, reason_text=""):
@@ -1652,13 +1651,13 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _on_ffmpeg_progress(self, percent):
         _log.debug("FFmpeg installation progress: %d%%", percent)
-        # Update the preferences page progress bar on the main thread
-        def _update():
+        # Capture percent as default arg to avoid closure scoping issues across threads
+        def _update(pct=int(percent)):
             if hasattr(self, "essentials_progress"):
                 self.essentials_progress.setVisible(True)
-                self.essentials_progress.setValue(int(percent))
+                self.essentials_progress.setValue(pct)
             if hasattr(self, "essentials_status_label"):
-                self.essentials_status_label.setText("Installing essentials...")
+                self.essentials_status_label.setText(f"Downloading essentials... {pct}%")
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, _update)
 
@@ -2161,6 +2160,17 @@ class Downloader(QMainWindow, PagesMixin):
             return
         quality = self.quality.currentText().strip() or "Auto (Best)"
         container = (self.format_combo.currentText().strip() or "auto").lower()
+
+        # Warn the user if FFmpeg is missing and they selected a specific quality.
+        # Without FFmpeg, yt-dlp cannot merge split streams, so YouTube only delivers
+        # progressive (single-file) streams which are capped at 360p.
+        if "auto" not in quality.lower() and not self._find_ffmpeg():
+            self._show_toast(
+                "⚠️ FFmpeg is not installed — quality is limited to 360p. "
+                "Go to Preferences → Install Essentials to fix this.",
+                variant="warning",
+                duration=8000
+            )
 
         self._info_ready = False
         self._active_url = normalize_youtube_url(url, keep_playlist=is_playlist)
@@ -2936,7 +2946,6 @@ class Downloader(QMainWindow, PagesMixin):
         self._paused_tasks[task_id] = task
         self._update_global_progress()
         self._start_next_downloads()
-        self._maybe_finalize_reset()
 
     def on_download_complete(self, task_id, items):
         task = self._active_tasks.pop(task_id, None)
@@ -3003,7 +3012,6 @@ class Downloader(QMainWindow, PagesMixin):
         else:
             self._start_next_downloads()
         self._sync_download_button_text()
-        self._maybe_finalize_reset()
 
         # Re-enable the download button for single-video downloads so the user
         # can immediately download the same video at a different quality without

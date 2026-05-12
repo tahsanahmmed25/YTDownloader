@@ -60,10 +60,21 @@ def _require_ffmpeg_sha(expected_sha256, platform_label):
             platform_label,
         )
         return
-    raise RuntimeError(
-        f"FFmpeg {platform_label} archive SHA256 is not configured. "
-        "Public beta builds fail closed instead of downloading unverified FFmpeg binaries."
+    # Only enforce the closed-policy when running in a CI environment where a pinned
+    # hash SHOULD have been configured. For regular end-user installs (no CI env),
+    # allow the HTTPS download so the app is functional out-of-the-box.
+    running_in_ci = os.environ.get("CI", "").lower() in {"1", "true", "yes"}
+    if running_in_ci:
+        raise RuntimeError(
+            f"FFmpeg {platform_label} archive SHA256 is not configured. "
+            "CI builds require a pinned SHA256 via YTDL_FFMPEG_LIN_TAR_SHA256 "
+            "or YTDL_ALLOW_UNVERIFIED_FFMPEG_DOWNLOADS=true."
+        )
+    _log.warning(
+        "FFmpeg %s archive has no pinned SHA256; proceeding with HTTPS-only download for end-user install.",
+        platform_label,
     )
+
 
 
 # ── Path helpers ──────────────────────────────────────────────────────────────

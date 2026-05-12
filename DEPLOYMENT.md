@@ -1,6 +1,6 @@
 # Deployment Guide for YTDownloader
 
-This project is hardened for unsigned beta releases, but it should not be treated as production-ready. Paid code signing is not a blocker for public unsigned beta builds; users must instead get clear unsigned-app warnings, SHA256 checksums, transparent release notes, and no-warranty language.
+This project is hardened for unsigned releases, but it should not be treated as production-ready. Paid code signing is not a blocker for public unsigned builds; users must instead get clear unsigned-app warnings, SHA256 checksums, transparent release notes, and no-warranty language.
 
 ## Table of Contents
 1. [Pre-Release Checklist](#pre-release-checklist)
@@ -193,13 +193,13 @@ gh release create v2.0.1-beta.1 \
 
 **Tag:** `v2.0.1-beta.1`
 
-**Title:** `YTDownloader v2.0.1-beta.1 - Unsigned Beta`
+**Title:** `YTDownloader v2.0.1-beta.1 - Unsigned Release`
 
 **Description:**
 ```markdown
 ## YTDownloader v2.0.1-beta.1
 
-This is an unsigned beta release of a personal project. Your system may show security warnings because the app is not signed with a paid certificate. Please verify the SHA256 checksum before running.
+This is an unsigned release release of a personal project. Your system may show security warnings because the app is not signed with a paid certificate. Please verify the SHA256 checksum before running.
 
 No warranty is provided. Use at your own risk.
 
@@ -396,7 +396,7 @@ git push origin main --tags
 # - Go to GitHub.com
 # - Create Release from tag
 # - Upload installer
-# - Add release notes with unsigned beta warning, SHA256 checksum, and no-warranty text
+# - Add release notes with unsigned release warning, SHA256 checksum, and no-warranty text
 
 # 9. Users get auto-update notification
 # Done! 🎉

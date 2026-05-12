@@ -21,9 +21,9 @@
 - [ ] Optionally publish detached GPG signatures if practical.
 - [ ] Test update checks against staging metadata.
 
-## Public Unsigned Beta
+## Public Unsigned Release
 
-- [ ] Promote the staging tag or create a final unsigned beta tag.
+- [ ] Promote the staging tag or create a final unsigned release tag.
 - [ ] Confirm CI tests passed before artifacts were uploaded.
 - [ ] Confirm artifacts launch on clean Windows and Linux machines.
 - [ ] Confirm AppImage smoke checks pass and Linux dependency notes are current.

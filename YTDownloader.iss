@@ -1,13 +1,13 @@
 [Setup]
 AppName=YTDownloader
-AppVersion=2.2.8
-AppVerName=YTDownloader 2.2.8
+AppVersion=2.2.9
+AppVerName=YTDownloader 2.2.9
 AppPublisher=Tahsan
 AppPublisherURL=https://github.com/tahsanahmmed25/YTDownloader
 AppSupportURL=https://github.com/tahsanahmmed25/YTDownloader/issues
 AppUpdatesURL=https://github.com/tahsanahmmed25/YTDownloader/releases
 AppCopyright=Copyright (C) 2024-2026 Tahsan
-VersionInfoVersion=2.2.8.0
+VersionInfoVersion=2.2.9.0
 VersionInfoCompany=Tahsan
 VersionInfoDescription=YTDownloader - YouTube Video Downloader
 VersionInfoProductName=YTDownloader

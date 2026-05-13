@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.9] - 2026-05-14
+
+### Fixed
+- **Browser Launching** — Fixed an issue on Linux where specific browsers (e.g., Firefox) would fail to launch from the login dialog if they were installed via Flatpak or Snap, defaulting back to Chrome unexpectedly.
+- **FFmpeg Concurrency Bug** — Fixed an issue where the background FFmpeg updater would silently conflict with the manual "Install Essentials" button on startup, resulting in a false "FFmpeg setup failed" banner while the actual download was still working correctly in the background.
+
+---
+
 ## [2.2.8] - 2026-05-14
 
 ### Fixed

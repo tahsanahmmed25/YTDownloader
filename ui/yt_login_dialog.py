@@ -272,24 +272,42 @@ class YouTubeLoginDialog(QDialog):
         opened = False
 
         if browser_id and browser_id != "auto":
-            # Map our generic names to Python webbrowser names where needed
-            import sys
-            aliases = [browser_id]
-            if browser_id == "chrome":
-                aliases = ["google-chrome", "chrome", "chromium"]
+            # Map generic names to command-line executables (native, flatpak, snap)
+            import shutil
+            import subprocess
+            
+            candidates = []
+            if browser_id == "firefox":
+                candidates = ["firefox", "flatpak run org.mozilla.firefox", "snap run firefox"]
+            elif browser_id == "chrome":
+                candidates = ["google-chrome", "chrome", "chromium", "flatpak run com.google.Chrome", "google-chrome-stable"]
             elif browser_id == "edge":
-                aliases = ["microsoft-edge", "edge"]
+                candidates = ["microsoft-edge", "microsoft-edge-stable", "flatpak run com.microsoft.Edge"]
+            elif browser_id == "brave":
+                candidates = ["brave-browser", "brave", "flatpak run com.brave.Browser", "snap run brave"]
+            elif browser_id == "opera":
+                candidates = ["opera", "snap run opera"]
+            elif browser_id == "chromium":
+                candidates = ["chromium-browser", "chromium", "snap run chromium", "flatpak run org.chromium.Chromium"]
 
-            for alias in aliases:
+            for cmd_str in candidates:
+                parts = cmd_str.split()
+                # If it's a direct command (like 'firefox') check if it exists in PATH
+                if len(parts) == 1 and not shutil.which(parts[0]):
+                    continue
+                # For flatpak/snap, check if the runner exists
+                if len(parts) > 1 and not shutil.which(parts[0]):
+                    continue
+                
                 try:
-                    br = webbrowser.get(alias)
-                    br.open(_LOGIN_URL, new=2, autoraise=True)
+                    subprocess.Popen(parts + [_LOGIN_URL], start_new_session=True)
                     opened = True
                     break
-                except webbrowser.Error:
+                except Exception:
                     continue
 
         if not opened:
+            # Fallback to system default
             try:
                 webbrowser.open(_LOGIN_URL, new=2, autoraise=True)
             except Exception:

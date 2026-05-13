@@ -1602,9 +1602,10 @@ class Downloader(QMainWindow, PagesMixin):
             _log.warning("FFmpeg background check failed: %s", msg)
             self.dialog_requested.emit("__ffmpeg_error__", msg, None)
 
-        ffmpeg_manager.ensure_ffmpeg_background(
+        self._ffmpeg_install_thread = ffmpeg_manager.ensure_ffmpeg_background(
             on_done=_on_done,
             on_error=_on_error,
+            progress_cb=self._on_ffmpeg_progress
         )
 
     def _ffmpeg_install_running(self):

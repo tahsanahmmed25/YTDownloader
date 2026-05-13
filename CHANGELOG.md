@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.8] - 2026-05-14
+
+### Fixed
+- **Browser Authentication Mapping** — Fixed an issue where the "Open Login Page" button would always launch the system's default browser (like Chrome) instead of respecting the specific browser selected in the dropdown menu (e.g., Firefox).
+
+---
+
 ## [2.2.7] - 2026-05-14
 
 ### Changed

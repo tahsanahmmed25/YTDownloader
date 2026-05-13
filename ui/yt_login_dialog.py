@@ -268,10 +268,33 @@ class YouTubeLoginDialog(QDialog):
     # ── Handlers ───────────────────────────────────────────────────────────
 
     def _on_open_login(self):
-        try:
-            webbrowser.open(_LOGIN_URL, new=2, autoraise=True)
-        except Exception:
-            pass
+        browser_id = self._browser_combo.currentData()
+        opened = False
+
+        if browser_id and browser_id != "auto":
+            # Map our generic names to Python webbrowser names where needed
+            import sys
+            aliases = [browser_id]
+            if browser_id == "chrome":
+                aliases = ["google-chrome", "chrome", "chromium"]
+            elif browser_id == "edge":
+                aliases = ["microsoft-edge", "edge"]
+
+            for alias in aliases:
+                try:
+                    br = webbrowser.get(alias)
+                    br.open(_LOGIN_URL, new=2, autoraise=True)
+                    opened = True
+                    break
+                except webbrowser.Error:
+                    continue
+
+        if not opened:
+            try:
+                webbrowser.open(_LOGIN_URL, new=2, autoraise=True)
+            except Exception:
+                pass
+
         self._set_state("waiting")
 
     def _on_confirm(self):

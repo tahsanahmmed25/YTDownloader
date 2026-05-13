@@ -17,7 +17,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [2.2.5] - 2026-05-13
+## [2.2.6] - 2026-05-14
+
+### Fixed
+- **FFmpeg progress bar permanently stuck at 0%** — Three separate root causes:
+  1. On Linux with system-installed FFmpeg (`apt install ffmpeg`), `ensure_ffmpeg()` returned
+     early without ever calling `progress_cb`. All early-return paths now fire `progress_cb(100)`
+     before returning so the bar always reaches 100%.
+  2. The `__ffmpeg_ready__` UI sentinel only set `_ffmpeg_installed = True` but never updated
+     the progress bar or status label. It now calls `_on_ffmpeg_completed()` which drives the
+     full UI update (bar → 100%, label → ✅, button disabled).
+  3. When downloading from GitHub (BtbN FFmpeg builds), the server redirects through
+     `objects.githubusercontent.com` and may not include a `Content-Length` header.
+     The chunk loop was gated with `if total and progress_cb:` so progress was never
+     reported. Downloads now pulse the bar every 10 chunks when content-length is unknown.
+- **"FFmpeg setup failed" error banner on every startup** — `_check_ffmpeg_on_startup()`
+  was unconditionally starting a background thread even on systems where FFmpeg was already
+  installed. The startup check now short-circuits immediately when `is_ffmpeg_present()` is
+  true, preventing false errors and unnecessary background threads.
+- **"Clear History" button does nothing** — The `_migrate_json()` function was called inside
+  `load_history()` on every call with the guard `if _count(conn) == 0`. After `clear_history()`
+  emptied the database, the next `refresh_library()` call triggered `load_history()` which
+  re-imported everything from the legacy `history.json` file, silently restoring all cleared
+  history. Fixed by adding a `meta` table with persistent migration flags — migrations now run
+  exactly once and never repeat regardless of database state.
+- **Browser cookie auth fails on Linux for restricted videos** — Three root causes:
+  1. PyInstaller sets `LD_LIBRARY_PATH` to its bundled library directory. When
+     `browser_cookie3` loaded Firefox's NSS library via `ctypes`, it found the AppImage's
+     bundled libraries instead of the system `libnss3`, causing silent decryption failure
+     and empty cookie jars. `LD_LIBRARY_PATH` is now stripped before browser cookie
+     extraction and restored afterward.
+  2. The Firefox profile scanner selected the **largest** `cookies.sqlite` file, which is
+     unreliable on systems with multiple profiles. It now prefers profiles marked
+     `Default=1` in `profiles.ini` (the user's active profile), falling back to the
+     largest-by-size only if no default is found.
+  3. The auth validator required cookies from **both** `.youtube.com` AND `.google.com`
+     domains. On Linux, `browser_cookie3` often returns only YouTube-domain cookies.
+     The check now accepts strong YouTube-domain-only tokens (`SAPISID`, `__Secure-1PSID`,
+     `__Secure-3PSID`) as sufficient without requiring Google-domain cookies.
+
+---
+
 
 ### Fixed
 - **"Unhandled Error: `_maybe_finalize_reset`" crash after every download completes** —

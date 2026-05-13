@@ -850,6 +850,7 @@ class Downloader(QMainWindow, PagesMixin):
             return
         if title == "__ffmpeg_ready__":
             self._ffmpeg_installed = True
+            self._on_ffmpeg_completed()
             return
         if title == "__ffmpeg_error__":
             self._show_toast(
@@ -1585,8 +1586,16 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _check_ffmpeg_on_startup(self):
         """Check for ffmpeg on startup; auto-update silently in background."""
+        # If ffmpeg is already available (system or managed), mark ready immediately
+        if ffmpeg_manager.is_ffmpeg_present():
+            _log.info("FFmpeg already present — skipping background check.")
+            self._ffmpeg_installed = True
+            self._refresh_essentials_status()
+            return
+
+        # Not present: start a silent background install (no progress bar — user
+        # hasn't visited Preferences yet, so there's no widget to update).
         def _on_done():
-            # Called from background thread — use sentinel to update UI on main thread
             self.dialog_requested.emit("__ffmpeg_ready__", "", None)
 
         def _on_error(msg):
@@ -1682,10 +1691,8 @@ class Downloader(QMainWindow, PagesMixin):
             self._show_toast("FFmpeg installation already in progress.", variant="info")
             return
         if self._find_ffmpeg():
-            if hasattr(self, "essentials_status_label"):
-                self.essentials_status_label.setText("✅ Essentials are already installed.")
-            if hasattr(self, "install_essentials_btn"):
-                self.install_essentials_btn.setEnabled(False)
+            # Already installed — drive the UI to completed state
+            self._on_ffmpeg_completed()
             self._show_toast("FFmpeg is already installed.", variant="success")
             return
         if hasattr(self, "essentials_status_label"):

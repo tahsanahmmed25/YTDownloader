@@ -7,6 +7,8 @@ def test_history_storage_uses_sqlite_and_preserves_items(tmp_path):
 
     db.DB_FILE = str(tmp_path / "state.db")
     history.APPDATA_HISTORY_JSON = str(tmp_path / "missing-history.json")
+    # Also patch the legacy CWD file so a real project history.json is not migrated
+    history.LEGACY_FILE = str(tmp_path / "missing-legacy.json")
 
     history.save_history({
         "title": "Example",

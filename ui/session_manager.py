@@ -130,6 +130,24 @@ def save_cookies_from_browser(browser_name: str) -> str:
     """
     import browser_cookie3
 
+    # ── Strip PyInstaller LD_LIBRARY_PATH so system libnss3 is found by Firefox ──
+    # When running inside a PyInstaller AppImage, LD_LIBRARY_PATH is set to the
+    # bundled lib directory. browser_cookie3 uses ctypes to load libnss3 for
+    # Firefox cookie decryption; without a clean PATH it finds the wrong library
+    # and decryption silently fails, returning an empty cookie jar.
+    _saved_ldpath = None
+    if sys.platform.startswith("linux"):
+        _saved_ldpath = os.environ.pop("LD_LIBRARY_PATH", None)
+
+    try:
+        return _save_cookies_from_browser_inner(browser_name, browser_cookie3)
+    finally:
+        if _saved_ldpath is not None:
+            os.environ["LD_LIBRARY_PATH"] = _saved_ldpath
+
+
+def _save_cookies_from_browser_inner(browser_name: str, browser_cookie3) -> str:
+    """Inner implementation of save_cookies_from_browser (LD_LIBRARY_PATH already clean)."""
     _YOUTUBE_DOMAINS = _YOUTUBE_COOKIE_DOMAINS + _GOOGLE_COOKIE_DOMAINS
 
     _BROWSER_LOADERS = {
@@ -144,50 +162,58 @@ def save_cookies_from_browser(browser_name: str) -> str:
     names_to_try = get_browser_auto_order() if browser_name == "auto" else [browser_name.lower()]
 
     # On Linux, Firefox profiles can be in standard, alternate, snap, or flatpak locations.
-    # We scan all known paths and pick the largest cookies.sqlite database, as that is
-    # the most reliable indicator of the active/primary browser profile.
+    # Prefer the profile with Default=1 in profiles.ini (the active profile the user
+    # actually logs into), falling back to the largest cookies.sqlite if no default found.
     _firefox_custom_profile = None
     if sys.platform.startswith("linux"):
         import glob as _glob
         import configparser as _cp
-        
+
         candidates = []
+        _default_profile_path = None  # Track Default=1 profile specifically
         _search_dirs = [
             os.path.expanduser("~/.mozilla/firefox"),
             os.path.expanduser("~/.config/mozilla/firefox"),
             os.path.expanduser("~/snap/firefox/common/.mozilla/firefox"),
             os.path.expanduser("~/.var/app/org.mozilla.firefox/config/mozilla/firefox")
         ]
-        
+
         for _dir in _search_dirs:
             if not os.path.isdir(_dir):
                 continue
             _ini_hits = _glob.glob(os.path.join(_dir, "profiles.ini"))
             if not _ini_hits:
                 continue
-                
+
             _cfg = _cp.ConfigParser()
             try:
                 _cfg.read(_ini_hits[0], encoding="utf-8")
                 for _sec in _cfg.sections():
                     _rel = _cfg.get(_sec, "Path", fallback="")
-                    if _rel:
-                        _full = os.path.join(_dir, _rel)
-                        _cookie_db = os.path.join(_full, "cookies.sqlite")
-                        if os.path.isfile(_cookie_db):
-                            try:
-                                size = os.path.getsize(_cookie_db)
-                                candidates.append((size, _cookie_db))
-                            except Exception:
-                                pass
+                    if not _rel:
+                        continue
+                    _full = os.path.join(_dir, _rel)
+                    _cookie_db = os.path.join(_full, "cookies.sqlite")
+                    if os.path.isfile(_cookie_db):
+                        try:
+                            size = os.path.getsize(_cookie_db)
+                            # Track the Default=1 profile (the user's active profile)
+                            if _cfg.get(_sec, "Default", fallback="0") == "1" and _default_profile_path is None:
+                                _default_profile_path = _cookie_db
+                                _log.info("Found default Firefox profile (Default=1, %d bytes): %s", size, _cookie_db)
+                            candidates.append((size, _cookie_db))
+                        except Exception:
+                            pass
             except Exception:
                 pass
-                
-        if candidates:
-            # Sort by file size descending so we pick the profile with the most cookies
+
+        if _default_profile_path:
+            _firefox_custom_profile = _default_profile_path
+        elif candidates:
+            # Fallback: sort by file size descending
             candidates.sort(key=lambda x: x[0], reverse=True)
             _firefox_custom_profile = candidates[0][1]
-            _log.info("Selected active Firefox profile (size %d bytes): %s", candidates[0][0], _firefox_custom_profile)
+            _log.info("Selected largest Firefox profile (%d bytes): %s", candidates[0][0], _firefox_custom_profile)
 
     best_collected: dict = {}          # (domain, path, name) → cookie
     best_auth_count: int = 0
@@ -323,13 +349,20 @@ def get_auth_cookie_domain_groups_in_file(path: str) -> dict:
     return dict(groups)
 
 
+# Strong YouTube auth cookies that work cross-domain without needing Google cookies
+_STRONG_YOUTUBE_AUTH = frozenset({
+    "__Secure-1PSID", "__Secure-3PSID",
+    "SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID",
+})
+
+
 def has_required_auth_cookies(path: str) -> bool:
     """True when a cookies file has enough account cookies for restricted videos."""
     groups = get_auth_cookie_domain_groups_in_file(path)
     youtube = groups.get("youtube") or set()
     google = groups.get("google") or set()
     total = sum(len(names) for names in groups.values())
-    return bool(total >= _MIN_AUTH_COOKIES and youtube and google)
+    return _auth_groups_sufficient(youtube, google, total)
 
 
 def clear_session() -> None:
@@ -360,6 +393,24 @@ def _file_has_auth_cookies(path: str) -> bool:
     return False
 
 
+def _auth_groups_sufficient(youtube: set, google: set, total: int) -> bool:
+    """
+    Return True if the collected auth cookies are sufficient for restricted-video access.
+
+    Strict mode: both YouTube-domain AND Google-domain cookies present (ideal).
+    Relaxed mode: strong YouTube-domain-only cookies (__Secure-1PSID / SAPISID)
+                  that are known to work cross-domain — covers users whose browser
+                  reports YouTube cookies only (common with browser_cookie3 on Linux).
+    """
+    if not youtube or total < _MIN_AUTH_COOKIES:
+        return False
+    # Strict: both domains present
+    if google:
+        return True
+    # Relaxed: at least one strong YouTube-domain token
+    return bool(youtube & _STRONG_YOUTUBE_AUTH)
+
+
 def _cookies_have_required_auth(cookies: dict) -> bool:
     groups = defaultdict(set)
     for key in cookies:
@@ -375,7 +426,11 @@ def _cookies_have_required_auth(cookies: dict) -> bool:
         elif any(domain.endswith(d) for d in _GOOGLE_COOKIE_DOMAINS):
             groups["google"].add(name)
     total = sum(len(names) for names in groups.values())
-    return bool(total >= _MIN_AUTH_COOKIES and groups["youtube"] and groups["google"])
+    return _auth_groups_sufficient(
+        groups.get("youtube") or set(),
+        groups.get("google") or set(),
+        total,
+    )
 
 
 def _write_cookies_file(cookies: dict) -> str:

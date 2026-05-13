@@ -53,6 +53,29 @@ def _ensure_schema(conn):
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_history_added_at ON history(added_at DESC)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _is_migration_done(conn, key):
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row is not None and row[0] == "1"
+    except Exception:
+        return False
+
+
+def _mark_migration_done(conn, key):
+    try:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, "1"))
+    except Exception:
+        pass
 
 
 def _count(conn):
@@ -60,25 +83,35 @@ def _count(conn):
 
 
 def _migrate_json(conn):
-    if _count(conn):
+    """One-time import from legacy JSON. Guarded by a meta flag so it never repeats."""
+    if _is_migration_done(conn, "json_migration"):
         return
     source = APPDATA_HISTORY_JSON if os.path.exists(APPDATA_HISTORY_JSON) else LEGACY_FILE
     if not os.path.exists(source):
+        _mark_migration_done(conn, "json_migration")
         return
     try:
         with open(source, "r", encoding="utf-8") as f:
             raw = json.load(f)
     except Exception as exc:
         _log.warning("Could not migrate history JSON: %s", exc)
+        _mark_migration_done(conn, "json_migration")
         return
     if not isinstance(raw, list):
+        _mark_migration_done(conn, "json_migration")
         return
     for item in raw:
         save_history(item, _conn=conn)
+    _mark_migration_done(conn, "json_migration")
+    _log.info("Migrated %d items from legacy JSON history.", len(raw))
 
 
 def _migrate_legacy_sqlite(conn):
-    if _count(conn) or not os.path.exists(LEGACY_DB_FILE):
+    """One-time import from legacy history.db. Guarded by a meta flag."""
+    if _is_migration_done(conn, "sqlite_migration"):
+        return
+    if not os.path.exists(LEGACY_DB_FILE):
+        _mark_migration_done(conn, "sqlite_migration")
         return
     import sqlite3
     legacy_conn = None
@@ -90,6 +123,8 @@ def _migrate_legacy_sqlite(conn):
                 "INSERT OR IGNORE INTO history (id, title, url, filepath, thumb_path, added_at) VALUES (?, ?, ?, ?, ?, ?)",
                 row,
             )
+        _mark_migration_done(conn, "sqlite_migration")
+        _log.info("Migrated %d items from legacy SQLite history.", len(rows))
     except Exception as exc:
         _log.warning("Could not migrate legacy SQLite history: %s", exc)
     finally:

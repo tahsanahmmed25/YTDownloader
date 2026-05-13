@@ -183,15 +183,23 @@ def _download_windows(progress_cb):
     resp  = request_with_retry("GET", _FFMPEG_WIN_ZIP_URL, stream=True, timeout=60)
     total = int(resp.headers.get("Content-Length", 0))
     done  = 0
+    _ind_pct = [5]  # indeterminate pulse tracker
+    if not total and progress_cb:
+        progress_cb(5)  # show activity immediately if size unknown
 
     with open(zip_path, "wb") as f:
+        _chunk_n = 0
         for chunk in resp.iter_content(chunk_size=65536):
             if not chunk:
                 continue
             f.write(chunk)
             done += len(chunk)
+            _chunk_n += 1
             if total and progress_cb:
                 progress_cb(5 + int(done * 65 / total))
+            elif progress_cb and _chunk_n % 10 == 0:
+                _ind_pct[0] = min(_ind_pct[0] + 2, 68)
+                progress_cb(_ind_pct[0])
 
     if progress_cb:
         progress_cb(72)
@@ -245,15 +253,24 @@ def _download_linux(progress_cb):
     resp  = request_with_retry("GET", _FFMPEG_LIN_URL, stream=True, timeout=120)
     total = int(resp.headers.get("Content-Length", 0))
     done  = 0
+    _ind_pct = [5]  # indeterminate pulse tracker
+    _log.info("FFmpeg Linux download started; Content-Length=%s bytes", total or "unknown")
+    if not total and progress_cb:
+        progress_cb(5)  # show activity immediately if size unknown
 
     with open(tar_path, "wb") as f:
+        _chunk_n = 0
         for chunk in resp.iter_content(chunk_size=65536):
             if not chunk:
                 continue
             f.write(chunk)
             done += len(chunk)
+            _chunk_n += 1
             if total and progress_cb:
                 progress_cb(5 + int(done * 65 / total))
+            elif progress_cb and _chunk_n % 10 == 0:
+                _ind_pct[0] = min(_ind_pct[0] + 2, 68)
+                progress_cb(_ind_pct[0])
 
     if progress_cb:
         progress_cb(72)
@@ -313,6 +330,8 @@ def ensure_ffmpeg(force=False, progress_cb=None):
         if sh.which("ffmpeg") and sh.which("ffprobe"):
             _log.info("Using system ffmpeg from PATH.")
             _save_local_version("system")
+            if progress_cb:
+                progress_cb(100)
             return True
 
     with _LOCK:
@@ -339,11 +358,15 @@ def ensure_ffmpeg(force=False, progress_cb=None):
         if already_present and not force:
             if latest and local_version and latest == local_version:
                 _log.info("FFmpeg is already up to date (%s).", local_version)
+                if progress_cb:
+                    progress_cb(100)
                 return True
             if not latest:
                 _log.info("FFmpeg present but couldn't check version (offline). Using existing.")
+                if progress_cb:
+                    progress_cb(100)
                 return True
-            _log.info("Updating FFmpeg: %s → %s", local_version or "?", latest)
+            _log.info("Updating FFmpeg: %s \u2192 %s", local_version or "?", latest)
         else:
             _log.info("FFmpeg not found; checking managed install policy.")
 

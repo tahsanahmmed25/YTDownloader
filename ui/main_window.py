@@ -3892,6 +3892,11 @@ class Downloader(QMainWindow, PagesMixin):
                 f"Diagnostics: Mode={mode_label} | Auth={auth_label} | Browser={browser_label}"
             )
         self._sync_restricted_controls()
+        # Keep the "Login to YouTube" status label in sync
+        if effective_file or effective_browser:
+            self._update_yt_login_ui("done")
+        else:
+            self._update_yt_login_ui("idle")
 
     def _sync_restricted_controls(self):
         enabled = bool(self.restricted_mode)
@@ -3986,29 +3991,19 @@ class Downloader(QMainWindow, PagesMixin):
         self.update_cookie_indicator()
         self._show_message_dialog("Browser Auth", "Browser auth disconnected.")
 
-    # ── YouTube system-browser login ──────────────────────────────────────
+    # ── YouTube dialog-based login ─────────────────────────────────────────
 
-    def _ensure_auth_controller(self):
-        """Lazily create the AuthController (keeps it off the import path until needed)."""
-        if not hasattr(self, "_auth_controller") or self._auth_controller is None:
-            from ui.auth_controller import AuthController
-            self._auth_controller = AuthController(parent=self)
-            self._auth_controller.login_started.connect(self._on_yt_login_started)
-            self._auth_controller.login_success.connect(self._on_yt_login_success)
-            self._auth_controller.login_failed.connect(self._on_yt_login_failed)
-            self._auth_controller.state_changed.connect(self._on_yt_login_state_changed)
-
-    def _yt_open_login(self):
-        """User clicked 'Open YouTube Login' — open system browser."""
-        self._ensure_auth_controller()
-        # Browser to extract cookies from mirrors the 'Connect Browser' selector
+    def _yt_open_login_dialog(self):
+        """Open the polished YouTube Login popup dialog."""
+        from ui.yt_login_dialog import YouTubeLoginDialog
         browser_name = getattr(self, "browser_auth_source", "") or "auto"
-        self._auth_controller.start_login(browser_name=browser_name)
-
-    def _yt_confirm_login(self):
-        """User clicked 'I'm Logged In' — trigger background cookie extraction."""
-        if hasattr(self, "_auth_controller") and self._auth_controller:
-            self._auth_controller.confirm_logged_in()
+        dlg = YouTubeLoginDialog(
+            dark_mode=self.dark_mode,
+            initial_browser=browser_name,
+            parent=self,
+        )
+        dlg.accepted.connect(lambda: self._on_yt_login_dialog_accepted(dlg.cookie_path))
+        dlg.open()
 
     def _yt_logout(self):
         """User clicked 'Logout' — clear the managed session."""
@@ -4022,87 +4017,34 @@ class Downloader(QMainWindow, PagesMixin):
         self._update_yt_login_ui("idle")
         self._show_message_dialog("Logged Out", "YouTube session cleared.")
 
-    def _on_yt_login_started(self):
-        self._update_yt_login_ui("waiting")
-
-    def _on_yt_login_success(self, cookie_path: str):
-        """Cookie extraction completed — validate auth cookies before wiring in."""
-        from ui.session_manager import get_auth_cookie_names_in_file, has_required_auth_cookies
-        auth_cookies = get_auth_cookie_names_in_file(cookie_path)
-        if not has_required_auth_cookies(cookie_path):
-            # Extraction "succeeded" but only got tracking/analytics cookies —
-            # not real login cookies.  Treat this as a login failure.
-            _log.warning(
-                "_on_yt_login_success: managed cookie file does not have a complete YouTube/Google auth session"
-            )
-            self._update_yt_login_ui("failed")
-            self._show_error_dialog(
-                "Login Failed",
-                "Cookies were extracted from your browser, but no complete "
-                "YouTube/Google login session was found.\n\n"
-                "Please make sure you are fully logged in to YouTube in your "
-                "browser, then try again.\n\n"
-                "Tip: After logging in, wait a few seconds and then click "
-                "'I\u2019m Logged In \u2713'."
-            )
-            return
-
-        _log.info(
-            "_on_yt_login_success: found auth cookies %s in managed cookie storage",
-            auth_cookies
-        )
+    def _on_yt_login_dialog_accepted(self, cookie_path: str):
+        """Called when the YouTubeLoginDialog was accepted with a valid cookie file."""
+        _log.info("YouTube login dialog accepted; cookie_path=%s", cookie_path)
         self.cookie_file = cookie_path
         self.settings.setValue("cookie_file", cookie_path)
         self.restricted_mode = True
         self.settings.setValue("restricted_mode", True)
-        # Disable browser-auth mode; we now use the explicit cookies file
         self.browser_auth_enabled = False
         self.settings.setValue("browser_auth_enabled", False)
         self.update_cookie_indicator()
         self._update_yt_login_ui("done")
-        self._show_message_dialog(
-            "Logged In \u2705",
-            "Successfully logged in to YouTube!\n"
-            "Age-restricted and members-only videos can now be downloaded."
-        )
-
-
-    def _on_yt_login_failed(self, error: str):
-        self._update_yt_login_ui("failed")
-        from errors import humanize_error
-        self._show_error_dialog("Login Failed", humanize_error(error))
-
-    def _on_yt_login_state_changed(self, state: str):
-        self._update_yt_login_ui(state)
 
     def _update_yt_login_ui(self, state: str):
-        """Sync the Login-to-YouTube button states and status label with *state*."""
-        # Widgets may not exist if the cookies page hasn't been rendered yet
-        open_btn    = getattr(self, "yt_open_login_btn",    None)
-        confirm_btn = getattr(self, "yt_confirm_login_btn", None)
-        logout_btn  = getattr(self, "yt_logout_btn",        None)
-        status_lbl  = getattr(self, "yt_login_status_label", None)
+        """Sync the Login-to-YouTube button label and status label with *state*."""
+        login_btn  = getattr(self, "yt_login_btn",         None)
+        logout_btn = getattr(self, "yt_logout_btn",        None)
+        status_lbl = getattr(self, "yt_login_status_label", None)
 
         labels = {
-            "idle":       "Status: Not logged in",
-            "waiting":    "Status: Waiting — log in to YouTube in your browser, then click 'I'm Logged In \u2713'",
-            "extracting": "Status: Extracting cookies\u2026 please wait",
-            "done":       "Status: \u2705 Logged in",
-            "failed":     "Status: Login failed. Please try again.",
+            "idle":   "Status: Not connected",
+            "done":   "Status: \u2705 Connected",
+            "failed": "Status: Login failed \u2014 please try again.",
         }
-
         if status_lbl:
-            status_lbl.setText(labels.get(state, ""))
+            status_lbl.setText(labels.get(state, labels["idle"]))
 
-        # Open button: enabled unless actively extracting or waiting for user
-        if open_btn:
-            open_btn.setEnabled(state not in ("extracting",))
-
-        # Confirm button: only enabled while we are "waiting" for the user
-        if confirm_btn:
-            confirm_btn.setEnabled(state == "waiting")
-
-        # Logout always enabled (no-op when already logged out)
+        if login_btn:
+            login_btn.setEnabled(True)
         if logout_btn:
             logout_btn.setEnabled(True)
 

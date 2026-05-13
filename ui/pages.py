@@ -684,47 +684,44 @@ class PagesMixin:
         warn.setMinimumWidth(0)
         card_layout.addWidget(warn)
 
-        # ── System browser login section ──────────────────────────────────
+        # ── YouTube login section ─────────────────────────────────────────────
         yt_login_title = QLabel("Login to YouTube")
         yt_login_title.setObjectName("CardTitle")
         yt_login_title.setContentsMargins(0, 10, 0, 0)
         card_layout.addWidget(yt_login_title)
 
         yt_login_hint = QLabel(
-            "Open YouTube in your system browser, log in, then click "
-            "\u2018I\u2019m Logged In\u2019. Cookies are extracted automatically."
+            "Connect your Google account to access age-restricted and members-only videos. "
+            "Cookies are read from your installed browser and stored securely on this device."
         )
         yt_login_hint.setObjectName("MutedText")
         yt_login_hint.setWordWrap(True)
         card_layout.addWidget(yt_login_hint)
 
         # Status indicator
-        self.yt_login_status_label = QLabel("Status: Not logged in")
+        self.yt_login_status_label = QLabel("Status: Not connected")
         self.yt_login_status_label.setObjectName("MutedText")
         self.yt_login_status_label.setWordWrap(True)
         card_layout.addWidget(self.yt_login_status_label)
 
         yt_btn_row = QHBoxLayout()
 
-        self.yt_open_login_btn = QPushButton("\U0001f310  Open YouTube Login")
-        self.yt_open_login_btn.setObjectName("GhostButton")
-        self.yt_open_login_btn.clicked.connect(self._yt_open_login)
+        self.yt_login_btn = QPushButton("\U0001f511  Login to YouTube")
+        self.yt_login_btn.setObjectName("GhostButton")
+        self.yt_login_btn.clicked.connect(self._yt_open_login_dialog)
 
-        self.yt_confirm_login_btn = QPushButton("\u2713  I\u2019m Logged In")
-        self.yt_confirm_login_btn.setObjectName("GhostButton")
-        self.yt_confirm_login_btn.setEnabled(False)
-        self.yt_confirm_login_btn.clicked.connect(self._yt_confirm_login)
-
-        self.yt_logout_btn = QPushButton("Logout")
+        self.yt_logout_btn = QPushButton("Disconnect")
         self.yt_logout_btn.setObjectName("GhostButton")
         self.yt_logout_btn.clicked.connect(self._yt_logout)
 
-        yt_btn_row.addWidget(self.yt_open_login_btn)
-        yt_btn_row.addWidget(self.yt_confirm_login_btn)
+        yt_btn_row.addWidget(self.yt_login_btn)
         yt_btn_row.addWidget(self.yt_logout_btn)
         yt_btn_row.addStretch(1)
         card_layout.addLayout(yt_btn_row)
         # ─────────────────────────────────────────────────────────────────
+
+
+
 
 
         file_title = QLabel("Cookies file (optional)")

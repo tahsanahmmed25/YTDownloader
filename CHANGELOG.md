@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.7] - 2026-05-14
+
+### Changed
+- **Modernized YouTube Login Experience** — Replaced the clunky multi-step inline login flow with a polished, modal pop-up dialog (`YouTubeLoginDialog`). The new dialog provides clear, step-by-step instructions for browser authentication, includes an animated progress spinner during extraction, and gracefully handles errors with a built-in retry option.
+- **Simplified UI** — The 3-button login section in Preferences has been condensed to a clean 2-button layout ("🔑 Login to YouTube" and "Disconnect").
+- **State Synchronization** — The login status label now automatically stays in sync when browser sessions are restored on startup or cookies files are manually set/cleared.
+
+---
+
 ## [2.2.6] - 2026-05-14
 
 ### Fixed

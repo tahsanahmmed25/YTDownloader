@@ -280,22 +280,21 @@ All contributors must respect code quality, write unit tests for new features, a
 
 ## ☕ Support the Project
 
-If YTDownloader has saved you time or made your life easier, please consider supporting its development! 
+If YTDownloader has saved you time or made your tasks easier, please consider supporting its development. 
 
-This project is supported **exclusively through international platforms** to ensure clean, professional, and secure support channels:
+This project is sustained through international channels to ensure secure and direct support:
 
-* **Buy Me a Coffee (Primary):** [buymeacoffee.com/tahsanahmmed25](https://buymeacoffee.com/tahsanahmmed25)  
-  *Supports all major international Visa, Mastercard, and American Express debit/credit cards.*
-* **Ko-fi (Secondary):** [ko-fi.com/tahsanahmmed25](https://ko-fi.com/tahsanahmmed25)  
-  *Supports global card payments and PayPal.*
+* **Ko-fi (Primary Support):** [ko-fi.com/tahsanahmmed25](https://ko-fi.com/tahsanahmmed25)  
+  *Supports global credit/debit card payments and PayPal.*
+* **Payoneer (International Transfers):** `tahsanahmmed25@gmail.com`  
+  *Supports direct account-to-account transfers and international payout options.*
 
 <div align="left">
-  <a href="https://buymeacoffee.com/tahsanahmmed25"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-yellow?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me a Coffee" /></a>
   <a href="https://ko-fi.com/tahsanahmmed25"><img src="https://img.shields.io/badge/Ko--fi-Donate-red?style=for-the-badge&logo=ko-fi" alt="Ko-fi" /></a>
 </div>
 
 > [!NOTE]
-> All payout integrations on these platforms are configured for secure international payouts directly to a **Visa debit card**. No local or alternative payment methods are active. Thank you for keeping this open-source tool independent!
+> All support channels are configured for secure international transactions to keep this open-source GPLv3 project independent and free. Thank you for your support!
 
 ---
 

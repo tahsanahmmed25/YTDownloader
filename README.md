@@ -4,11 +4,11 @@
 
 **A clean, fast YouTube downloader with a desktop UI — for Windows and Linux.**
 
-**Unsigned:** This is a personal project by Tahsan. Builds are unsigned, may trigger OS/browser warnings, and should only be installed if you trust the release source and verify the SHA256 checksum.
+**Official Source Notice:** This is the official repository for YTDownloader. To protect your system from fake, rebranded, or malicious copies, always check the source URL and download only from: [https://github.com/tahsanahmmed25/YTDownloader](https://github.com/tahsanahmmed25/YTDownloader).
 
 [![Build](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloader?label=latest)](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)
-[![License](https://img.shields.io/github/license/tahsanahmmed25/YTDownloader)](LICENSE)
+[![License](https://img.shields.io/github/license/tahsanahmmed25/YTDownloader?label=license&color=blue)](LICENSE)
 
 </div>
 
@@ -266,6 +266,41 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ---
 
+## 🤝 How to Contribute
+
+We welcome contributions of all sizes! To get started:
+
+1. Read our **[Contributing Guidelines](CONTRIBUTING.md)** for developer setup, testing, and coding standards.
+2. Check the existing **[Issues](https://github.com/tahsanahmmed25/YTDownloader/issues)** or open a new one to discuss your ideas.
+3. Submit a Pull Request targeting the `main` branch.
+
+All contributors must respect code quality, write unit tests for new features, and ensure the entire test suite passes before submitting PRs.
+
+---
+
+## ☕ Support the Project
+
+If YTDownloader has saved you time or made your life easier, please consider supporting its development! 
+
+This project is supported **exclusively through international platforms** to ensure clean, professional, and secure support channels:
+
+* **Buy Me a Coffee (Primary):** [buymeacoffee.com/tahsanahmmed25](https://buymeacoffee.com/tahsanahmmed25)  
+  *Supports all major international Visa, Mastercard, and American Express debit/credit cards.*
+* **Ko-fi (Secondary):** [ko-fi.com/tahsanahmmed25](https://ko-fi.com/tahsanahmmed25)  
+  *Supports global card payments and PayPal.*
+
+<div align="left">
+  <a href="https://buymeacoffee.com/tahsanahmmed25"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-yellow?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me a Coffee" /></a>
+  <a href="https://ko-fi.com/tahsanahmmed25"><img src="https://img.shields.io/badge/Ko--fi-Donate-red?style=for-the-badge&logo=ko-fi" alt="Ko-fi" /></a>
+</div>
+
+> [!NOTE]
+> All payout integrations on these platforms are configured for secure international payouts directly to a **Visa debit card**. No local or alternative payment methods are active. Thank you for keeping this open-source tool independent!
+
+---
+
 ## 📄 License
 
-See [LICENSE](LICENSE).
+This project is licensed under the **GNU General Public License v3 (GPLv3)**. See the [LICENSE](LICENSE) file for the full text. 
+
+GPLv3 is a strong copyleft license that guarantees you the freedom to share and change all versions of the program—ensuring it remains free software for all its users. Any redistributions, rebranding, or modifications of this codebase must also be fully open-source under GPLv3.

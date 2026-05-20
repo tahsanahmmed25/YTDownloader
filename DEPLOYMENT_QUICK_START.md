@@ -117,7 +117,7 @@ User clicks "Update" → Downloads & installs
 |------|---------|
 | `DEPLOYMENT.md` | Full deployment guide (read this!) |
 | `CHANGELOG.md` | Version history for users |
-| `LICENSE` | MIT open source license |
+| `LICENSE` | GNU GPLv3 open source license |
 | Updated `YTDownloader.iss` | Professional installer info |
 
 ---
@@ -259,7 +259,7 @@ You: Push code → Release on GitHub → Done!
 
 ### Common Questions
 - **"Can users make custom builds?"** Yes, open source means they can fork & modify
-- **"Is MIT license okay?"** Yes, best for free software - gives users freedom
+- **"Is GPLv3 license okay?"** Yes, protects the code from closed-source rebranding while keeping it free software.
 - **"Do I need to sign the installer?"** Optional but professional (code signing costs ~$300/year)
 - **"How do I get updates?"** GitHub email notifications, or check Releases tab
 

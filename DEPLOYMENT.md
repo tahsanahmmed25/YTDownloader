@@ -132,15 +132,15 @@ git push -u origin main
 ```
 
 ### 2. Add License
-Create `LICENSE` file (MIT recommended for free software):
+Create `LICENSE` file (GNU GPLv3 to protect code from closed-source rebranding):
 ```markdown
-MIT License
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
 
-Copyright (c) 2026 Tahsan
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction...
+Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
+...
 ```
 
 ### 3. Create Release Notes Template

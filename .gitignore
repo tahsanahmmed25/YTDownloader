@@ -159,3 +159,11 @@ downloads_test/
 
 # PyArmor
 obf/
+
+# Credentials / Private keys
+.git-credentials
+*.token
+*.key
+*.pem
+*.passwd
+

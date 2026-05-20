@@ -772,7 +772,19 @@ class PagesMixin:
         card_layout.addWidget(QLabel(f"Version: {self._version_text()}"))
         card_layout.addWidget(QLabel("Created by: Tahsan"))
         card_layout.addWidget(QLabel("A modern downloader built for speed and clarity."))
-        card_layout.addWidget(QLabel("Keep building. Keep exploring."))
+        card_layout.addWidget(QLabel("License: GNU GPLv3"))
+        
+        repo_link = QLabel('Official Repository: <a href="https://github.com/tahsanahmmed25/YTDownloader" style="color: #4361ee; text-decoration: none;">github.com/tahsanahmmed25/YTDownloader</a>')
+        repo_link.setOpenExternalLinks(True)
+        card_layout.addWidget(repo_link)
+        
+        notice_label = QLabel(
+            "<b>Security Notice:</b> To protect your system, discourage fake/rebranded copies, and ensure "
+            "you receive official updates, always download from the official source link above."
+        )
+        notice_label.setWordWrap(True)
+        notice_label.setStyleSheet("color: #64748b; font-size: 11px;")
+        card_layout.addWidget(notice_label)
 
         terms_btn = QPushButton("View Terms & Privacy")
         terms_btn.setObjectName("GhostButton")

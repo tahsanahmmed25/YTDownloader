@@ -17,6 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.3.1] - 2026-05-21
+
+### Fixed
+- **Browser Login Launch** — Fixed an issue where sandboxed browsers (like Flatpak Firefox on Linux) would exit immediately with an error (e.g. `EPERM` user namespace issue) but get marked as successfully launched, blocking the fallback browser. Added verification of spawned browser processes.
+- **Default Browser Priority** — Prioritized the system's default web browser in the "Auto-detect" cookie extraction flow to ensure the correct cookies are extracted when the user signs in via the opened default browser (Chrome).
+
+---
+
+## [2.3.0] - 2026-05-20
+
+### Added
+- **GPLv3 License** — Switched repository license from MIT to GPLv3.
+- **Cleanup** — Performed repository cleanup, removing obsolete build outputs and updating `.gitignore`.
+
+### Fixed
+- **Linux FFmpeg Loop** — Fixed a false update loop on Linux when FFmpeg is system-installed.
+- **Folder Opener** — Corrected folder opener paths and platform-specific packaging layouts.
+
+---
+
 ## [2.2.9] - 2026-05-14
 
 ### Fixed
@@ -309,7 +329,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.2.1** | ✅ Stable | Current stable — open-folder fix, Firefox auth fix, restricted video fix, FFmpeg progress UI |
+| **2.3.1** | ✅ Stable | Current stable — fixes browser login launch and auto cookie prioritization |
+| 2.3.0 | Upgrade recommended | GPLv3 release, Linux FFmpeg loop and folder opener fixes |
+| 2.2.9 | Upgrade recommended | Browser launch and FFmpeg concurrency bug fixes |
+| 2.2.1 | Upgrade recommended | Open-folder fix, Firefox auth fix, restricted video fix, FFmpeg progress UI |
 | 2.2.0 | Upgrade recommended | CI release pipeline fix, generation-based reset |
 | 2.1.9-beta.3 | Superseded beta | Superseded by 2.2.0 stable |
 | 2.1.8 | Upgrade recommended | Restricted-video and Linux merge fixes |

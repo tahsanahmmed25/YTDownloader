@@ -5,10 +5,13 @@ cd /d %~dp0
 set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
 if exist "%PYTHON_EXE%" goto python_ready
 
+set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
+if exist "%PYTHON_EXE%" goto python_ready
+
 set "PYTHON_EXE="
 for /f "delims=" %%I in ('where python 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
 if not defined PYTHON_EXE (
-  echo Python was not found. Create .\venv or add python to PATH.
+  echo Python was not found. Create .\venv or .\.venv or add python to PATH.
   exit /b 1
 )
 

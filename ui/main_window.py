@@ -1923,7 +1923,6 @@ class Downloader(QMainWindow, PagesMixin):
             if sys.platform.startswith("linux"):
                 import subprocess
                 import shutil
-                import os
                 # Prevent xdg-open from launching Brave by explicitly checking
                 # common GUI file managers first, then falling back to gio / xdg-open.
                 # Crucially, clear PyInstaller's LD_LIBRARY_PATH so system apps don't crash.

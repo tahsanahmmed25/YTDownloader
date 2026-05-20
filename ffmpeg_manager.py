@@ -154,6 +154,8 @@ def is_ffmpeg_latest() -> bool:
     local = _get_local_version()
     if not local:
         return False  # not installed — treat as needs update
+    if local.strip() == "system":
+        return True
     try:
         if IS_WINDOWS:
             remote = _fetch_latest_version_windows()

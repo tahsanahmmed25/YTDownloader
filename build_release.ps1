@@ -12,13 +12,18 @@ function Resolve-BuildPython {
     if (Test-Path $venvPython) {
         return (Resolve-Path $venvPython).Path
     }
+    
+    $dotVenvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+    if (Test-Path $dotVenvPython) {
+        return (Resolve-Path $dotVenvPython).Path
+    }
 
     $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
     if ($pythonCommand) {
         return $pythonCommand.Source
     }
 
-    throw "Python was not found. Create .\venv or add python to PATH."
+    throw "Python was not found. Create .\venv or .\.venv or add python to PATH."
 }
 
 function Invoke-Python {

@@ -79,9 +79,61 @@ def get_session_cookies_path() -> str:
     return managed_cookie_cache_path()
 
 
+def _get_default_browser_name() -> str | None:
+    if sys.platform.startswith("linux"):
+        try:
+            import subprocess
+            res = subprocess.run(
+                ["xdg-settings", "get", "default-web-browser"],
+                capture_output=True, text=True, timeout=2
+            )
+            val = res.stdout.lower()
+            if "chrome" in val:
+                return "chrome"
+            if "firefox" in val:
+                return "firefox"
+            if "edge" in val:
+                return "edge"
+            if "brave" in val:
+                return "brave"
+            if "opera" in val:
+                return "opera"
+            if "chromium" in val:
+                return "chromium"
+        except Exception:
+            pass
+    elif sys.platform.startswith("win32"):
+        try:
+            import winreg
+            path = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+                prog_id, _ = winreg.QueryValueEx(key, "ProgId")
+                prog_id = prog_id.lower()
+                if "chrome" in prog_id:
+                    return "chrome"
+                if "firefox" in prog_id:
+                    return "firefox"
+                if "edge" in prog_id:
+                    return "edge"
+                if "brave" in prog_id:
+                    return "brave"
+                if "opera" in prog_id:
+                    return "opera"
+                if "chromium" in prog_id:
+                    return "chromium"
+        except Exception:
+            pass
+    return None
+
+
 def get_browser_auto_order() -> list:
     """Return the browser order used by auto cookie extraction."""
-    return list(_AUTO_BROWSER_ORDER)
+    order = list(_AUTO_BROWSER_ORDER)
+    default_browser = _get_default_browser_name()
+    if default_browser and default_browser in order:
+        order.remove(default_browser)
+        order.insert(0, default_browser)
+    return order
 
 
 def load_session() -> str:

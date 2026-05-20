@@ -275,10 +275,11 @@ class YouTubeLoginDialog(QDialog):
             # Map generic names to command-line executables (native, flatpak, snap)
             import shutil
             import subprocess
+            import time
             
             candidates = []
             if browser_id == "firefox":
-                candidates = ["firefox", "flatpak run org.mozilla.firefox", "snap run firefox"]
+                candidates = ["firefox", "firefox-esr", "flatpak run org.mozilla.firefox", "snap run firefox"]
             elif browser_id == "chrome":
                 candidates = ["google-chrome", "chrome", "chromium", "flatpak run com.google.Chrome", "google-chrome-stable"]
             elif browser_id == "edge":
@@ -286,13 +287,13 @@ class YouTubeLoginDialog(QDialog):
             elif browser_id == "brave":
                 candidates = ["brave-browser", "brave", "flatpak run com.brave.Browser", "snap run brave"]
             elif browser_id == "opera":
-                candidates = ["opera", "snap run opera"]
+                candidates = ["opera", "snap run opera", "flatpak run com.opera.Client"]
             elif browser_id == "chromium":
                 candidates = ["chromium-browser", "chromium", "snap run chromium", "flatpak run org.chromium.Chromium"]
 
             for cmd_str in candidates:
                 parts = cmd_str.split()
-                # If it's a direct command (like 'firefox') check if it exists in PATH
+                # If it's a direct command check if it exists in PATH
                 if len(parts) == 1 and not shutil.which(parts[0]):
                     continue
                 # For flatpak/snap, check if the runner exists
@@ -300,7 +301,15 @@ class YouTubeLoginDialog(QDialog):
                     continue
                 
                 try:
-                    subprocess.Popen(parts + [_LOGIN_URL], start_new_session=True)
+                    p = subprocess.Popen(parts + [_LOGIN_URL], start_new_session=True)
+                    # Verify if the process terminates immediately with an error (e.g. flatpak EPERM sandbox error)
+                    try:
+                        ret = p.wait(timeout=0.5)
+                        if ret != 0:
+                            continue  # exited with error, try next candidate
+                    except subprocess.TimeoutExpired:
+                        # still running, assume successful launch
+                        pass
                     opened = True
                     break
                 except Exception:

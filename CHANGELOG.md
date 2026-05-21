@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [2.3.4] - 2026-05-21
+
+### Removed
+- **Support / Donations** — Removed the Support / Donations section, donation platform references, badges, links, and funding configurations from the repository.
+
+---
+
 ## [2.3.3] - 2026-05-21
 
 ### Changed

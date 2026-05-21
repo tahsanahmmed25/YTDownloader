@@ -276,29 +276,6 @@ We welcome contributions of all sizes! To get started:
 
 All contributors must respect code quality, write unit tests for new features, and ensure the entire test suite passes before submitting PRs.
 
----
-
-## ☕ Support the Project
-
-If YTDownloader has saved you time or made your tasks easier, please consider supporting its development. 
-
-This project is sustained exclusively through international channels to ensure secure and direct support:
-
-* **Wise (Primary Support):** `tahsanahmmed25@gmail.com`  
-  *Supports direct bank-to-bank international transfers.*
-* **Payoneer (International Support):** `tahsanahmmed25@gmail.com`  
-  *Supports direct account-to-account transfers and international payouts.*
-
-<div align="left">
-  <img src="https://img.shields.io/badge/Wise-Donate-green?style=for-the-badge&logo=wise" alt="Wise" />
-  <img src="https://img.shields.io/badge/Payoneer-Donate-orange?style=for-the-badge&logo=payoneer" alt="Payoneer" />
-</div>
-
-> [!NOTE]
-> All support channels are configured for secure international transactions to keep this open-source GPLv3 project independent and free. Thank you for your support!
-
----
-
 ## 📄 License
 
 This project is licensed under the **GNU General Public License v3 (GPLv3)**. See the [LICENSE](LICENSE) file for the full text. 

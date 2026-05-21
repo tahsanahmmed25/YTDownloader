@@ -6,7 +6,7 @@ from core.security import ensure_private_dir
 
 APP_NAME = "YTDownloader"
 APP_ORG = "Tahsan"
-APP_VERSION = "2.3.3"
+APP_VERSION = "2.3.4"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 

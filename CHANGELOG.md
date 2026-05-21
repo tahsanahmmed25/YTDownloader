@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [2.3.2] - 2026-05-21
+
+### Fixed
+- **Quality Resolution Fallback** — Fixed a logic issue where requesting 1080p (or other high resolutions) would fallback to 360p (progressive format 18) prematurely. Swapped the loop priority to try the requested split video+audio formats across all player clients and authentication methods first before falling back to lower-resolution progressive formats.
+- **Donation Options** — Replaced Buy Me a Coffee references with Ko-fi (primary) and Payoneer (international payout support) across the repository.
+
 ---
 
 ## [2.3.1] - 2026-05-21

@@ -1986,11 +1986,32 @@ def download_video(url,
     # is what leaves separate video/audio files on Linux while setup is running.
     fmt_safe = "bestvideo+bestaudio/best" if ffmpeg_path else "best"
 
+    import re
     attempts = []
     if "auto" not in str(quality).lower():
-        attempts.append((str(quality), fmt_requested))
+        m = re.search(r"(\d+)", str(quality))
+        h = m.group(1) if m else "1080"
+        
+        # Attempt 1: Try split video+audio formats at or below target height first
+        if ffmpeg_path:
+            if container == "mp4":
+                fmt_split = f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={h}]+bestaudio"
+            elif container == "webm":
+                fmt_split = f"bestvideo[height<={h}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={h}]+bestaudio"
+            else:
+                fmt_split = f"bestvideo[height<={h}]+bestaudio"
+            attempts.append((f"{h}p-split", fmt_split))
+            
+        # Attempt 2: Try progressive/combined formats at or below target height
+        if container == "mp4":
+            fmt_prog = f"best[height<={h}][ext=mp4]/best[height<={h}]"
+        elif container == "webm":
+            fmt_prog = f"best[height<={h}][ext=webm]/best[height<={h}]"
+        else:
+            fmt_prog = f"best[height<={h}]"
+        attempts.append((f"{h}p-progressive", fmt_prog))
+
     attempts.append(("best", fmt_best))
-    # Only add the safe fallback if it's different from what we already have
     if fmt_safe != fmt_best:
         attempts.append(("safe", fmt_safe))
 
@@ -2012,13 +2033,13 @@ def download_video(url,
                 auth_sets.append((f"restricted-browser:{browser_entry}", browser_opts))
 
     _skip_to_restricted = False
-    for auth_label, opts_template in auth_sets:
-        if _skip_to_restricted and auth_label == "normal":
-            continue
-        for client in _client_fallbacks(authenticated=(auth_label != "normal")):
-            if _skip_to_restricted:
-                _skip_to_restricted = False  # consumed: proceed with restricted
-            for label, fmt in attempts:
+    for label, fmt in attempts:
+        for auth_label, opts_template in auth_sets:
+            if _skip_to_restricted and auth_label == "normal":
+                continue
+            for client in _client_fallbacks(authenticated=(auth_label != "normal")):
+                if _skip_to_restricted:
+                    _skip_to_restricted = False  # consumed: proceed with restricted
                 ydl_opts = dict(opts_template)
                 apply_client_fallback(ydl_opts, client)
                 ydl_opts["format"] = fmt
@@ -2054,22 +2075,20 @@ def download_video(url,
                         )
                         if auth_label == "normal" and restricted_opts is not None:
                             _skip_to_restricted = True
-                            break  # break format loop → break client loop → skip to restricted
+                            break  # break client loop → try restricted auth_label for the same format/quality
                     elif is_cookie_err:
                         _log.warning(
                             "Cookie error during %s/%s/%s: %s",
                             auth_label, client or "default", label, err_str
                         )
                         if auth_label.startswith("restricted"):
-                            break  # try next client
+                            break  # break client loop → try next auth_label
                     else:
                         _log.warning(
                             "Download attempt %s/%s/%s failed: %s",
                             auth_label, client or "default", label, err_str
                         )
                     continue
-            if _skip_to_restricted:
-                break  # break client loop to move to restricted auth_set
 
     if last_non_cookie_err:
         raise last_non_cookie_err

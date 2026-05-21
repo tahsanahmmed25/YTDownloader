@@ -282,15 +282,16 @@ All contributors must respect code quality, write unit tests for new features, a
 
 If YTDownloader has saved you time or made your tasks easier, please consider supporting its development. 
 
-This project is sustained through international channels to ensure secure and direct support:
+This project is sustained exclusively through international channels to ensure secure and direct support:
 
-* **Ko-fi (Primary Support):** [ko-fi.com/tahsanahmmed25](https://ko-fi.com/tahsanahmmed25)  
-  *Supports global credit/debit card payments and PayPal.*
-* **Payoneer (International Transfers):** `tahsanahmmed25@gmail.com`  
-  *Supports direct account-to-account transfers and international payout options.*
+* **Wise (Primary Support):** `tahsanahmmed25@gmail.com`  
+  *Supports direct bank-to-bank international transfers.*
+* **Payoneer (International Support):** `tahsanahmmed25@gmail.com`  
+  *Supports direct account-to-account transfers and international payouts.*
 
 <div align="left">
-  <a href="https://ko-fi.com/tahsanahmmed25"><img src="https://img.shields.io/badge/Ko--fi-Donate-red?style=for-the-badge&logo=ko-fi" alt="Ko-fi" /></a>
+  <img src="https://img.shields.io/badge/Wise-Donate-green?style=for-the-badge&logo=wise" alt="Wise" />
+  <img src="https://img.shields.io/badge/Payoneer-Donate-orange?style=for-the-badge&logo=payoneer" alt="Payoneer" />
 </div>
 
 > [!NOTE]

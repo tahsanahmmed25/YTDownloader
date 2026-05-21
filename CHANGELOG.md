@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [2.3.3] - 2026-05-21
+
+### Changed
+- **Donation Platform** — Replaced Ko-fi references with Wise (primary support option) due to lack of regional Stripe/PayPal payment support.
+
+---
+
 ## [2.3.2] - 2026-05-21
 
 ### Fixed

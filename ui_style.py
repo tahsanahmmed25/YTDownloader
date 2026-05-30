@@ -1,44 +1,44 @@
 LIGHT = {
-    "bg_window":       "#f5f5f5",
-    "bg_surface":      "#efefef",
-    "bg_input":        "#f7f7f7",
-    "bg_card":         "#ffffff",
-    "bg_hover":        "#f0f0f0",
-    "bg_active":       "#ffffff",
-    "border":          "#e5e5e5",
-    "border_focus":    "#a0a0a0",
-    "text_primary":    "#1a1a1a",
-    "text_secondary":  "#6b6b6b",
-    "text_tertiary":   "#a0a0a0",
-    "text_on_accent":  "#ffffff",
-    "accent":          "#3a3a3a",
-    "accent_hover":    "#555555",
-    "success_bg":      "#f0fdf4",
-    "success_text":    "#166534",
-    "warning_bg":      "#fffbeb",
-    "warning_text":    "#92400e",
-    "error_bg":        "#fff1f2",
-    "error_text":      "#9f1239",
-    "progress_track":  "#f0f0f0",
-    "progress_fill":   "#1a1a1a",
-    "scrollbar":       "#e0e0e0",
+    "bg_window":      "#f7f7f7",
+    "bg_surface":     "#efefef",
+    "bg_input":       "#f7f7f7",
+    "bg_card":        "#ffffff",
+    "bg_hover":       "#f0f0f0",
+    "bg_active":      "#f0fdfa",
+    "border":         "#e5e5e5",
+    "border_focus":   "#5eead4",
+    "text_primary":   "#2d2d2d",
+    "text_secondary": "#636363",
+    "text_tertiary":  "#a0a0a0",
+    "text_on_accent": "#ffffff",
+    "accent":         "#0d9488",
+    "accent_hover":   "#0f766e",
+    "success_bg":     "#f0fdf4",
+    "success_text":   "#166534",
+    "warning_bg":     "#fffbeb",
+    "warning_text":   "#92400e",
+    "error_bg":       "#fff1f2",
+    "error_text":     "#9f1239",
+    "progress_track": "#f0f0f0",
+    "progress_fill":  "#0d9488",
+    "scrollbar":      "#e0e0e0",
 }
 
 DARK = {
     "bg_window":      "#0f0f0f",
     "bg_surface":     "#141414",
-    "bg_input":       "#141414",
+    "bg_input":       "#1c1c1c",
     "bg_card":        "#1c1c1c",
     "bg_hover":       "#242424",
-    "bg_active":      "#242424",
-    "border":         "#272727",
-    "border_focus":   "#444444",
-    "text_primary":   "#f5f5f5",
-    "text_secondary": "#a0a0a0",
-    "text_tertiary":  "#5a5a5a",
-    "text_on_accent": "#0f0f0f",
-    "accent":         "#d4d4d4",
-    "accent_hover":   "#bbbbbb",
+    "bg_active":      "#0a1f1e",
+    "border":         "#2a2a2a",
+    "border_focus":   "#0d9488",
+    "text_primary":   "#d4d4d4",
+    "text_secondary": "#888888",
+    "text_tertiary":  "#555555",
+    "text_on_accent": "#ffffff",
+    "accent":         "#2dd4bf",
+    "accent_hover":   "#14b8a6",
     "success_bg":     "#0d1f0d",
     "success_text":   "#4ade80",
     "warning_bg":     "#1a1500",
@@ -46,17 +46,19 @@ DARK = {
     "error_bg":       "#1a0a0a",
     "error_text":     "#f87171",
     "progress_track": "#242424",
-    "progress_fill":  "#d4d4d4",
+    "progress_fill":  "#2dd4bf",
     "scrollbar":      "#333333",
 }
 
 
 def build_stylesheet(t: dict) -> str:
+    t_copy = dict(t)
+    t_copy["nav_color"] = "#b0b0b0" if t.get("bg_window") == "#0f0f0f" else "#3a3a3a"
     template = """
 QMainWindow, QWidget {{
     color: {text_primary};
     font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-    font-size: 13px;
+    font-size: 14px;
 }}
 
 QMainWindow, QMainWindow > QWidget, QWidget#centralWidget {{
@@ -97,39 +99,28 @@ QLabel#BrandName {{
 }}
 
 QPushButton#NavButton {{
-    background: {bg_surface};
-    border: 1px solid {border_focus};
+    background: transparent;
+    border: none;
     border-radius: 6px;
     padding: 7px 10px;
     text-align: left;
-    color: {text_secondary};
-    font-size: 12px;
+    color: {nav_color};
+    font-size: 13px;
 }}
 
 QPushButton#NavButton:hover {{
     background: {bg_hover};
     color: {text_primary};
-    border: 1px solid {accent};
 }}
 
 QPushButton#NavButton[active="true"] {{
-    background: {bg_active};
-    border: 1px solid {accent};
+    background: transparent;
     color: {text_primary};
     font-weight: 500;
 }}
 
-QPushButton#NavButton QLabel {{
-    color: {text_secondary};
-}}
-
-QPushButton#NavButton:hover QLabel {{
-    color: {text_primary};
-}}
-
-QPushButton#NavButton[active="true"] QLabel {{
-    color: {text_primary};
-    font-weight: 500;
+QPushButton#NavButton[active="true"]:hover {{
+    background: transparent;
 }}
 
 QLineEdit {{
@@ -138,7 +129,7 @@ QLineEdit {{
     border-radius: 8px;
     padding: 7px 10px;
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
     selection-background-color: {accent};
 }}
 
@@ -147,40 +138,20 @@ QLineEdit:focus {{
 }}
 
 QPushButton#PrimaryButton {{
-    background: {accent};
     color: {text_on_accent};
     border: none;
     border-radius: 8px;
     padding: 7px 14px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
 }}
 
-QPushButton#PrimaryButton:hover {{
-    background: {accent_hover};
-}}
-
-QPushButton#PrimaryButton:disabled {{
-    background: {bg_hover};
-    color: {text_tertiary};
-}}
-
 QPushButton#DownloadButton {{
-    background: {accent};
     color: {text_on_accent};
     border: none;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
-}}
-
-QPushButton#DownloadButton:hover {{
-    background: {accent_hover};
-}}
-
-QPushButton#DownloadButton:disabled {{
-    background: {bg_hover};
-    color: {text_tertiary};
 }}
 
 QPushButton#GhostButton {{
@@ -189,7 +160,7 @@ QPushButton#GhostButton {{
     border: 1px solid {border};
     border-radius: 8px;
     padding: 7px 14px;
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 QPushButton#GhostButton:hover {{
@@ -247,6 +218,14 @@ QFrame#ConfigCell:hover {{
     border: 1px solid {border_focus};
 }}
 
+QFrame#ConfigCell QLabel {{
+    font-size: 14px;
+}}
+
+QFrame#ConfigCell QLabel#SectionLabel {{
+    font-size: 11px;
+}}
+
 QProgressBar {{
     background: {progress_track};
     border: none;
@@ -300,7 +279,7 @@ QComboBox {{
     border-radius: 8px;
     padding: 6px 10px;
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 QComboBox:focus {{
@@ -353,7 +332,7 @@ QSpinBox {{
     border-radius: 8px;
     padding: 7px 10px;
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
     selection-background-color: {accent};
 }}
 
@@ -366,7 +345,7 @@ QLabel#BadgeSuccess {{
     color: {success_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
 }}
 
@@ -375,7 +354,7 @@ QLabel#BadgeWarning {{
     color: {warning_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
 }}
 
@@ -384,7 +363,7 @@ QLabel#BadgeError {{
     color: {error_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
 }}
 
@@ -393,7 +372,7 @@ QLabel#BadgeNeutral {{
     color: {text_secondary};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
 }}
 
@@ -402,7 +381,7 @@ QLabel#NavCounter {{
     border: 1px solid {border};
     border-radius: 20px;
     padding: 1px 6px;
-    font-size: 10px;
+    font-size: 11px;
     color: {text_secondary};
 }}
 
@@ -427,7 +406,7 @@ QCheckBox::indicator:checked {{
 }}
 
 QLabel#SectionLabel {{
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.08em;
     color: {text_tertiary};
@@ -436,12 +415,12 @@ QLabel#SectionLabel {{
 /* Styled label types to fix dark mode contrast issues */
 QLabel#PageSubtitle {{
     color: {text_secondary};
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 QLabel#MetaLabel {{
     color: {text_secondary};
-    font-size: 11px;
+    font-size: 12px;
 }}
 
 QLabel#SettingSubLabel, QLabel#InfoSubtle, QLabel#ToggleLabel {{
@@ -450,6 +429,7 @@ QLabel#SettingSubLabel, QLabel#InfoSubtle, QLabel#ToggleLabel {{
 
 QLabel#TaskTitle, QLabel#InfoTitle {{
     color: {text_primary};
+    font-size: 12px;
 }}
 
 /* Flat dialog styling */
@@ -460,7 +440,7 @@ QDialog {{
 
 QDialog QLabel {{
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
     background: transparent;
 }}
 
@@ -469,7 +449,7 @@ QDialog QTextEdit, QDialog QPlainTextEdit {{
     border: 1px solid {border};
     border-radius: 8px;
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
     padding: 10px;
 }}
 
@@ -479,14 +459,14 @@ QDialog QPushButton {{
     border-radius: 8px;
     padding: 7px 18px;
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 QDialog QPushButton:hover {{
     background: {bg_hover};
 }}
 """
-    return template.format(**t)
+    return template.format(**t_copy)
 
 
 style = build_stylesheet(LIGHT)

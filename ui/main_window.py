@@ -113,7 +113,7 @@ class Downloader(QMainWindow, PagesMixin):
 
     def __init__(self):
         super().__init__()
-        QApplication.setFont(QFont("Segoe UI", 10))
+        QApplication.setFont(QFont("Segoe UI", 11))
 
         self.setWindowTitle("YT Downloader Pro")
         self.resize(960, 544)
@@ -433,31 +433,24 @@ class Downloader(QMainWindow, PagesMixin):
         toast_layout.addWidget(self.toast_label)
         self.toast.hide()
 
+    def _switch_page(self, page, page_name):
+        self.pages.setCurrentWidget(page)
+        self.set_active_nav(page_name)
+
     def _add_nav_button(self, label, page, page_name, icon_char=""):
-        btn = NavButton("")  # Text rendered via inner QLabel; not as QPushButton text
+        btn = NavButton("")
         btn.setObjectName("NavButton")
         btn.setProperty("page", page_name)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedHeight(32)
+        btn.icon_char = icon_char
+        btn.label_text = label
 
         btn_layout = QHBoxLayout(btn)
         btn_layout.setContentsMargins(10, 0, 10, 0)
-        btn_layout.setSpacing(6)
-
-        if icon_char:
-            icon_label = QLabel(icon_char)
-            icon_label.setFixedWidth(18)
-            icon_label.setAlignment(Qt.AlignCenter)
-            icon_label.setStyleSheet("font-size: 13px;")
-            icon_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-            btn_layout.addWidget(icon_label)
-
-        label_widget = QLabel(label)
-        label_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
-        btn_layout.addWidget(label_widget)
         btn_layout.addStretch(1)
 
-        btn.clicked.connect(lambda: self.pages.setCurrentWidget(page))
+        btn.clicked.connect(lambda p=page, n=page_name: self._switch_page(p, n))
         self.nav_group.addButton(btn)
         self._nav_buttons.append(btn)
         self.sidebar.layout().addWidget(btn)
@@ -1786,6 +1779,9 @@ class Downloader(QMainWindow, PagesMixin):
         return APP_VERSION
 
     def _show_terms_if_needed(self):
+        from PySide6.QtGui import QGuiApplication
+        if QGuiApplication.platformName() == "offscreen":
+            return
         from PySide6.QtWidgets import QApplication
         # Ensure the main window is fully painted and visible before any modal
         # dialog opens — this prevents a blank transient "YTDownloader" window.
@@ -3262,7 +3258,7 @@ class Downloader(QMainWindow, PagesMixin):
             item["pause_btn"].setEnabled(False)
             self._pending_tasks.append(task)
 
-        self.active_downloads_layout.addWidget(item["frame"])
+        self.active_downloads_layout.insertWidget(0, item["frame"])
         return True
 
     def _load_persistent_queue(self):

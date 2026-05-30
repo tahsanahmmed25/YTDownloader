@@ -24,7 +24,7 @@ from PySide6.QtGui import QFont, QColor, QPixmap, QIcon
 from ui.widgets import (
     FadingTextButton, PasteButton, BrandIcon, DownloadButton, GradientButton,
     DownloadProgressBar, ToggleSwitch, ToastFrame, NavButton, StatusBadge,
-    SectionLabel, NavCounter
+    SectionLabel, NavCounter, PrimaryButton
 )
 
 
@@ -38,17 +38,17 @@ class PagesMixin:
         
         t_label = QLabel(title)
         t_label.setObjectName("PageTitle")
-        t_label.setStyleSheet("font-size: 15px; font-weight: 500;")
+        t_label.setStyleSheet("font-size: 16px; font-weight: 500;")
         
         sub_label = QLabel(subtitle)
         sub_label.setObjectName("PageSubtitle")
-        sub_label.setStyleSheet("font-size: 12px;")
+        sub_label.setStyleSheet("font-size: 13px;")
         
         layout.addWidget(t_label)
         layout.addWidget(sub_label)
         return header
 
-    def _create_config_cell(self, label_text, combo):
+    def _create_config_cell(self, label_text, widget):
         cell = QFrame()
         cell.setObjectName("ConfigCell")
         layout = QVBoxLayout(cell)
@@ -59,10 +59,12 @@ class PagesMixin:
         key_label.setObjectName("SectionLabel")
         key_label.setStyleSheet("font-size: 11px; font-weight: 500;")
         
-        combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 13px; padding: 0px; margin: 0px;")
+        combos = widget.findChildren(QComboBox) if not isinstance(widget, QComboBox) else [widget]
+        for combo in combos:
+            combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 14px; padding: 0px; margin: 0px;")
         
         layout.addWidget(key_label)
-        layout.addWidget(combo)
+        layout.addWidget(widget)
         return cell
 
     def _create_toggle_row(self, label_text, toggle_switch):
@@ -105,7 +107,7 @@ class PagesMixin:
 
         title_label = QLabel(title)
         title_label.setObjectName("TaskTitle")
-        title_label.setStyleSheet("font-size: 11px; font-weight: 500;")
+        title_label.setStyleSheet("font-size: 12px; font-weight: 500;")
         
         # Elide title text
         metrics = title_label.fontMetrics()
@@ -124,7 +126,7 @@ class PagesMixin:
 
         speed_label = QLabel("0.0 KB/s")
         speed_label.setObjectName("MetaLabel")
-        speed_label.setStyleSheet("font-size: 10px;")
+        speed_label.setStyleSheet("font-size: 12px;")
 
         info_layout.addWidget(title_label)
         info_layout.addWidget(progress)
@@ -228,7 +230,7 @@ class PagesMixin:
         _pal.setColor(_pal.ColorRole.PlaceholderText, QColor("#a0a0a0" if self.dark_mode else "#6b6b6b"))
         self.url_input.setPalette(_pal)
 
-        self.fetch_btn = QPushButton("Analyze")
+        self.fetch_btn = PrimaryButton("Analyze")
         self.fetch_btn.setObjectName("PrimaryButton")
         self.fetch_btn.setFixedHeight(32)
 
@@ -407,6 +409,31 @@ class PagesMixin:
         self.subs_lang.setMaxVisibleItems(10)
         self.subs_lang.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
+        # Create audio_combo for Audio config cell
+        self.audio_combo = QComboBox()
+        self.audio_combo.setMaxVisibleItems(10)
+        self.audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.audio_combo.addItems(["Best", "AAC", "MP3", "Opus", "FLAC", "Vorbis"])
+        
+        # Load from settings, default to Best
+        default_audio_val = self.settings.value("default_audio", "Best", type=str)
+        if default_audio_val == "Flac":
+            default_audio_val = "FLAC"
+        self.audio_combo.setCurrentText(default_audio_val)
+        
+        # Connect change signal to settings
+        self.audio_combo.currentTextChanged.connect(
+            lambda v: self.settings.setValue("default_audio", v)
+        )
+
+        # Create combined subtitles container for subtitles cell
+        self.subs_container = QWidget()
+        subs_container_layout = QHBoxLayout(self.subs_container)
+        subs_container_layout.setContentsMargins(0, 0, 0, 0)
+        subs_container_layout.setSpacing(6)
+        subs_container_layout.addWidget(self.subs_mode_combo)
+        subs_container_layout.addWidget(self.subs_lang)
+
         config_card = QFrame()
         config_card.setObjectName("Card")
         config_card_layout = QVBoxLayout(config_card)
@@ -435,21 +462,20 @@ class PagesMixin:
 
         cell_quality = self._create_config_cell("Quality", self.quality)
         cell_format = self._create_config_cell("Format", self.format_combo)
-        cell_subs = self._create_config_cell("Audio", self.subs_mode_combo)
-        # Fix 12 — subtitle cell hidden until analysis returns subtitle data
-        self.subtitle_lang_cell = self._create_config_cell("Subtitles", self.subs_lang)
+        cell_audio = self._create_config_cell("Audio", self.audio_combo)
+        self.subtitle_lang_cell = self._create_config_cell("Subtitles", self.subs_container)
         self.subtitle_lang_cell.setVisible(False)
 
         config_grid_layout.addWidget(cell_quality, 0, 0)
         config_grid_layout.addWidget(cell_format, 0, 1)
-        config_grid_layout.addWidget(cell_subs, 0, 2)
+        config_grid_layout.addWidget(cell_audio, 0, 2)
         config_grid_layout.addWidget(self.subtitle_lang_cell, 0, 3)
 
         config_card_layout.addLayout(config_grid_layout)
         layout.addWidget(config_card)
 
         # Download Button
-        self.download_btn = QPushButton("Start download")
+        self.download_btn = DownloadButton("Start download")
         self.download_btn.setObjectName("DownloadButton")
         self.download_btn.setFixedHeight(40)
         self.download_btn.setEnabled(False)
@@ -497,6 +523,7 @@ class PagesMixin:
         self.downloads_list_layout = QVBoxLayout(self.downloads_container)
         self.downloads_list_layout.setContentsMargins(0, 0, 0, 0)
         self.downloads_list_layout.setSpacing(8)
+        self.downloads_list_layout.setAlignment(Qt.AlignTop)
 
         # Empty Label
         self.library_empty_label = QLabel("No active, queued, or paused downloads.")
@@ -507,19 +534,24 @@ class PagesMixin:
         # Child layouts for active & completed tasks
         self.active_downloads_layout = QVBoxLayout()
         self.active_downloads_layout.setSpacing(8)
+        self.active_downloads_layout.setAlignment(Qt.AlignTop)
         self.downloads_list_layout.addLayout(self.active_downloads_layout)
 
         self.completed_downloads_layout = QVBoxLayout()
         self.completed_downloads_layout.setSpacing(8)
+        self.completed_downloads_layout.setAlignment(Qt.AlignTop)
         self.downloads_list_layout.addLayout(self.completed_downloads_layout)
 
         self.downloads_scroll.setWidget(self.downloads_container)
         layout.addWidget(self.downloads_scroll, 1)
 
         # Dummy variables to maintain backward compatibility with self references in main_window.py
-        self.downloads_panel = QFrame()
-        self.downloads_header = QLabel()
-        self.reset_btn_downloads = QPushButton()
+        self.downloads_panel = QFrame(page)
+        self.downloads_panel.hide()
+        self.downloads_header = QLabel(page)
+        self.downloads_header.hide()
+        self.reset_btn_downloads = QPushButton(page)
+        self.reset_btn_downloads.hide()
 
         return page
 

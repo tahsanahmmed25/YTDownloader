@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QProgressBar
 )
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QTimer, QSize, QRectF, QPointF, QEasingCurve
-from PySide6.QtGui import QColor, QPalette, QPainter, QPen, QLinearGradient, QBrush
+from PySide6.QtGui import QColor, QPalette, QPainter, QPen, QLinearGradient, QBrush, QPainterPath, QFont
 
 from ui_style import DARK, LIGHT
 
@@ -279,20 +279,23 @@ class DownloadButton(QPushButton):
         t = DARK if dark_mode else LIGHT
         
         if self.isEnabled():
-            bg_color = QColor(t["accent"])
-            if self.underMouse():
-                bg_color = QColor(t["accent_hover"])
+            rect = self.rect()
+            grad = QLinearGradient(rect.left(), 0, rect.right(), 0)
+            grad.setColorAt(0.0, QColor("#0d9488"))
+            grad.setColorAt(0.5, QColor("#0891b2"))
+            grad.setColorAt(1.0, QColor("#0e7490"))
+            painter.setBrush(QBrush(grad))
             self.shadow_effect.setEnabled(True)
-            self.shadow_effect.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(124, 58, 237, 76))
-            text_color = QColor(t["text_on_accent"])
-            icon_color = QColor(t["text_on_accent"])
+            self.shadow_effect.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(13, 148, 136, 76))
+            text_color = QColor("#ffffff")
+            icon_color = QColor("#ffffff")
         else:
             bg_color = QColor(t["bg_hover"])
             self.shadow_effect.setEnabled(False)
             text_color = QColor(t["text_tertiary"])
             icon_color = QColor(t["text_tertiary"])
+            painter.setBrush(bg_color)
             
-        painter.setBrush(bg_color)
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 11, 11)
         
@@ -451,7 +454,65 @@ class NavButton(QPushButton):
         self.setObjectName("NavButton")
         self.setCheckable(True)
         self.setFocusPolicy(Qt.NoFocus)
-        self.setCursor(Qt.ArrowCursor)
+        self.setCursor(Qt.PointingHandCursor)
+        self.icon_char = ""
+        self.label_text = ""
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = 6
+        is_active = self.property("active") == "true"
+        dark = self.window().dark_mode if hasattr(self.window(), 'dark_mode') else False
+
+        # Fix 5: Transparent active background
+        bg = QColor("transparent")
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        painter.fillPath(path, bg)
+
+        if is_active:
+            grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
+            grad.setColorAt(0.0, QColor("#0d9488"))
+            grad.setColorAt(1.0, QColor("#0891b2"))
+            pen = QPen(QBrush(grad), 1.0)
+            painter.setPen(pen)
+            painter.drawRoundedRect(rect, radius, radius)
+        else:
+            painter.setPen(QColor("#e5e5e5" if not dark else "#2a2a2a"))
+            painter.drawRoundedRect(rect, radius, radius)
+
+        # Fix 6: High contrast text colors
+        if is_active:
+            text_color = QColor("#1a1a1a" if not dark else "#f0f0f0")
+        else:
+            text_color = QColor("#3a3a3a" if not dark else "#b0b0b0")
+
+        icon_rect = QRectF(rect.left() + 10, rect.top(), 20, rect.height())
+        text_rect = QRectF(rect.left() + 30, rect.top(), rect.width() - 34, rect.height())
+
+        # Fix 7: Bolder active icon size and color
+        icon_font = QFont(self.font())
+        if is_active:
+            icon_font.setPixelSize(15)
+            icon_font.setWeight(QFont.Medium)
+            icon_color = QColor("#0d9488") if not dark else QColor("#2dd4bf")
+        else:
+            icon_font.setPixelSize(14)
+            icon_font.setWeight(QFont.Normal)
+            icon_color = QColor("#3a3a3a") if not dark else QColor("#b0b0b0")
+
+        painter.setFont(icon_font)
+        painter.setPen(icon_color)
+        painter.drawText(icon_rect, Qt.AlignVCenter | Qt.AlignLeft, self.icon_char if hasattr(self, 'icon_char') else '')
+
+        label_font = QFont(self.font())
+        label_font.setPixelSize(13)
+        painter.setFont(label_font)
+        painter.setPen(text_color)
+        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, self.label_text if hasattr(self, 'label_text') else self.text())
+        painter.end()
 
 
 # ── StatusBadge ───────────────────────────────────────────────────────────────
@@ -532,18 +593,21 @@ class GradientButton(QPushButton):
         t = DARK if dark_mode else LIGHT
 
         if self.isEnabled():
-            bg_color = QColor(t["accent"])
-            if self.underMouse():
-                bg_color = QColor(t["accent_hover"])
+            rect = self.rect()
+            grad = QLinearGradient(rect.left(), 0, rect.right(), 0)
+            grad.setColorAt(0.0, QColor("#0d9488"))
+            grad.setColorAt(0.5, QColor("#0891b2"))
+            grad.setColorAt(1.0, QColor("#0e7490"))
+            painter.setBrush(QBrush(grad))
             self._shadow.setEnabled(True)
-            self._shadow.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(124, 58, 237, 77))
-            text_color = QColor(t["text_on_accent"])
+            self._shadow.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(13, 148, 136, 77))
+            text_color = QColor("#ffffff")
         else:
             bg_color = QColor(t["bg_hover"])
             self._shadow.setEnabled(False)
             text_color = QColor(t["text_tertiary"])
+            painter.setBrush(bg_color)
 
-        painter.setBrush(bg_color)
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 11, 11)
 
@@ -601,6 +665,39 @@ class ElidedLabel(QLabel):
 
         align = self.alignment()
         painter.drawText(self.rect(), align, elided)
+
+
+# ── PrimaryButton ─────────────────────────────────────────────────────────────
+class PrimaryButton(QPushButton):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setObjectName("PrimaryButton")
+        self.setCursor(Qt.PointingHandCursor)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect()
+        radius = 8
+        dark = self.window().dark_mode if hasattr(self.window(), 'dark_mode') else False
+
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(rect), radius, radius)
+
+        if self.isEnabled():
+            grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.top())
+            grad.setColorAt(0.0, QColor("#0d9488"))
+            grad.setColorAt(1.0, QColor("#0891b2"))
+            painter.fillPath(path, QBrush(grad))
+            painter.setPen(QColor("#ffffff"))
+        else:
+            t = DARK if dark else LIGHT
+            painter.fillPath(path, QBrush(QColor(t["bg_hover"])))
+            painter.setPen(QColor(t["text_tertiary"]))
+
+        painter.setFont(self.font())
+        painter.drawText(rect, Qt.AlignCenter, self.text())
+        painter.end()
 
 
 

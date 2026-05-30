@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [2.9.0] - 2026-05-30
+
+### Changed
+- **Modernized UI Redesign** — Migrated the visual layer of YTDownloader to a clean, minimal, flat card-based layout inspired by Linear/Notion aesthetics. Includes customized sidebar navigation with colored dots, custom gradient action buttons, and flat preferences panels.
+
+---
+
 ## [2.3.4] - 2026-05-21
 
 ### Removed
@@ -349,9 +356,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | Version | Status | Notes |
 |---|---|---|
-| **2.3.1** | ✅ Stable | Current stable — fixes browser login launch and auto cookie prioritization |
-| 2.3.0 | Upgrade recommended | GPLv3 release, Linux FFmpeg loop and folder opener fixes |
-| 2.2.9 | Upgrade recommended | Browser launch and FFmpeg concurrency bug fixes |
+| **2.9.0** | ✅ Stable | Current stable — modern card-based flat UI redesign |
+| 2.3.4 | Upgrade recommended | Support and donation options cleanup |
+| 2.3.1 | Upgrade recommended | Fixes browser login launch and auto cookie prioritization |
 | 2.2.1 | Upgrade recommended | Open-folder fix, Firefox auth fix, restricted video fix, FFmpeg progress UI |
 | 2.2.0 | Upgrade recommended | CI release pipeline fix, generation-based reset |
 | 2.1.9-beta.3 | Superseded beta | Superseded by 2.2.0 stable |

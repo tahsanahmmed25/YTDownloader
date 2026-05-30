@@ -44,12 +44,6 @@ def get_exe_path():
 
 def is_exe_present():
     """True if the yt-dlp binary exists, is non-zero, and is executable."""
-    import shutil
-    # Prefer system-installed version on Linux (apt install yt-dlp), UNLESS in local dev mode
-    if not IS_WINDOWS and not is_local_dev_mode():
-        system = shutil.which("yt-dlp")
-        if system and os.path.exists(system):
-            return True
     p = get_exe_path()
     try:
         return os.path.exists(p) and os.path.getsize(p) > 0
@@ -194,15 +188,8 @@ def ensure_ytdlp_exe(force=False, progress_cb=None):
     """
     global _DOWNLOAD_IN_PROGRESS
 
-    import shutil
-
-    # On Linux: if system yt-dlp is available, prefer it, UNLESS local dev mode is active
-    if not IS_WINDOWS and not force and not is_local_dev_mode():
-        system = shutil.which("yt-dlp")
-        if system and os.path.exists(system):
-            _log.info("Using system yt-dlp at %s", system)
-            _save_local_version("system")
-            return True
+    # Do not prefer system-installed yt-dlp, as it is often outdated and broken.
+    # Always download/update the latest binary from GitHub Releases to bin_dir().
 
     with _LOCK:
         if _DOWNLOAD_IN_PROGRESS:

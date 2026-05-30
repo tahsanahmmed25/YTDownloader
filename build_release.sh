@@ -55,6 +55,23 @@ mkdir -p "$APPDIR/usr/lib"
 # Copy PyInstaller bundle
 cp -r "$DIST_DIR"/. "$APPDIR/usr/bin/"
 
+# Copy Qt plugins and libraries manually since PyInstaller might miss them on some setups
+if [[ -d "$SCRIPT_DIR/.venv/lib/python3.12/site-packages/PySide6/Qt/plugins" ]]; then
+    info "Copying PySide6 Qt plugins to AppDir..."
+    mkdir -p "$APPDIR/usr/bin/_internal/PySide6/Qt"
+    cp -r "$SCRIPT_DIR/.venv/lib/python3.12/site-packages/PySide6/Qt/plugins" "$APPDIR/usr/bin/_internal/PySide6/Qt/"
+    info "Copying PySide6 Qt libraries to AppDir..."
+    mkdir -p "$APPDIR/usr/bin/_internal/PySide6/Qt/lib"
+    cp -rn "$SCRIPT_DIR/.venv/lib/python3.12/site-packages/PySide6/Qt/lib"/* "$APPDIR/usr/bin/_internal/PySide6/Qt/lib/"
+elif [[ -d "$SCRIPT_DIR/venv/lib/python3.12/site-packages/PySide6/Qt/plugins" ]]; then
+    info "Copying PySide6 Qt plugins to AppDir..."
+    mkdir -p "$APPDIR/usr/bin/_internal/PySide6/Qt"
+    cp -r "$SCRIPT_DIR/venv/lib/python3.12/site-packages/PySide6/Qt/plugins" "$APPDIR/usr/bin/_internal/PySide6/Qt/"
+    info "Copying PySide6 Qt libraries to AppDir..."
+    mkdir -p "$APPDIR/usr/bin/_internal/PySide6/Qt/lib"
+    cp -rn "$SCRIPT_DIR/venv/lib/python3.12/site-packages/PySide6/Qt/lib"/* "$APPDIR/usr/bin/_internal/PySide6/Qt/lib/"
+fi
+
 # Desktop entry (required by AppImage spec)
 cat > "$APPDIR/YTDownloader.desktop" <<'EOF'
 [Desktop Entry]
@@ -78,7 +95,8 @@ cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="$HERE/usr/bin:$PATH"
-export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$HERE/usr/bin/_internal/PySide6/Qt/lib:$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+export QT_PLUGIN_PATH="$HERE/usr/bin/_internal/PySide6/Qt/plugins"
 exec "$HERE/usr/bin/YTDownloader" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"

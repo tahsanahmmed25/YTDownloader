@@ -174,6 +174,7 @@ def _make_window(monkeypatch):
     window._show_message_dialog = lambda *_args, **_kwargs: None
     window._show_downloads_panel = lambda *_args, **_kwargs: None
     window._expand_details = lambda *_args, **_kwargs: None
+    window._collapse_details = lambda *_args, **_kwargs: None
     window._clear_downloads_list = lambda *_args, **_kwargs: None
     window._update_downloads_header = lambda *_args, **_kwargs: None
     window._update_library_nav_state = lambda *_args, **_kwargs: None

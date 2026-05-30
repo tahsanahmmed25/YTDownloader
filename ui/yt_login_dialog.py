@@ -238,9 +238,9 @@ class YouTubeLoginDialog(QDialog):
 
         # Colour status label
         if state == "failed":
-            self._status_lbl.setStyleSheet("color:#e74c3c;font-weight:600;")
+            self._status_lbl.setStyleSheet("color:#f43f5e;font-weight:600;")
         elif state == "done":
-            self._status_lbl.setStyleSheet("color:#2ecc71;font-weight:600;")
+            self._status_lbl.setStyleSheet("color:#10b981;font-weight:600;")
         else:
             self._status_lbl.setStyleSheet("")
 
@@ -248,8 +248,9 @@ class YouTubeLoginDialog(QDialog):
             QTimer.singleShot(1500, self.accept)
 
     def _refresh_steps(self, state: str):
-        active  = "font-weight:700; color:#4f8dff;"
-        done_c  = "font-weight:500; color:#2ecc71;"
+        accent_color = "#d4d4d4" if self._dark else "#3a3a3a"
+        active  = f"font-weight:700; color:{accent_color};"
+        done_c  = "font-weight:500; color:#10b981;"
         pending = "color:#9aa7b4;"
 
         if state == "idle":
@@ -372,34 +373,26 @@ class YouTubeLoginDialog(QDialog):
     # ── Styling ────────────────────────────────────────────────────────────
 
     def _apply_style(self):
-        if self._dark:
-            bg       = "#1f2633"
-            card_bg  = "#242d3c"
-            border   = "rgba(230,237,243,0.15)"
-            text     = "#e6edf3"
-            muted    = "#9aa7b4"
-            steps_bg = "rgba(255,255,255,0.04)"
-            cancel_bg = "rgba(25,32,45,0.85)"
-            cancel_br = "rgba(230,237,243,0.18)"
-            open_bg  = "rgba(79,141,255,0.15)"
-            open_br  = "rgba(79,141,255,0.5)"
-            cb_bg    = "rgba(34,43,58,0.92)"
-            cb_br    = "rgba(230,237,243,0.15)"
-            sp_bg    = "rgba(79,141,255,0.15)"
-        else:
-            bg       = "#ffffff"
-            card_bg  = "#f4f7fb"
-            border   = "rgba(31,42,54,0.12)"
-            text     = "#1f2a36"
-            muted    = "#6e7b88"
-            steps_bg = "rgba(79,141,255,0.06)"
-            cancel_bg = "rgba(253,253,254,0.9)"
-            cancel_br = "rgba(31,42,54,0.2)"
-            open_bg  = "rgba(79,141,255,0.08)"
-            open_br  = "rgba(79,141,255,0.4)"
-            cb_bg    = "rgba(253,253,254,0.9)"
-            cb_br    = "rgba(31,42,54,0.2)"
-            sp_bg    = "rgba(79,141,255,0.18)"
+        from ui_style import DARK, LIGHT
+        t = DARK if self._dark else LIGHT
+        
+        bg        = t["bg_window"]
+        card_bg   = t["bg_surface"]
+        border    = t["border"]
+        text      = t["text_primary"]
+        muted     = t["text_secondary"]
+        text_tert = t["text_tertiary"]
+        steps_bg  = t["bg_hover"]
+        cancel_bg = t["bg_card"]
+        cancel_br = t["border"]
+        open_bg   = t["bg_hover"]
+        open_br   = t["border_focus"]
+        cb_bg     = t["bg_input"]
+        cb_br     = t["border"]
+        sp_bg     = t["bg_active"]
+        accent    = t["accent"]
+        accent_h  = t["accent_hover"]
+        text_acc  = t["text_on_accent"]
 
         self.setStyleSheet(f"""
             QDialog {{ background:{bg}; }}
@@ -434,8 +427,7 @@ class YouTubeLoginDialog(QDialog):
                 height:4px; padding:0px; border-radius:2px;
             }}
             QProgressBar#YTLoginSpinner::chunk {{
-                background:qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #4f8dff,stop:1 #2ac9c2);
+                background:{accent};
                 border-radius:2px;
             }}
             QComboBox {{
@@ -448,30 +440,28 @@ class YouTubeLoginDialog(QDialog):
                 color:{text}; font-size:13px;
             }}
             QPushButton#YTLoginCancelBtn:hover {{
-                background:rgba(220,60,60,0.12);
-                border:1px solid rgba(220,60,60,0.4);
+                background:{steps_bg};
+                border:1px solid {accent};
             }}
             QPushButton#YTLoginOpenBtn {{
                 background:{open_bg}; border:1px solid {open_br};
                 border-radius:10px; padding:8px 20px;
-                color:#4f8dff; font-size:13px; font-weight:700;
+                color:{accent}; font-size:13px; font-weight:700;
             }}
             QPushButton#YTLoginOpenBtn:hover {{
-                background:rgba(79,141,255,0.22);
+                background:{steps_bg};
             }}
             QPushButton#YTLoginOpenBtn:disabled {{ opacity:0.5; }}
             QPushButton#YTLoginConfirmBtn {{
-                background:qlineargradient(x1:0,y1:0,x2:1,y2:1,
-                    stop:0 #4f8dff,stop:1 #2ac9c2);
+                background:{accent};
                 border:none; border-radius:10px; padding:8px 22px;
-                color:#ffffff; font-size:13px; font-weight:700;
+                color:{text_acc}; font-size:13px; font-weight:700;
             }}
             QPushButton#YTLoginConfirmBtn:hover:!disabled {{
-                background:qlineargradient(x1:0,y1:0,x2:1,y2:1,
-                    stop:0 #6ba0ff,stop:1 #38d6cd);
+                background:{accent_h};
             }}
             QPushButton#YTLoginConfirmBtn:disabled {{
-                background:rgba(79,141,255,0.32);
-                color:rgba(255,255,255,0.55);
+                background:{steps_bg};
+                color:{text_tert};
             }}
         """)

@@ -1,7 +1,9 @@
+import os
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QPushButton,
     QLineEdit,
@@ -12,222 +14,448 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
-    QListView
+    QListView,
+    QButtonGroup,
+    QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QFont, QColor, QPixmap, QIcon
 
-from ui.widgets import FadingTextButton, PasteButton
+from ui.widgets import (
+    FadingTextButton, PasteButton, BrandIcon, DownloadButton, GradientButton,
+    DownloadProgressBar, ToggleSwitch, ToastFrame, NavButton, StatusBadge,
+    SectionLabel, NavCounter
+)
 
 
 class PagesMixin:
+    def _create_page_header(self, title, subtitle):
+        header = QWidget()
+        header.setObjectName("PageHeader")
+        layout = QVBoxLayout(header)
+        layout.setContentsMargins(0, 0, 0, 8)
+        layout.setSpacing(2)
+        
+        t_label = QLabel(title)
+        t_label.setObjectName("PageTitle")
+        t_label.setStyleSheet("font-size: 15px; font-weight: 500;")
+        
+        sub_label = QLabel(subtitle)
+        sub_label.setObjectName("PageSubtitle")
+        sub_label.setStyleSheet("font-size: 12px;")
+        
+        layout.addWidget(t_label)
+        layout.addWidget(sub_label)
+        return header
+
+    def _create_config_cell(self, label_text, combo):
+        cell = QFrame()
+        cell.setObjectName("ConfigCell")
+        layout = QVBoxLayout(cell)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(2)
+        
+        key_label = QLabel(label_text.upper())
+        key_label.setObjectName("SectionLabel")
+        key_label.setStyleSheet("font-size: 11px; font-weight: 500;")
+        
+        combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 13px; padding: 0px; margin: 0px;")
+        
+        layout.addWidget(key_label)
+        layout.addWidget(combo)
+        return cell
+
+    def _create_toggle_row(self, label_text, toggle_switch):
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+        
+        label = QLabel(label_text)
+        label.setObjectName("ToggleLabel")
+        
+        row.addWidget(toggle_switch)
+        row.addWidget(label)
+        row.addStretch(1)
+        return row
+
+    def build_task_card(self, title):
+        frame = QFrame()
+        frame.setObjectName("Card")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        frame.setFixedHeight(56)
+        
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignVCenter)
+
+        # 1. Thumbnail QLabel — 50x28px, border-radius: 6px
+        thumbnail = QLabel()
+        thumbnail.setFixedSize(50, 28)
+        thumbnail.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        thumbnail.setObjectName("TaskThumbnail")
+        thumbnail.setAlignment(Qt.AlignCenter)
+
+        # 2. Info column QVBoxLayout
+        info_widget = QWidget()
+        info_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
+        info_layout = QVBoxLayout(info_widget)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(4)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("TaskTitle")
+        title_label.setStyleSheet("font-size: 11px; font-weight: 500;")
+        
+        # Elide title text
+        metrics = title_label.fontMetrics()
+        elided = metrics.elidedText(title, Qt.ElideRight, 350)
+        title_label.setText(elided)
+
+        progress = QProgressBar()
+        progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        progress.setFixedHeight(4)
+        progress.setValue(0)
+        progress.setTextVisible(False)
+
+        size_label = QLabel()
+        size_label.setObjectName("MetaLabel")
+        size_label.setVisible(False)
+
+        speed_label = QLabel("0.0 KB/s")
+        speed_label.setObjectName("MetaLabel")
+        speed_label.setStyleSheet("font-size: 10px;")
+
+        info_layout.addWidget(title_label)
+        info_layout.addWidget(progress)
+        info_layout.addWidget(size_label)
+        info_layout.addWidget(speed_label)
+
+        # 3. Right side percentage or badges
+        percentage_label = QLabel("0%")
+        percentage_label.setObjectName("PercentageLabel")
+        percentage_label.setStyleSheet("font-size: 11px; font-weight: 500;")
+        percentage_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        percentage_label.setFixedWidth(45)
+
+        # Status badge
+        status_label = StatusBadge("Downloading...")
+        status_label.hide()
+        status_label._item_pct = percentage_label
+        status_label._item_prog = progress
+        status_label._item_speed = speed_label
+
+        # Hidden buttons to prevent crashes
+        pause_btn = QPushButton("Pause")
+        pause_btn.hide()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.hide()
+        open_btn = QPushButton("Open")
+        open_btn.hide()
+
+        layout.addWidget(thumbnail)
+        layout.addWidget(info_widget, 1)
+        layout.addWidget(percentage_label)
+        layout.addWidget(status_label)
+
+        # Wire value changes
+        progress.valueChanged.connect(lambda val: percentage_label.setText(f"{val}%"))
+
+        item = {
+            "frame": frame,
+            "title": title_label,
+            "status": status_label,
+            "status_icon": QLabel(),
+            "status_effect": QGraphicsOpacityEffect(),
+            "progress": progress,
+            "speed": speed_label,
+            "size": size_label,
+            "pause_btn": pause_btn,
+            "cancel_btn": cancel_btn,
+            "open_btn": open_btn,
+            "percentage_label": percentage_label,
+            "thumbnail": thumbnail
+        }
+        frame._download_item = item
+        return item
+
     def _build_downloader_page(self):
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 10, 20, 20)
+        layout.setSpacing(6)
 
-        input_row = QHBoxLayout()
+        # Header
+        header = self._create_page_header("Download media", "Paste a YouTube URL to get started")
+        layout.addWidget(header)
 
-        self.playlist_toggle = QCheckBox("Playlist")
+        # Hidden widgets for compatibility
+        self.playlist_toggle = QCheckBox()
         self.playlist_toggle.setObjectName("PlaylistToggle")
-        self.playlist_toggle.setToolTip(
-            "Downloading entire playlist forces Format and Quality to Auto."
-        )
         self.playlist_toggle.toggled.connect(self._on_playlist_toggle)
+        self.playlist_toggle.hide()
+        layout.addWidget(self.playlist_toggle)
 
         self.paste_btn = PasteButton()
         self.paste_btn.clicked.connect(self._paste_from_clipboard)
+        self.paste_btn.hide()
+        layout.addWidget(self.paste_btn)
+
+        self.subs_checkbox = QCheckBox()
+        self.subs_checkbox.hide()
+        layout.addWidget(self.subs_checkbox)
+
+        self.embed_subs_checkbox = QCheckBox()
+        self.embed_subs_checkbox.hide()
+        layout.addWidget(self.embed_subs_checkbox)
+
+        # URL Input Card
+        url_card = QFrame()
+        url_card.setObjectName("Card")
+        url_card_layout = QHBoxLayout(url_card)
+        url_card_layout.setContentsMargins(14, 14, 14, 14)
+        url_card_layout.setSpacing(8)
+
         self.url_input = QLineEdit()
         self.url_input.setObjectName("UrlInput")
-        self.url_input.setPlaceholderText("Paste YouTube link...")
+        self.url_input.setPlaceholderText("https://youtube.com/watch?v=...")
         self.url_input.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.url_input.setTextMargins(6, 0, 6, 0)
         self.url_input.textChanged.connect(self._on_url_changed)
 
-        self.fetch_btn = FadingTextButton("Analyze")
+        _pal = self.url_input.palette()
+        _pal.setColor(_pal.ColorRole.PlaceholderText, QColor("#a0a0a0" if self.dark_mode else "#6b6b6b"))
+        self.url_input.setPalette(_pal)
+
+        self.fetch_btn = QPushButton("Analyze")
         self.fetch_btn.setObjectName("PrimaryButton")
-        self.fetch_btn.setFixedWidth(150)
+        self.fetch_btn.setFixedHeight(32)
 
         self.fetch_spinner = QProgressBar()
         self.fetch_spinner.setObjectName("FetchBar")
         self.fetch_spinner.setRange(0, 0)
         self.fetch_spinner.setTextVisible(False)
-        self.fetch_spinner.setFixedHeight(4)
+        self.fetch_spinner.setFixedHeight(2)
         self.fetch_spinner.setVisible(False)
 
-        url_wrap = QWidget()
-        url_layout = QVBoxLayout(url_wrap)
-        url_layout.setContentsMargins(0, 0, 0, 0)
-        url_layout.setSpacing(0)
-        url_layout.addWidget(self.url_input)
-        url_layout.addWidget(self.fetch_spinner)
+        url_input_col = QWidget()
+        url_input_col_layout = QVBoxLayout(url_input_col)
+        url_input_col_layout.setContentsMargins(0, 0, 0, 0)
+        url_input_col_layout.setSpacing(4)
+        url_input_col_layout.addWidget(self.url_input)
+        url_input_col_layout.addWidget(self.fetch_spinner)
 
-        input_row.addWidget(self.playlist_toggle)
-        input_row.addWidget(self.paste_btn)
-        input_row.addWidget(url_wrap, 1)
-        input_row.addWidget(self.fetch_btn)
-        layout.addLayout(input_row)
+        # Fix 14 — visible Paste button
+        self.paste_url_btn = QPushButton("Paste")
+        self.paste_url_btn.setObjectName("GhostButton")
+        self.paste_url_btn.setFixedWidth(60)
+        self.paste_url_btn.setFixedHeight(32)
+        self.paste_url_btn.clicked.connect(self._paste_from_clipboard)
 
+        url_card_layout.addWidget(self.paste_url_btn)
+        url_card_layout.addWidget(url_input_col, 1)
+        url_card_layout.addWidget(self.fetch_btn)
+        layout.addWidget(url_card)
+
+        # Video details container (collapsed on startup)
         self.details_container = QWidget()
+        self.details_container.setVisible(False)
+        self.details_container.setMaximumHeight(0)
         details_layout = QVBoxLayout(self.details_container)
-        details_layout.setContentsMargins(0, 0, 0, 2)
-        details_layout.setSpacing(8)
-
-        preview_label = QLabel("Video Preview")
-        preview_label.setObjectName("SectionTitle")
-        details_layout.addWidget(preview_label)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(0)
 
         preview_card = QFrame()
         preview_card.setObjectName("Card")
         preview_layout = QHBoxLayout(preview_card)
-        preview_layout.setContentsMargins(16, 12, 16, 12)
-        preview_layout.setSpacing(18)
+        preview_layout.setContentsMargins(14, 14, 14, 14)
+        preview_layout.setSpacing(14)
         preview_layout.setAlignment(Qt.AlignVCenter)
 
         self.thumbnail = QLabel()
         self.thumbnail.setObjectName("PreviewThumb")
-        self.thumbnail.setFixedSize(200, 112)
+        self.thumbnail.setFixedSize(120, 68)
         self.thumbnail.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.thumbnail.setScaledContents(False)
-        self.thumbnail.setAlignment(Qt.AlignCenter)
-        self.thumbnail.setStyleSheet("border-radius: 12px; background: #dfe7f2;")
-        self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
-        self.thumbnail.setVisible(self.show_thumbnail)
-        thumb_wrap = QWidget()
-        thumb_wrap_layout = QVBoxLayout(thumb_wrap)
-        thumb_wrap_layout.setContentsMargins(0, 0, 0, 0)
-        thumb_wrap_layout.setSpacing(0)
-        thumb_wrap_layout.addStretch(1)
-        thumb_wrap_layout.addWidget(self.thumbnail, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        thumb_wrap_layout.addStretch(1)
-        preview_layout.addWidget(thumb_wrap, 0, Qt.AlignVCenter)
+        self.thumbnail.setScaledContents(True)
+        self.thumbnail.setStyleSheet("")
 
         info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(0, 4, 0, 0)
-        info_layout.setSpacing(0)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(4)
+
         self.title = QLabel("Title: -")
         self.title.setObjectName("InfoTitle")
         self.title.setWordWrap(True)
         self.title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.title.setMaximumHeight(42)
+        self.title.setStyleSheet("font-size: 12px; font-weight: 500;")
 
         self.size = QLabel("Estimated size: -")
         self.size.setObjectName("InfoSubtle")
+        self.size.setStyleSheet("font-size: 11px;")
 
         info_layout.addWidget(self.title)
-        info_layout.addSpacing(6)
         info_layout.addWidget(self.size)
 
-        info_layout.addSpacing(14)
-
-        info_layout.addStretch(1)
-
-        bottom_row = QHBoxLayout()
-        bottom_row.setSpacing(12)
-        bottom_row.setAlignment(Qt.AlignBottom)
+        preview_action_layout = QHBoxLayout()
+        preview_action_layout.setSpacing(12)
 
         self.show_thumb_cb = QCheckBox("Show thumbnail")
-        self.show_thumb_cb.setObjectName("ThumbToggle")
         self.show_thumb_cb.setChecked(self.show_thumbnail)
         self.show_thumb_cb.toggled.connect(self._on_show_thumbnail_toggle)
-        bottom_row.addWidget(self.show_thumb_cb)
+        preview_action_layout.addWidget(self.show_thumb_cb)
 
         self.reset_btn = QPushButton("Reset")
         self.reset_btn.setObjectName("GhostButton")
-        self.reset_btn.setMinimumHeight(32)
-        self.reset_btn.setMinimumWidth(80)
-        reset_font = self.reset_btn.font()
-        reset_font.setWeight(QFont.Medium)
-        self.reset_btn.setFont(reset_font)
         self.reset_btn.clicked.connect(self.clear_homepage_ui)
+        preview_action_layout.addWidget(self.reset_btn)
+        info_layout.addLayout(preview_action_layout)
 
-        bottom_row.addLayout(self._make_cookie_status_row(self.reset_btn))
-        info_layout.addLayout(bottom_row)
+        preview_layout.addWidget(self.thumbnail)
         preview_layout.addLayout(info_layout, 1)
-        preview_layout.setStretch(0, 0)
-        preview_layout.setStretch(1, 1)
 
-        preview_wrap = QWidget()
-        preview_wrap_layout = QVBoxLayout(preview_wrap)
-        preview_wrap_layout.setContentsMargins(22, 8, 22, 8)
-        preview_wrap_layout.addWidget(preview_card)
-        details_layout.addWidget(preview_wrap)
-        self._apply_shadow(preview_card, 22, 96, 0)
+        details_layout.addWidget(preview_card)
+        layout.addWidget(self.details_container)
 
-        config_label = QLabel("Configuration")
-        config_label.setObjectName("SectionTitle")
-        details_layout.addWidget(config_label)
+        # Configuration Card
+        self.pill_group = QButtonGroup(page)
+        self.pill_group.setExclusive(True)
+
+        self.pill_video = QPushButton("Video")
+        self.pill_video.setObjectName("PillButton")
+        self.pill_video.setProperty("active", "true")
+        self.pill_video.setCheckable(True)
+        self.pill_video.setChecked(True)
+
+        self.pill_audio = QPushButton("Audio")
+        self.pill_audio.setObjectName("PillButton")
+        self.pill_audio.setProperty("active", "false")
+        self.pill_audio.setCheckable(True)
+
+        self.pill_playlist = QPushButton("Playlist")
+        self.pill_playlist.setObjectName("PillButton")
+        self.pill_playlist.setProperty("active", "false")
+        self.pill_playlist.setCheckable(True)
+
+        self.pill_group.addButton(self.pill_video)
+        self.pill_group.addButton(self.pill_audio)
+        self.pill_group.addButton(self.pill_playlist)
+
+        def _update_pill_styles():
+            for btn in [self.pill_video, self.pill_audio, self.pill_playlist]:
+                is_active = btn.isChecked()
+                btn.setProperty("active", "true" if is_active else "false")
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
+
+        def on_pill_clicked(btn):
+            if btn == self.pill_playlist:
+                self.playlist_toggle.setChecked(True)
+            else:
+                self.playlist_toggle.setChecked(False)
+            _update_pill_styles()
+        self.pill_group.buttonClicked.connect(on_pill_clicked)
+
+        def on_playlist_toggled(checked):
+            if checked:
+                self.pill_playlist.setChecked(True)
+            else:
+                if self.pill_playlist.isChecked():
+                    self.pill_video.setChecked(True)
+            _update_pill_styles()
+        self.playlist_toggle.toggled.connect(on_playlist_toggled)
+
+        self.subs_mode_combo = QComboBox()
+        self.subs_mode_combo.blockSignals(True)
+        self.subs_mode_combo.addItems(["None", "Download", "Embed"])
+        self.subs_mode_combo.blockSignals(False)
+        self.subs_mode_combo.setMaxVisibleItems(10)
+        self.subs_mode_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        def on_subs_mode_changed(index):
+            if index == 0:
+                self.subs_checkbox.setChecked(False)
+                self.embed_subs_checkbox.setChecked(False)
+            elif index == 1:
+                self.subs_checkbox.setChecked(True)
+                self.embed_subs_checkbox.setChecked(False)
+            elif index == 2:
+                self.subs_checkbox.setChecked(True)
+                self.embed_subs_checkbox.setChecked(True)
+        self.subs_mode_combo.currentIndexChanged.connect(on_subs_mode_changed)
+
+        def sync_subs_mode_from_checkboxes():
+            self.subs_mode_combo.blockSignals(True)
+            if not self.subs_checkbox.isChecked():
+                self.subs_mode_combo.setCurrentIndex(0)
+            elif not self.embed_subs_checkbox.isChecked():
+                self.subs_mode_combo.setCurrentIndex(1)
+            else:
+                self.subs_mode_combo.setCurrentIndex(2)
+            self.subs_mode_combo.blockSignals(False)
+
+        self.subs_checkbox.toggled.connect(lambda _: sync_subs_mode_from_checkboxes())
+        self.embed_subs_checkbox.toggled.connect(lambda _: sync_subs_mode_from_checkboxes())
+
+        self.format_combo = QComboBox()
+        self.format_combo.setMaxVisibleItems(10)
+        self.format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.quality = QComboBox()
+        self.quality.setMaxVisibleItems(10)
+        self.quality.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.subs_lang = QComboBox()
+        self.subs_lang.setMaxVisibleItems(10)
+        self.subs_lang.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         config_card = QFrame()
         config_card.setObjectName("Card")
-        config_layout = QVBoxLayout(config_card)
-        config_layout.setContentsMargins(16, 16, 16, 16)
-        config_layout.setSpacing(10)
+        config_card_layout = QVBoxLayout(config_card)
+        config_card_layout.setContentsMargins(14, 14, 14, 14)
+        config_card_layout.setSpacing(10)
 
-        self.config_content = QWidget()
-        config_content_layout = QVBoxLayout(self.config_content)
-        config_content_layout.setContentsMargins(0, 0, 0, 0)
-        config_content_layout.setSpacing(10)
+        header_row = QHBoxLayout()
+        config_title = QLabel("Configuration")
+        config_title.setStyleSheet("font-size: 13px; font-weight: 500;")
 
-        columns = QHBoxLayout()
-        columns.setSpacing(24)
+        tab_pills_layout = QHBoxLayout()
+        tab_pills_layout.setSpacing(4)
+        tab_pills_layout.setContentsMargins(0, 0, 0, 0)
+        tab_pills_layout.addWidget(self.pill_video)
+        tab_pills_layout.addWidget(self.pill_audio)
+        tab_pills_layout.addWidget(self.pill_playlist)
 
-        left_col = QVBoxLayout()
-        left_col.setSpacing(10)
-        format_row = QHBoxLayout()
-        format_row.addWidget(QLabel("Format"))
-        self.format_combo = QComboBox()
-        format_row.addWidget(self.format_combo, 1)
-        left_col.addLayout(format_row)
+        header_row.addWidget(config_title)
+        header_row.addStretch(1)
+        header_row.addLayout(tab_pills_layout)
+        config_card_layout.addLayout(header_row)
 
-        quality_row = QHBoxLayout()
-        quality_row.addWidget(QLabel("Quality"))
-        self.quality = QComboBox()
-        quality_row.addWidget(self.quality, 1)
-        left_col.addLayout(quality_row)
+        config_grid_layout = QGridLayout()
+        config_grid_layout.setSpacing(6)
+        config_grid_layout.setContentsMargins(0, 0, 0, 0)
 
-        right_col = QVBoxLayout()
-        right_col.setSpacing(10)
-        self.subs_checkbox = QCheckBox("Download subtitles (if available)")
-        right_col.addWidget(self.subs_checkbox)
+        cell_quality = self._create_config_cell("Quality", self.quality)
+        cell_format = self._create_config_cell("Format", self.format_combo)
+        cell_subs = self._create_config_cell("Audio", self.subs_mode_combo)
+        # Fix 12 — subtitle cell hidden until analysis returns subtitle data
+        self.subtitle_lang_cell = self._create_config_cell("Subtitles", self.subs_lang)
+        self.subtitle_lang_cell.setVisible(False)
 
-        self.embed_subs_checkbox = QCheckBox("Embed subtitles")
-        self.embed_subs_checkbox.setChecked(False)
-        right_col.addWidget(self.embed_subs_checkbox)
+        config_grid_layout.addWidget(cell_quality, 0, 0)
+        config_grid_layout.addWidget(cell_format, 0, 1)
+        config_grid_layout.addWidget(cell_subs, 0, 2)
+        config_grid_layout.addWidget(self.subtitle_lang_cell, 0, 3)
 
-        lang_row = QHBoxLayout()
-        lang_row.addWidget(QLabel("Subtitles language"))
-        self.subs_lang = QComboBox()
-        self.subs_lang.setToolTip("Examples: en,es | en-US | ja")
-        self.subs_lang.setMinimumWidth(180)
-        lang_row.addWidget(self.subs_lang, 1)
-        right_col.addLayout(lang_row)
+        config_card_layout.addLayout(config_grid_layout)
+        layout.addWidget(config_card)
 
-        columns.addLayout(left_col, 1)
-        columns.addLayout(right_col, 1)
-        config_content_layout.addLayout(columns)
-        config_layout.addWidget(self.config_content)
-
-        config_wrap = QWidget()
-        config_wrap_layout = QVBoxLayout(config_wrap)
-        config_wrap_layout.setContentsMargins(22, 8, 22, 8)
-        config_wrap_layout.addWidget(config_card)
-        details_layout.addWidget(config_wrap)
-        self._apply_shadow(config_card, 22, 96, 0)
-
-        layout.addWidget(self.details_container)
-
-        actions_col = QVBoxLayout()
-        self.download_btn = FadingTextButton("Start Download")
-        self.download_btn.setObjectName("PrimaryButton")
-        self.download_btn.setMinimumHeight(36)
-        self.download_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Download Button
+        self.download_btn = QPushButton("Start download")
+        self.download_btn.setObjectName("DownloadButton")
+        self.download_btn.setFixedHeight(40)
         self.download_btn.setEnabled(False)
-        actions_col.addWidget(self.download_btn)
+        layout.addWidget(self.download_btn)
+
         self.progress = None
-        layout.addLayout(actions_col)
 
         self.fetch_btn.clicked.connect(self.fetch_info)
         self.download_btn.clicked.connect(self.start_download)
@@ -236,477 +464,323 @@ class PagesMixin:
 
         return page
 
-    def _build_downloads_panel(self):
-        self.downloads_panel = QFrame()
-        self.downloads_panel.setObjectName("DownloadsPanel")
-        self.downloads_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        self.downloads_panel.setMaximumHeight(300)
-        downloads_layout = QVBoxLayout(self.downloads_panel)
-        downloads_layout.setContentsMargins(10, 10, 10, 10)
-        downloads_layout.setSpacing(6)
+    def _build_library_page(self):
+        page = QWidget()
+        page.setObjectName("Page")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
 
-        downloads_header_row = QHBoxLayout()
-        downloads_header = QLabel("Active downloads (0)")
-        downloads_header.setObjectName("CardTitle")
-        self.downloads_header = downloads_header
-        downloads_header_row.addWidget(downloads_header)
-        downloads_header_row.addStretch(1)
-        self.reset_btn_downloads = QPushButton("Reset")
-        self.reset_btn_downloads.setObjectName("GhostButton")
-        self.reset_btn_downloads.setMinimumHeight(30)
-        self.reset_btn_downloads.setMinimumWidth(96)
-        self.reset_btn_downloads.clicked.connect(self.reset_ui)
-        downloads_header_row.addWidget(self.reset_btn_downloads)
-        downloads_layout.addLayout(downloads_header_row)
+        # Header Title + Subtitle
+        self.library_header_title = QLabel("Downloads")
+        self.library_header_title.setObjectName("PageTitle")
+        self.library_header_title.setStyleSheet("font-size: 15px; font-weight: 500;")
 
+        self.library_header_subtitle = QLabel("No active downloads")
+        self.library_header_subtitle.setObjectName("PageSubtitle")
+        self.library_header_subtitle.setStyleSheet("font-size: 12px;")
+
+        layout.addWidget(self.library_header_title)
+        layout.addWidget(self.library_header_subtitle)
+
+        # Scroll Area
         self.downloads_scroll = QScrollArea()
         self.downloads_scroll.setWidgetResizable(True)
-        self.downloads_scroll.setObjectName("GlassScroll")
-        self.downloads_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.downloads_scroll.setMinimumHeight(140)
+        self.downloads_scroll.setFrameShape(QFrame.NoFrame)
         self.downloads_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.downloads_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.downloads_container = QWidget()
-        self.downloads_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.downloads_container.setMinimumWidth(0)
-        self.downloads_list_layout = QVBoxLayout(self.downloads_container)
-        self.downloads_list_layout.setSpacing(8)
-        self.downloads_list_layout.setContentsMargins(0, 0, 0, 0)
+        # Fix 6 — ensure scroll viewport is transparent so theme bg shows through
+        self.downloads_scroll.viewport().setStyleSheet("background: transparent;")
 
+        self.downloads_container = QWidget()
+        self.downloads_container.setStyleSheet("background: transparent;")
+        self.downloads_list_layout = QVBoxLayout(self.downloads_container)
+        self.downloads_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.downloads_list_layout.setSpacing(8)
+
+        # Empty Label
         self.library_empty_label = QLabel("No active, queued, or paused downloads.")
-        self.library_empty_label.setObjectName("MutedText")
-        self.library_empty_label.setWordWrap(True)
+        self.library_empty_label.setObjectName("PageSubtitle")
+        self.library_empty_label.setStyleSheet("")
         self.downloads_list_layout.addWidget(self.library_empty_label)
 
+        # Child layouts for active & completed tasks
         self.active_downloads_layout = QVBoxLayout()
         self.active_downloads_layout.setSpacing(8)
         self.downloads_list_layout.addLayout(self.active_downloads_layout)
-        self.downloads_list_layout.addSpacing(4)
+
         self.completed_downloads_layout = QVBoxLayout()
         self.completed_downloads_layout.setSpacing(8)
         self.downloads_list_layout.addLayout(self.completed_downloads_layout)
 
         self.downloads_scroll.setWidget(self.downloads_container)
-        downloads_layout.addWidget(self.downloads_scroll)
-        self.downloads_panel.setVisible(True)
-        return self.downloads_panel
+        layout.addWidget(self.downloads_scroll, 1)
 
-    def _build_library_page(self):
-        page = QWidget()
-        page.setObjectName("Page")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        # Dummy variables to maintain backward compatibility with self references in main_window.py
+        self.downloads_panel = QFrame()
+        self.downloads_header = QLabel()
+        self.reset_btn_downloads = QPushButton()
 
-        title = QLabel("Downloads")
-        title.setObjectName("SectionTitle")
-        layout.addWidget(title)
-
-        library_card = QFrame()
-        library_card.setObjectName("Card")
-        library_card_layout = QVBoxLayout(library_card)
-        library_card_layout.setContentsMargins(12, 10, 12, 10)
-        library_card_layout.setSpacing(8)
-        library_card_layout.addWidget(self._build_downloads_panel(), 1)
-
-        layout.addWidget(library_card, 1)
-        self._apply_shadow(library_card, 22, 96, 0)
         return page
 
     def _build_history_page(self):
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
 
-        header = QHBoxLayout()
-        title = QLabel("History")
-        title.setObjectName("SectionTitle")
-        header.addWidget(title)
+        # Header
+        header = self._create_page_header("History", "Recently downloaded files")
+        layout.addWidget(header)
+
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(7)
+        controls_row.setContentsMargins(0, 0, 0, 0)
+
         self.library_search = QLineEdit()
         self.library_search.setPlaceholderText("Search history...")
         self.library_search.textChanged.connect(self._on_library_search_changed)
-        header.addWidget(self.library_search, 1)
-        header.addStretch(1)
+        controls_row.addWidget(self.library_search, 1)
 
         clear_btn = QPushButton("Clear History")
         clear_btn.setObjectName("GhostButton")
         clear_btn.clicked.connect(self.clear_library)
-        header.addWidget(clear_btn)
-        layout.addLayout(header)
+        controls_row.addWidget(clear_btn)
+        layout.addLayout(controls_row)
 
         history_card = QFrame()
         history_card.setObjectName("Card")
         history_card_layout = QVBoxLayout(history_card)
-        history_card_layout.setContentsMargins(12, 10, 12, 10)
-        history_card_layout.setSpacing(8)
+        history_card_layout.setContentsMargins(14, 14, 14, 14)
+        history_card_layout.setSpacing(10)
 
         self.library_scroll = QScrollArea()
         self.library_scroll.setWidgetResizable(True)
+        self.library_scroll.setFrameShape(QFrame.NoFrame)
         self.library_scroll.setObjectName("GlassScroll")
+        self.library_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Fix 7 — ensure history scroll viewport is transparent
+        self.library_scroll.viewport().setStyleSheet("background: transparent;")
 
         self.library_container = QWidget()
         self.library_layout = QVBoxLayout(self.library_container)
-        self.library_layout.setSpacing(10)
+        self.library_layout.setSpacing(8)
         self.library_layout.setContentsMargins(0, 0, 0, 0)
 
         self.library_scroll.setWidget(self.library_container)
         history_card_layout.addWidget(self.library_scroll, 1)
         layout.addWidget(history_card, 1)
-        self._apply_shadow(history_card, 22, 96, 0)
         return page
 
     def _build_options_page(self):
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
 
-        title = QLabel("Preferences")
-        title.setObjectName("SectionTitle")
-        layout.addWidget(title)
+        # Header
+        header = self._create_page_header("Preferences", "Configure your download settings")
+        layout.addWidget(header)
 
-        options_card = QFrame()
-        options_card.setObjectName("OptionsCard")
-        options_card_layout = QVBoxLayout(options_card)
-        options_card_layout.setContentsMargins(12, 10, 12, 10)
-        options_card_layout.setSpacing(8)
+        # Settings Card (QFrame, objectName="Card")
+        settings_card = QFrame()
+        settings_card.setObjectName("Card")
+        card_layout = QVBoxLayout(settings_card)
+        card_layout.setContentsMargins(14, 14, 14, 14)
+        card_layout.setSpacing(0)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setObjectName("GlassScroll")
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        def create_setting_row(label_text, sublabel_text, control_widget, is_last=False):
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 10, 0, 10)
+            row_layout.setSpacing(12)
 
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(2, 2, 2, 2)
-        content_layout.setSpacing(12)
-        content_layout.addWidget(self._build_downloads_card())
-        content_layout.addWidget(self._build_updates_card())
-        content_layout.addWidget(self._build_appearance_card())
-        content_layout.addStretch(1)
+            label_block = QWidget()
+            label_block_layout = QVBoxLayout(label_block)
+            label_block_layout.setContentsMargins(0, 0, 0, 0)
+            label_block_layout.setSpacing(2)
 
-        scroll.setWidget(content)
-        options_card_layout.addWidget(scroll, 1)
-        layout.addWidget(options_card, 1)
-        self._apply_shadow(options_card, 22, 96, 0)
-        return page
+            main_label = QLabel(label_text)
+            main_label.setObjectName("SettingLabel")
+            label_block_layout.addWidget(main_label)
 
-    def _build_downloads_card(self):
-        card = QFrame()
-        card.setObjectName("Card")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+            if sublabel_text:
+                sub_label = QLabel(sublabel_text)
+                sub_label.setObjectName("SettingSubLabel")
+                sub_label.setStyleSheet("font-size: 11px;")
+                label_block_layout.addWidget(sub_label)
 
-        title = QLabel("Download settings")
-        title.setObjectName("CardTitle")
-        layout.addWidget(title)
+            row_layout.addWidget(label_block, 1)
+            row_layout.addWidget(control_widget)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Save to"))
-        self.download_dir_input = QLineEdit()
-        self.download_dir_input.setReadOnly(True)
-        self.download_dir_input.setText(self.download_dir)
-        row.addWidget(self.download_dir_input, 1)
-        change_btn = QPushButton("Change Folder")
-        change_btn.setObjectName("GhostButton")
-        change_btn.clicked.connect(self.change_download_dir)
-        row.addWidget(change_btn)
-        layout.addLayout(row)
+            wrapper = QWidget()
+            wrapper_layout = QVBoxLayout(wrapper)
+            wrapper_layout.setContentsMargins(0, 0, 0, 0)
+            wrapper_layout.setSpacing(0)
+            wrapper_layout.addWidget(row_widget)
 
-        limit_row = QHBoxLayout()
-        limit_row.addWidget(QLabel("Max concurrent downloads"))
-        self.concurrent_spin = QSpinBox()
-        self.concurrent_spin.setRange(1, 10)
-        self.concurrent_spin.setValue(self.max_concurrent_downloads)
-        self.concurrent_spin.valueChanged.connect(self._on_max_concurrent_changed)
-        limit_row.addWidget(self.concurrent_spin)
-        limit_row.addSpacing(12)
-        limit_row.addWidget(QLabel("Speed limit (KB/s)"))
+            if not is_last:
+                divider = QFrame()
+                divider.setFrameShape(QFrame.HLine)
+                divider.setFrameShadow(QFrame.Plain)
+                divider.setFixedHeight(1)
+                divider.setObjectName("Divider")
+                divider.setStyleSheet("")
+                wrapper_layout.addWidget(divider)
+
+            return wrapper
+
+        # 1. Save Folder Row
+        self.download_dir_input = QLabel(self.download_dir)
+        self.download_dir_input.setObjectName("SettingSubLabel")
+        self.download_dir_input.setStyleSheet("font-size: 11px;")
+        self.change_btn = QPushButton("Change")
+        self.change_btn.setObjectName("GhostButton")
+        self.change_btn.clicked.connect(self.change_download_dir)
+
+        # 2. Dark Mode Row
+        self.dark_mode_cb = ToggleSwitch(self.dark_mode, self)
+        self.dark_mode_cb.setChecked(self.dark_mode)
+        self.dark_mode_cb.toggled.connect(self._on_dark_mode_toggle)
+
+        # 3. Show Thumbnails Row
+        self.show_thumbnails_pref_cb = ToggleSwitch(self.dark_mode, self)
+        self.show_thumbnails_pref_cb.setChecked(self.show_thumbnail)
+        self.show_thumbnails_pref_cb.toggled.connect(self._on_show_thumbnail_toggle)
+
+        # 4. Restricted Mode Row
+        self.restricted_mode_cb = ToggleSwitch(self.dark_mode, self)
+        self.restricted_mode_cb.setChecked(self.restricted_mode)
+        self.restricted_mode_cb.toggled.connect(self._on_restricted_mode_toggle)
+
+        # 5. Speed Limit Row
         self.speed_limit_spin = QSpinBox()
         self.speed_limit_spin.setRange(0, 100000)
         self.speed_limit_spin.setSingleStep(250)
         self.speed_limit_spin.setValue(self.speed_limit_kbps)
-        self.speed_limit_spin.setToolTip("0 = unlimited")
         self.speed_limit_spin.valueChanged.connect(self._on_speed_limit_changed)
-        limit_row.addWidget(self.speed_limit_spin)
-        limit_row.addStretch(1)
-        layout.addLayout(limit_row)
 
-        proxy_row = QHBoxLayout()
-        proxy_row.addWidget(QLabel("Proxy URL (optional)"))
+        # 6. Default Quality Row — Fix 11: full quality list
+        self.pref_quality_combo = QComboBox()
+        self.pref_quality_combo.blockSignals(True)
+        self.pref_quality_combo.addItems([
+            "Best", "4320p (8K)", "2160p (4K)", "1440p (2K)",
+            "1080p", "720p", "480p", "360p", "240p", "144p", "Worst"
+        ])
+        self.pref_quality_combo.blockSignals(False)
+        self.pref_quality_combo.setCurrentText("1080p")
+        self.pref_quality_combo.setMaxVisibleItems(12)
+        self.pref_quality_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # 7. Default Format Row — Fix 10
+        self.pref_format_combo = QComboBox()
+        self.pref_format_combo.blockSignals(True)
+        self.pref_format_combo.addItems(["MP4", "MKV", "WebM", "MP3", "M4A"])
+        self.pref_format_combo.blockSignals(False)
+        self.pref_format_combo.setCurrentText(
+            self.settings.value("default_format", "MP4", type=str)
+        )
+        self.pref_format_combo.setMaxVisibleItems(10)
+        self.pref_format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.pref_format_combo.currentTextChanged.connect(
+            lambda v: self.settings.setValue("default_format", v)
+        )
+
+        # 8. Default Audio Codec Row — Fix 10
+        self.pref_audio_combo = QComboBox()
+        self.pref_audio_combo.blockSignals(True)
+        self.pref_audio_combo.addItems(["AAC", "MP3", "Opus", "Flac", "Best"])
+        self.pref_audio_combo.blockSignals(False)
+        self.pref_audio_combo.setCurrentText(
+            self.settings.value("default_audio", "AAC", type=str)
+        )
+        self.pref_audio_combo.setMaxVisibleItems(10)
+        self.pref_audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.pref_audio_combo.currentTextChanged.connect(
+            lambda v: self.settings.setValue("default_audio", v)
+        )
+
+        # Build rows
+        card_layout.addWidget(create_setting_row("Save folder", self.download_dir, self.change_btn))
+        card_layout.addWidget(create_setting_row("Dark mode", "", self.dark_mode_cb))
+        card_layout.addWidget(create_setting_row("Show thumbnails", "", self.show_thumbnails_pref_cb))
+        card_layout.addWidget(create_setting_row("Restricted mode", "Force cookie auth on downloads", self.restricted_mode_cb))
+        card_layout.addWidget(create_setting_row("Speed limit", "", self.speed_limit_spin))
+        card_layout.addWidget(create_setting_row("Default quality", "", self.pref_quality_combo))
+        card_layout.addWidget(create_setting_row("Default format", "", self.pref_format_combo))
+        card_layout.addWidget(create_setting_row("Default audio codec", "", self.pref_audio_combo, is_last=True))
+
+        layout.addWidget(settings_card)
+        layout.addStretch(1)
+
+        # Dummy hidden widgets for option settings referenced by backend to prevent crashes
+        self.concurrent_spin = QSpinBox()
+        self.concurrent_spin.hide()
         self.proxy_input = QLineEdit()
-        if hasattr(self, "proxy_display_url"):
-            self.proxy_input.setText(self.proxy_display_url)
-        elif hasattr(self, "proxy_url"):
-            self.proxy_input.setText(self.proxy_url)
-        self.proxy_input.setPlaceholderText("http://user:pass@127.0.0.1:1080")
-        self.proxy_input.textChanged.connect(self._on_proxy_changed)
-        proxy_row.addWidget(self.proxy_input, 1)
-        layout.addLayout(proxy_row)
-
-        # ── Essentials (FFmpeg) section ──────────────────────────────────
-        essentials_label = QLabel("Essentials (FFmpeg)")
-        essentials_label.setObjectName("CardTitle")
-        layout.addWidget(essentials_label)
-
-        self.essentials_status_label = QLabel("")
-        self.essentials_status_label.setObjectName("MutedText")
-        self.essentials_status_label.setWordWrap(True)
-        layout.addWidget(self.essentials_status_label)
-
+        self.proxy_input.hide()
+        
+        self.essentials_status_label = QLabel()
+        self.essentials_status_label.hide()
         self.essentials_progress = QProgressBar()
-        self.essentials_progress.setObjectName("FetchBar")
-        self.essentials_progress.setRange(0, 100)
-        self.essentials_progress.setValue(0)
-        self.essentials_progress.setTextVisible(True)
-        self.essentials_progress.setFixedHeight(10)
-        self.essentials_progress.setVisible(False)
-        layout.addWidget(self.essentials_progress)
+        self.essentials_progress.hide()
+        
+        self.install_essentials_btn = QPushButton()
+        self.install_essentials_btn.hide()
+        self.reinstall_essentials_btn = QPushButton()
+        self.reinstall_essentials_btn.hide()
+        self.update_essentials_btn = QPushButton()
+        self.update_essentials_btn.hide()
 
-        essentials_btn_row = QHBoxLayout()
-        essentials_btn_row.setSpacing(8)
-
-        self.install_essentials_btn = QPushButton("Install Essentials")
-        self.install_essentials_btn.setObjectName("GhostButton")
-        self.install_essentials_btn.clicked.connect(self._run_install_essentials)
-        essentials_btn_row.addWidget(self.install_essentials_btn)
-
-        self.reinstall_essentials_btn = QPushButton("Reinstall")
-        self.reinstall_essentials_btn.setObjectName("GhostButton")
-        self.reinstall_essentials_btn.clicked.connect(self._run_reinstall_essentials)
-        essentials_btn_row.addWidget(self.reinstall_essentials_btn)
-
-        self.update_essentials_btn = QPushButton("Check for Update")
-        self.update_essentials_btn.setObjectName("GhostButton")
-        self.update_essentials_btn.clicked.connect(self._run_update_essentials)
-        essentials_btn_row.addWidget(self.update_essentials_btn)
-
-        essentials_btn_row.addStretch(1)
-        layout.addLayout(essentials_btn_row)
-        # ─────────────────────────────────────────────────────────────────
-
-        return card
-
-    def _build_updates_card(self):
-        card = QFrame()
-        card.setObjectName("Card")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
-
-        title = QLabel("Updates")
-        title.setObjectName("CardTitle")
-        layout.addWidget(title)
-
-        self.check_updates_cb = QCheckBox("Check for updates on startup")
-        self.check_updates_cb.setChecked(self.check_updates_on_startup)
-        self.check_updates_cb.toggled.connect(self._on_update_check_toggle)
-        layout.addWidget(self.check_updates_cb)
-
-        self.auto_update_cb = QCheckBox("Auto-download updates when available")
-        self.auto_update_cb.setChecked(self.auto_download_updates)
-        self.auto_update_cb.toggled.connect(self._on_auto_update_toggle)
-        layout.addWidget(self.auto_update_cb)
-
-        layout.addWidget(QLabel("Update manifest URL"))
-        row = QHBoxLayout()
-        row.setSpacing(8)
+        self.check_updates_cb = QCheckBox()
+        self.check_updates_cb.hide()
+        self.auto_update_cb = QCheckBox()
+        self.auto_update_cb.hide()
         self.update_url_input = QLineEdit()
-        self.update_url_input.setText(self.update_manifest_url)
-        try:
-            from updates.manager import custom_update_urls_enabled
-            self.update_url_input.setReadOnly(not custom_update_urls_enabled())
-        except Exception:
-            self.update_url_input.setReadOnly(True)
-        self.update_url_input.setCursorPosition(0)
-        self.update_url_input.setMinimumWidth(0)
-        self.update_url_input.textChanged.connect(self._on_update_url_changed)
-        row.addWidget(self.update_url_input, 1)
-        check_btn = QPushButton("Check Now")
-        check_btn.setObjectName("GhostButton")
-        check_btn.setMinimumWidth(92)
-        check_btn.clicked.connect(lambda: self.start_update_check(manual=True))
-        row.addWidget(check_btn)
-        layout.addLayout(row)
+        self.update_url_input.hide()
 
-        note = QLabel("This URL controls where the app checks for updates.")
-        note.setWordWrap(True)
-        layout.addWidget(note)
-
-        return card
-
-    def _build_appearance_card(self):
-        card = QFrame()
-        card.setObjectName("Card")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
-
-        title = QLabel("Appearance")
-        title.setObjectName("CardTitle")
-        layout.addWidget(title)
-
-        self.dark_mode_cb = QCheckBox("Enable dark mode")
-        self.dark_mode_cb.setChecked(self.dark_mode)
-        self.dark_mode_cb.toggled.connect(self._on_dark_mode_toggle)
-        layout.addWidget(self.dark_mode_cb)
-
-        return card
+        return page
 
     def _build_cookies_page(self):
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
 
-        title = QLabel("Cookies")
-        title.setObjectName("SectionTitle")
-        layout.addWidget(title)
+        # Page Header
+        header = self._create_page_header("Cookies", "Manage browser authentication and cookies files")
+        layout.addWidget(header)
 
         card = QFrame()
         card.setObjectName("Card")
-        outer_layout = QVBoxLayout(card)
-        outer_layout.setContentsMargins(16, 16, 16, 16)
-        outer_layout.setSpacing(12)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 14, 14, 14)
+        card_layout.setSpacing(10)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setObjectName("GlassScroll")
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        content = QWidget()
-        card_layout = QVBoxLayout(content)
-        card_layout.setContentsMargins(0, 0, 0, 0)
-        card_layout.setSpacing(12)
-        scroll.setWidget(content)
-        outer_layout.addWidget(scroll, 1)
-
-        card_layout.addLayout(self._make_cookie_status_row())
-
-        mode_row = QHBoxLayout()
-        self.restricted_mode_cb = QCheckBox("Restricted mode (use browser login)")
-        self.restricted_mode_cb.setChecked(self.restricted_mode)
-        self.restricted_mode_cb.toggled.connect(self._on_restricted_mode_toggle)
-        mode_row.addWidget(self.restricted_mode_cb)
-        mode_row.addStretch(1)
-        card_layout.addLayout(mode_row)
-
-        mode_note = QLabel(
-            "Normal mode downloads public videos without cookies. Restricted mode "
-            "lets you connect your local browser profile for account-required videos."
-        )
-        mode_note.setObjectName("MutedText")
-        mode_note.setWordWrap(True)
-        mode_note.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        mode_note.setMinimumWidth(0)
-        card_layout.addWidget(mode_note)
-
-        self.restricted_status_label = QLabel("")
-        self.restricted_status_label.setObjectName("MutedText")
-        self.restricted_status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.restricted_status_label.setMinimumWidth(0)
-        card_layout.addWidget(self.restricted_status_label)
-
-        self.diagnostics_label = QLabel("")
-        self.diagnostics_label.setObjectName("MutedText")
-        self.diagnostics_label.setWordWrap(True)
-        self.diagnostics_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.diagnostics_label.setMinimumWidth(0)
-        card_layout.addWidget(self.diagnostics_label)
-
-        auth_title = QLabel("Browser authentication")
-        auth_title.setObjectName("CardTitle")
-        card_layout.addWidget(auth_title)
-
-        auth_row = QHBoxLayout()
-        auth_row.addWidget(QLabel("Browser"))
-        self.browser_auth_combo = QComboBox()
-        combo_view = QListView()
-        combo_view.setObjectName("ComboPopupView")
-        self.browser_auth_combo.setView(combo_view)
-        self.browser_auth_combo.addItem("Auto-detect installed browsers", "auto")
-        self.browser_auth_combo.addItem("Chrome", "chrome")
-        self.browser_auth_combo.addItem("Edge", "edge")
-        self.browser_auth_combo.addItem("Firefox", "firefox")
-        self.browser_auth_combo.addItem("Brave", "brave")
-        self.browser_auth_combo.addItem("Opera", "opera")
-        if hasattr(self, "_apply_combo_popup_theme"):
-            self._apply_combo_popup_theme()
-        if self.browser_auth_source:
-            idx = self.browser_auth_combo.findData(self.browser_auth_source)
-            if idx >= 0:
-                self.browser_auth_combo.setCurrentIndex(idx)
-        auth_row.addWidget(self.browser_auth_combo, 1)
-        card_layout.addLayout(auth_row)
-
-        profile_row = QHBoxLayout()
-        profile_row.addWidget(QLabel("Profile (optional)"))
-        self.browser_profile_input = QLineEdit()
-        self.browser_profile_input.setPlaceholderText("Default, Profile 1, …")
-        if self.browser_auth_profile:
-            self.browser_profile_input.setText(self.browser_auth_profile)
-        profile_row.addWidget(self.browser_profile_input, 1)
-        card_layout.addLayout(profile_row)
-
-        auth_btn_row = QHBoxLayout()
-        self.browser_connect_btn = QPushButton("Connect Browser")
-        self.browser_connect_btn.setObjectName("GhostButton")
-        self.browser_connect_btn.clicked.connect(self._connect_browser_auth)
-        self.browser_disconnect_btn = QPushButton("Disconnect")
-        self.browser_disconnect_btn.setObjectName("GhostButton")
-        self.browser_disconnect_btn.clicked.connect(self._disconnect_browser_auth)
-        auth_btn_row.addWidget(self.browser_connect_btn)
-        auth_btn_row.addWidget(self.browser_disconnect_btn)
-        auth_btn_row.addStretch(1)
-        card_layout.addLayout(auth_btn_row)
-
-        import sys
-        if sys.platform.startswith("linux"):
-            linux_hint = QLabel("Tip: Firefox is the most reliable browser for cookie extraction on Linux.")
-            linux_hint.setObjectName("MutedText")
-            linux_hint.setWordWrap(True)
-            card_layout.addWidget(linux_hint)
-
-        warn = QLabel("Do not share your cookies file with anyone.")
-        warn.setObjectName("MutedText")
-        warn.setWordWrap(True)
-        warn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        warn.setMinimumWidth(0)
-        card_layout.addWidget(warn)
-
-        # ── YouTube login section ─────────────────────────────────────────────
+        # Setup YouTube login section
         yt_login_title = QLabel("Login to YouTube")
-        yt_login_title.setObjectName("CardTitle")
-        yt_login_title.setContentsMargins(0, 10, 0, 0)
+        yt_login_title.setObjectName("SettingLabel")
         card_layout.addWidget(yt_login_title)
 
         yt_login_hint = QLabel(
             "Connect your Google account to access age-restricted and members-only videos. "
             "Cookies are read from your installed browser and stored securely on this device."
         )
-        yt_login_hint.setObjectName("MutedText")
+        yt_login_hint.setObjectName("SettingSubLabel")
+        yt_login_hint.setStyleSheet("font-size: 11px;")
         yt_login_hint.setWordWrap(True)
         card_layout.addWidget(yt_login_hint)
 
-        # Status indicator
         self.yt_login_status_label = QLabel("Status: Not connected")
-        self.yt_login_status_label.setObjectName("MutedText")
+        self.yt_login_status_label.setObjectName("SettingSubLabel")
+        self.yt_login_status_label.setStyleSheet("font-size: 11px;")
         self.yt_login_status_label.setWordWrap(True)
         card_layout.addWidget(self.yt_login_status_label)
 
         yt_btn_row = QHBoxLayout()
-
-        self.yt_login_btn = QPushButton("\U0001f511  Login to YouTube")
+        self.yt_login_btn = QPushButton("🔑  Login to YouTube")
         self.yt_login_btn.setObjectName("GhostButton")
         self.yt_login_btn.clicked.connect(self._yt_open_login_dialog)
 
@@ -718,15 +792,10 @@ class PagesMixin:
         yt_btn_row.addWidget(self.yt_logout_btn)
         yt_btn_row.addStretch(1)
         card_layout.addLayout(yt_btn_row)
-        # ─────────────────────────────────────────────────────────────────
 
-
-
-
-
+        # Cookies file row section
         file_title = QLabel("Cookies file (optional)")
-        file_title.setObjectName("CardTitle")
-        file_title.setContentsMargins(0, 10, 0, 0)
+        file_title.setObjectName("SettingLabel")
         card_layout.addWidget(file_title)
 
         btn_row = QHBoxLayout()
@@ -741,57 +810,75 @@ class PagesMixin:
         btn_row.addStretch(1)
         card_layout.addLayout(btn_row)
 
-        help_btn = QPushButton("How To Add Cookies")
-        help_btn.setObjectName("GhostButton")
-        help_btn.clicked.connect(self.show_cookies_help)
-        card_layout.addWidget(help_btn)
+        self.help_btn = QPushButton("How To Add Cookies")
+        self.help_btn.setObjectName("GhostButton")
+        self.help_btn.clicked.connect(self.show_cookies_help)
+        card_layout.addWidget(self.help_btn)
 
         layout.addWidget(card)
-        self._apply_shadow(card, 22, 96, 0)
         layout.addStretch(1)
+
+        # Hidden elements for cookies page compatibility
+        self.restricted_status_label = QLabel()
+        self.restricted_status_label.hide()
+        self.diagnostics_label = QLabel()
+        self.diagnostics_label.hide()
+        self.browser_auth_combo = QComboBox()
+        self.browser_auth_combo.hide()
+        self.browser_profile_input = QLineEdit()
+        self.browser_profile_input.hide()
+        self.browser_connect_btn = QPushButton()
+        self.browser_connect_btn.hide()
+        self.browser_disconnect_btn = QPushButton()
+        self.browser_disconnect_btn.hide()
+
         return page
 
     def _build_about_page(self):
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
 
-        title = QLabel("About")
-        title.setObjectName("SectionTitle")
-        layout.addWidget(title)
+        # Page Header
+        header = self._create_page_header("About", "Application information and terms")
+        layout.addWidget(header)
 
         card = QFrame()
         card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setContentsMargins(14, 14, 14, 14)
         card_layout.setSpacing(8)
 
-        card_layout.addWidget(QLabel("Simple YouTube Downloader"))
+        title = QLabel("Simple YouTube Downloader")
+        title.setObjectName("SettingLabel")
+        card_layout.addWidget(title)
+        
         card_layout.addWidget(QLabel(f"Version: {self._version_text()}"))
         card_layout.addWidget(QLabel("Created by: Tahsan"))
         card_layout.addWidget(QLabel("A modern downloader built for speed and clarity."))
         card_layout.addWidget(QLabel("License: GNU GPLv3"))
         
-        repo_link = QLabel('Official Repository: <a href="https://github.com/tahsanahmmed25/YTDownloader" style="color: #4361ee; text-decoration: none;">github.com/tahsanahmmed25/YTDownloader</a>')
+        repo_link = QLabel('<a href="https://github.com/tahsanahmmed25/YTDownloader" style="color: inherit; text-decoration: none;">github.com/tahsanahmmed25/YTDownloader</a>')
+        repo_link.setObjectName("SettingSubLabel")
         repo_link.setOpenExternalLinks(True)
         card_layout.addWidget(repo_link)
         
         notice_label = QLabel(
-            "<b>Security Notice:</b> To protect your system, discourage fake/rebranded copies, and ensure "
+            "Security Notice: To protect your system, discourage fake/rebranded copies, and ensure "
             "you receive official updates, always download from the official source link above."
         )
         notice_label.setWordWrap(True)
-        notice_label.setStyleSheet("color: #64748b; font-size: 11px;")
+        notice_label.setObjectName("SettingSubLabel")
+        notice_label.setStyleSheet("font-size: 11px;")
         card_layout.addWidget(notice_label)
 
-        terms_btn = QPushButton("View Terms & Privacy")
-        terms_btn.setObjectName("GhostButton")
-        terms_btn.clicked.connect(self.show_terms_dialog)
-        card_layout.addWidget(terms_btn)
+        self.terms_btn = QPushButton("View Terms && Privacy")
+        self.terms_btn.setObjectName("GhostButton")
+        self.terms_btn.clicked.connect(self.show_terms_dialog)
+        card_layout.addWidget(self.terms_btn)
 
         layout.addWidget(card)
-        self._apply_shadow(card, 22, 96, 0)
         layout.addStretch(1)
         return page

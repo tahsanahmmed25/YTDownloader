@@ -39,9 +39,9 @@ from PySide6.QtWidgets import (
     QMenu
 )
 from PySide6.QtCore import Qt, Signal, QObject, QThread, QSettings, QSize, QUrl, QTimer, QStandardPaths, QPropertyAnimation, QParallelAnimationGroup, Property, QEasingCurve, QEvent, QPoint, Slot
-from PySide6.QtGui import QIcon, QPixmap, QDesktopServices, QColor, QFont, QPalette, QAction
+from PySide6.QtGui import QIcon, QPixmap, QDesktopServices, QColor, QFont, QPalette, QAction, QPainter, QLinearGradient
 
-from ui_style import style, dark_style
+from ui_style import style, dark_style, DARK, LIGHT
 from downloader import is_valid_youtube_url, is_playlist_url, normalize_youtube_url, get_playlist_entries
 from history_manager import load_history, remove_history, clear_history
 from app_config import (
@@ -62,7 +62,11 @@ from app_config import (
 from errors import humanize_error
 from auth.session_store import restore_proxy_secret, save_proxy_url
 from logging_utils import get_logger
-from ui.widgets import FadingTextButton, PasteButton, MarqueeLabel
+from ui.widgets import (
+    FadingTextButton, PasteButton, MarqueeLabel, BrandIcon,
+    DownloadButton, DownloadProgressBar, ToggleSwitch, ToastFrame,
+    NavButton, StatusBadge, SectionLabel, NavCounter, ElidedLabel
+)
 from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
 from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
@@ -109,8 +113,9 @@ class Downloader(QMainWindow, PagesMixin):
 
     def __init__(self):
         super().__init__()
+        QApplication.setFont(QFont("Segoe UI", 10))
 
-        self.setWindowTitle("Simple Youtube Downloader by Tahsan")
+        self.setWindowTitle("YT Downloader Pro")
         self.resize(960, 544)
         self.setMinimumSize(920, 500)
         self.menuBar().hide()
@@ -305,6 +310,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.dialog_requested.connect(self._show_dialog_on_ui_thread, Qt.QueuedConnection)
 
         self._build_ui()
+        self._collapse_details()
         self._update_global_progress()
         self._update_downloads_header()
         QTimer.singleShot(0, self._init_details_height)
@@ -313,7 +319,7 @@ class Downloader(QMainWindow, PagesMixin):
         QTimer.singleShot(0, self._load_persistent_queue)
         self._init_tray()
 
-        QTimer.singleShot(150, self._show_terms_if_needed)
+        QTimer.singleShot(0, self._show_terms_if_needed)
         if self.check_updates_on_startup:
             QTimer.singleShot(250, self.start_update_check)
         QTimer.singleShot(400, self._maybe_show_cookie_reminder)
@@ -323,22 +329,39 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _build_ui(self):
         root = QWidget()
+        root.setObjectName("centralWidget")
         root_layout = QHBoxLayout(root)
-        root_layout.setContentsMargins(16, 16, 16, 16)
-        root_layout.setSpacing(16)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
         self.sidebar = QFrame()
         self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setFixedWidth(200)
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(16, 16, 16, 16)
-        sidebar_layout.setSpacing(10)
+        sidebar_layout.setContentsMargins(10, 14, 10, 14)
+        sidebar_layout.setSpacing(2)
 
-        brand = QLabel("YTDownloader")
-        brand.setObjectName("Brand")
-        sidebar_layout.addWidget(brand)
+        brand_row = QWidget()
+        brand_layout = QHBoxLayout(brand_row)
+        brand_layout.setContentsMargins(8, 4, 8, 4)
+        brand_layout.setSpacing(8)
+
+        # Custom gradient BrandIcon
+        brand_icon = BrandIcon(self.dark_mode)
+
+        self.brand_name = QLabel("YT DL Pro")
+        self.brand_name.setObjectName("BrandName")
+
+        brand_layout.addWidget(brand_icon)
+        brand_layout.addWidget(self.brand_name)
+        brand_layout.addStretch(1)
+
+        sidebar_layout.addWidget(brand_row)
+        sidebar_layout.addSpacing(14)
 
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
+        self._nav_buttons = []
 
         self.pages = QStackedWidget()
 
@@ -357,23 +380,50 @@ class Downloader(QMainWindow, PagesMixin):
         self.pages.addWidget(self.page_about)
         self.pages.currentChanged.connect(self._on_page_changed)
 
-        self._add_nav_button(sidebar_layout, "Homepage", self.page_downloader, True)
-        self.nav_library_btn = self._add_nav_button(sidebar_layout, "Downloads", self.page_library, False)
-        self.nav_history_btn = self._add_nav_button(sidebar_layout, "History", self.page_history, False)
-        self._add_nav_button(sidebar_layout, "Preferences", self.page_options, False)
-        self._add_nav_button(sidebar_layout, "Cookies", self.page_cookies, False)
-        self._add_nav_button(sidebar_layout, "About", self.page_about, False)
+        # Group 1: MAIN
+        main_label = SectionLabel("MAIN")
+        sidebar_layout.addWidget(main_label)
+        sidebar_layout.addSpacing(2)
+
+        self.nav_home_btn = self._add_nav_button("Home", self.page_downloader, "home", "#4f8dff")
+        
+        self.nav_library_btn = self._add_nav_button("Downloads", self.page_library, "downloads", "#10b981")
+        # Add NavCounter to Downloads Button layout
+        self.downloads_counter = NavCounter(0)
+        self.downloads_counter.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.nav_library_btn.layout().addWidget(self.downloads_counter)
+
+        self.nav_history_btn = self._add_nav_button("History", self.page_history, "history", "#f59e0b")
+
+        sidebar_layout.addSpacing(12)
+
+        # Group 2: SETTINGS
+        settings_label = SectionLabel("SETTINGS")
+        sidebar_layout.addWidget(settings_label)
+        sidebar_layout.addSpacing(2)
+
+        self.nav_pref_btn = self._add_nav_button("Preferences", self.page_options, "preferences", "#8b5cf6")
+        self.nav_cookies_btn = self._add_nav_button("Cookies", self.page_cookies, "cookies", "#e11d48")
+        self.nav_about_btn = self._add_nav_button("About", self.page_about, "about", "#06b6d4")
 
         sidebar_layout.addStretch(1)
 
+        self.main_panel = QWidget()
+        self.main_panel.setObjectName("MainPanel")
+        main_panel_layout = QVBoxLayout(self.main_panel)
+        main_panel_layout.setContentsMargins(16, 16, 16, 16)
+        main_panel_layout.setSpacing(10)
+        main_panel_layout.addWidget(self.pages)
+
         root_layout.addWidget(self.sidebar)
-        root_layout.addWidget(self.pages, 1)
+        root_layout.addWidget(self.main_panel, 1)
 
         self.setCentralWidget(root)
-        self._apply_shadow(self.sidebar, 30, 140, 6)
+        
+        # Linear/Notion style: Flat. Call active state logic and remove shadows
+        self.set_active_nav("home")
 
-        self.toast = QFrame(root)
-        self.toast.setObjectName("Toast")
+        self.toast = ToastFrame(self.main_panel)
         toast_layout = QHBoxLayout(self.toast)
         toast_layout.setContentsMargins(14, 10, 14, 10)
         toast_layout.setSpacing(8)
@@ -383,29 +433,38 @@ class Downloader(QMainWindow, PagesMixin):
         toast_layout.addWidget(self.toast_label)
         self.toast.hide()
 
-        self._toast_effect = QGraphicsOpacityEffect(self.toast)
-        self._toast_effect.setOpacity(0.0)
-        self.toast.setGraphicsEffect(self._toast_effect)
-
-    def _add_nav_button(self, layout, label, page, checked):
-        btn = QPushButton(label)
+    def _add_nav_button(self, label, page, page_name, dot_color="#a0a0a0"):
+        btn = NavButton("", dot_color)
         btn.setObjectName("NavButton")
-        btn.setCheckable(True)
-        btn.setChecked(checked)
-        btn.setFocusPolicy(Qt.NoFocus)
-        btn.setCursor(Qt.ArrowCursor)
+        btn.setProperty("page", page_name)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedHeight(32)
+
+        btn_layout = QHBoxLayout(btn)
+        btn_layout.setContentsMargins(24, 0, 10, 0)
+        btn_layout.setSpacing(8)
+
+        label_widget = QLabel(label)
+        label_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
+        btn_layout.addWidget(label_widget)
+        btn_layout.addStretch(1)
+
         btn.clicked.connect(lambda: self.pages.setCurrentWidget(page))
         self.nav_group.addButton(btn)
-        layout.addWidget(btn)
+        self._nav_buttons.append(btn)
+        self.sidebar.layout().addWidget(btn)
         return btn
 
+    def set_active_nav(self, page_name: str):
+        for btn in self._nav_buttons:
+            is_active = (btn.property("page") == page_name)
+            btn.setProperty("active", "true" if is_active else "false")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+
+
     def _apply_shadow(self, widget, blur, alpha, y_offset):
-        effect = QGraphicsDropShadowEffect(self)
-        effect.setBlurRadius(blur)
-        soft_alpha = max(24, min(120, int(alpha * 0.72)))
-        effect.setColor(QColor(18, 31, 48, soft_alpha))
-        effect.setOffset(0, y_offset)
-        widget.setGraphicsEffect(effect)
+        pass
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -415,25 +474,16 @@ class Downloader(QMainWindow, PagesMixin):
         super().changeEvent(event)
 
     def _position_toast(self):
-        if not self.toast:
+        if not self.toast or not hasattr(self, "main_panel"):
             return
-        root = self.centralWidget()
-        if not root:
-            return
+        parent_w = self.main_panel.width()
         margin = 20
-        max_width = max(260, min(560, root.width() - margin * 2))
+        max_width = max(260, min(560, parent_w - margin * 2))
         self.toast.setFixedWidth(max_width)
         self.toast.adjustSize()
-        if self._toast_anchor and self._toast_anchor.isVisible():
-            anchor_top_left = self._toast_anchor.mapTo(root, QPoint(0, 0))
-            x = anchor_top_left.x() + self._toast_anchor.width() + 10
-            y = anchor_top_left.y() + (self._toast_anchor.height() - self.toast.height()) // 2
-            x = max(margin, min(x, root.width() - self.toast.width() - margin))
-            y = max(margin, min(y, root.height() - self.toast.height() - margin))
-        else:
-            x = (root.width() - self.toast.width()) // 2
-            y = margin
-        self.toast.move(max(x, margin), max(y, margin))
+        x = (parent_w - self.toast.width()) // 2
+        y = 10
+        self.toast.move(x, y)
 
     def _init_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -491,13 +541,13 @@ class Downloader(QMainWindow, PagesMixin):
         if self._toast_anim_out:
             self._toast_anim_out.stop()
 
-        self._toast_effect.setOpacity(0.0)
-        self._toast_anim_in = QPropertyAnimation(self._toast_effect, b"opacity", self)
+        self.toast.setOpacity(0.0)
+        self._toast_anim_in = QPropertyAnimation(self.toast, b"windowOpacity", self)
         self._toast_anim_in.setDuration(180)
         self._toast_anim_in.setStartValue(0.0)
         self._toast_anim_in.setEndValue(1.0)
 
-        self._toast_anim_out = QPropertyAnimation(self._toast_effect, b"opacity", self)
+        self._toast_anim_out = QPropertyAnimation(self.toast, b"windowOpacity", self)
         self._toast_anim_out.setDuration(180)
         self._toast_anim_out.setStartValue(1.0)
         self._toast_anim_out.setEndValue(0.0)
@@ -520,43 +570,18 @@ class Downloader(QMainWindow, PagesMixin):
         self._toast_anim_in.start()
 
     def _init_details_height(self):
-        if not hasattr(self, "details_container") or not self.details_container:
-            return
-        self.details_full_height = self.details_container.sizeHint().height()
-        if self.details_full_height:
-            self.details_container.setMaximumHeight(self.details_full_height)
+        pass
 
     def _collapse_details(self):
-        if not self.details_container:
+        if not hasattr(self, "details_container") or not self.details_container:
             return
-        if self.details_full_height is None:
-            self._init_details_height()
-        start = self.details_container.maximumHeight()
-        end = 0
-        if start == end:
-            return
-        self._details_anim = QPropertyAnimation(self.details_container, b"maximumHeight", self)
-        self._details_anim.setDuration(280)
-        self._details_anim.setStartValue(start)
-        self._details_anim.setEndValue(end)
-        self._details_anim.setEasingCurve(QEasingCurve.InOutCubic)
-        self._details_anim.start()
+        self.details_container.setVisible(False)
 
     def _expand_details(self):
-        if not self.details_container:
+        if not hasattr(self, "details_container") or not self.details_container:
             return
-        if self.details_full_height is None:
-            self._init_details_height()
-        start = self.details_container.maximumHeight()
-        end = self.details_full_height or self.details_container.sizeHint().height()
-        if start == end:
-            return
-        self._details_anim = QPropertyAnimation(self.details_container, b"maximumHeight", self)
-        self._details_anim.setDuration(280)
-        self._details_anim.setStartValue(start)
-        self._details_anim.setEndValue(end)
-        self._details_anim.setEasingCurve(QEasingCurve.InOutCubic)
-        self._details_anim.start()
+        self.details_container.setVisible(True)
+        self.details_container.setMaximumHeight(9999)
 
     def _show_downloads_panel(self, show=True):
         if not hasattr(self, "downloads_panel"):
@@ -673,7 +698,7 @@ class Downloader(QMainWindow, PagesMixin):
         row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         dot = QLabel()
         dot.setFixedSize(12, 12)
-        dot.setStyleSheet("border-radius: 6px; background: #f39c12;")
+        dot.setStyleSheet("border-radius: 6px; background: #f59e0b;")
         status = QLabel("Not loaded")
         status.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         row.addWidget(dot)
@@ -689,99 +714,7 @@ class Downloader(QMainWindow, PagesMixin):
             item = self._download_item_pool.pop()
             self._reset_download_item(item, title)
             return item
-        frame = QFrame()
-        frame.setObjectName("LibraryCard")
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        frame.setMinimumWidth(0)
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
-
-        top_row = QHBoxLayout()
-        top_row.setSpacing(8)
-        title_label = MarqueeLabel(title)
-        title_label.setObjectName("LibraryTitle")
-        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        title_label.setMinimumWidth(0)
-        title_label.setMinimumHeight(22)
-        status_label = QLabel("Downloading...")
-        status_label.setObjectName("MutedText")
-        status_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        status_label.setMinimumWidth(90)
-        status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        status_icon = QLabel("")
-        status_icon.setObjectName("StatusIcon")
-        status_icon.setFixedWidth(18)
-        status_icon.setAlignment(Qt.AlignCenter)
-        self._set_status_icon(status_icon, "active", "")
-        status_effect = QGraphicsOpacityEffect(status_icon)
-        status_effect.setOpacity(1.0)
-        status_icon.setGraphicsEffect(status_effect)
-        pause_btn = QPushButton("Pause")
-        pause_btn.setObjectName("GhostButton")
-        pause_btn.setFixedWidth(110)
-        pause_btn.setFixedHeight(30)
-        pause_btn.clicked.connect(self._on_pause_button_clicked)
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setObjectName("GhostButton")
-        cancel_btn.setFixedWidth(110)
-        cancel_btn.setFixedHeight(30)
-        cancel_btn.clicked.connect(self._on_cancel_button_clicked)
-        open_btn = QPushButton("Open Folder")
-        open_btn.setObjectName("GhostButton")
-        open_btn.setFixedWidth(110)
-        open_btn.setFixedHeight(30)
-        open_btn.setVisible(False)
-        open_btn.clicked.connect(lambda: self._open_folder(self.download_dir))
-        top_row.addWidget(title_label, 1)
-        top_row.addWidget(status_label)
-        top_row.addWidget(status_icon)
-        layout.addLayout(top_row)
-
-        progress = QProgressBar()
-        progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        progress.setMinimumWidth(0)
-        progress.setValue(0)
-        layout.addWidget(progress)
-
-        info_row = QHBoxLayout()
-        info_row.setSpacing(6)
-        speed_label = QLabel("Speed: -")
-        size_label = QLabel("Downloaded: -")
-        speed_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        speed_label.setMinimumWidth(0)
-        speed_label.setMaximumWidth(160)
-        size_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        size_label.setMinimumWidth(0)
-        size_label.setMaximumWidth(260)
-        info_row.addWidget(speed_label)
-        info_row.addSpacing(8)
-        info_row.addWidget(size_label)
-        layout.addLayout(info_row)
-
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(6)
-        actions_row.addStretch(1)
-        actions_row.addWidget(pause_btn)
-        actions_row.addWidget(cancel_btn)
-        actions_row.addWidget(open_btn)
-        layout.addLayout(actions_row)
-
-        item = {
-            "frame": frame,
-            "title": title_label,
-            "status": status_label,
-            "status_icon": status_icon,
-            "status_effect": status_effect,
-            "progress": progress,
-            "speed": speed_label,
-            "size": size_label,
-            "pause_btn": pause_btn,
-            "cancel_btn": cancel_btn,
-            "open_btn": open_btn
-        }
-        frame._download_item = item
-        return item
+        return self.build_task_card(title)
 
     def _on_pause_button_clicked(self):
         btn = self.sender()
@@ -805,6 +738,8 @@ class Downloader(QMainWindow, PagesMixin):
         item["status"].setText("Downloading...")
         self._set_status_icon(item["status_icon"], "active", "")
         item["progress"].setValue(0)
+        if item.get("percentage_label"):
+            item["percentage_label"].setText("0%")
         item["speed"].setText("Speed: -")
         item["size"].setText("Downloaded: -")
         item["pause_btn"].setEnabled(True)
@@ -925,34 +860,33 @@ class Downloader(QMainWindow, PagesMixin):
         box.exec()
 
     def _style_message_box(self, box):
-        if self.dark_mode:
-            box.setStyleSheet(
-                "QDialog, QMessageBox { background: #1f2633; color: #e6edf3; }"
-                "QLabel { color: #e6edf3; }"
-                "QTextEdit { background: #202939; color: #e6edf3; "
-                "border: 1px solid rgba(230,237,243,0.2); border-radius: 8px; }"
-                "QPushButton { background: rgba(25,32,45,0.85); "
-                "border: 1px solid rgba(230,237,243,0.2); "
-                "border-radius: 8px; padding: 6px 12px; color: #e6edf3; }"
-                "QPushButton:hover { background: rgba(79,141,255,0.18); "
-                "border: 1px solid rgba(79,141,255,0.55); }"
-            )
-        else:
-            box.setStyleSheet(
-                "QDialog, QMessageBox { background: #fdfdfe; color: #1f2a36; }"
-                "QLabel { color: #1f2a36; }"
-                "QTextEdit { background: #ffffff; color: #1f2a36; "
-                "border: 1px solid rgba(31,42,54,0.2); border-radius: 8px; }"
-                "QPushButton { background: rgba(253,253,254,0.92); "
-                "border: 1px solid rgba(31,42,54,0.2); "
-                "border-radius: 8px; padding: 6px 12px; color: #1f2a36; }"
-                "QPushButton:hover { background: rgba(79,141,255,0.12); "
-                "border: 1px solid rgba(79,141,255,0.45); }"
-            )
+        t = DARK if self.dark_mode else LIGHT
+        box.setStyleSheet(
+            f"QDialog, QMessageBox {{ background-color: {t['bg_window']}; color: {t['text_primary']}; }}"
+            f"QLabel {{ color: {t['text_primary']}; }}"
+            f"QTextEdit {{ background-color: {t['bg_surface']}; color: {t['text_primary']}; "
+            f"border: 1px solid {t['border']}; border-radius: 8px; }}"
+            f"QPushButton {{ background-color: {t['bg_card']}; "
+            f"border: 1px solid {t['border']}; "
+            f"border-radius: 8px; padding: 6px 12px; color: {t['text_primary']}; }}"
+            f"QPushButton:hover {{ background-color: {t['bg_hover']}; "
+            f"border: 1px solid {t['accent']}; color: {t['text_primary']}; }}"
+        )
 
     def _apply_theme(self):
         self.setStyleSheet(dark_style if self.dark_mode else style)
         self._apply_combo_popup_theme()
+
+        # Update dark_mode state on custom widgets dynamically
+        for widget in self.findChildren(ToggleSwitch):
+            widget.dark_mode = self.dark_mode
+            widget.update()
+        for widget in self.findChildren(DownloadProgressBar):
+            widget.dark_mode = self.dark_mode
+            widget.update()
+        for widget in self.findChildren(BrandIcon):
+            widget.dark_mode = self.dark_mode
+            widget.update()
 
     def _apply_combo_popup_theme(self):
         combo = getattr(self, "browser_auth_combo", None)
@@ -961,28 +895,17 @@ class Downloader(QMainWindow, PagesMixin):
         view = combo.view()
         if not view:
             return
-        if self.dark_mode:
-            view.setStyleSheet(
-                "QListView {"
-                " background: #1f2633;"
-                " border: 1px solid rgba(230, 237, 243, 0.2);"
-                " color: #e6edf3;"
-                " selection-background-color: rgba(79, 141, 255, 0.3);"
-                " selection-color: #ffffff;"
-                "}"
-                "QListView::item { padding: 6px 10px; }"
-            )
-        else:
-            view.setStyleSheet(
-                "QListView {"
-                " background: #f7f9fc;"
-                " border: 1px solid rgba(31, 42, 54, 0.2);"
-                " color: #1f2a36;"
-                " selection-background-color: rgba(79, 141, 255, 0.22);"
-                " selection-color: #1f2a36;"
-                "}"
-                "QListView::item { padding: 6px 10px; }"
-            )
+        t = DARK if self.dark_mode else LIGHT
+        view.setStyleSheet(
+            f"QListView {{"
+            f" background-color: {t['bg_card']};"
+            f" border: 1px solid {t['border']};"
+            f" color: {t['text_primary']};"
+            f" selection-background-color: {t['bg_hover']};"
+            f" selection-color: {t['text_primary']};"
+            f"}}"
+            f"QListView::item {{ padding: 6px 10px; }}"
+        )
 
     def _on_dark_mode_toggle(self, checked):
         self.dark_mode = bool(checked)
@@ -1057,11 +980,17 @@ class Downloader(QMainWindow, PagesMixin):
         if not available:
             self.subs_lang.addItem("Not available")
             self.subs_lang.setEnabled(False)
+            # Fix 12 — hide subtitle cell when no subtitles are available
+            if hasattr(self, "subtitle_lang_cell"):
+                self.subtitle_lang_cell.setVisible(False)
         else:
             self.subs_lang.addItem("Any")
             for lang in available:
                 self.subs_lang.addItem(lang)
             self.subs_lang.setEnabled(True)
+            # Fix 12 — reveal subtitle cell when subtitles are available
+            if hasattr(self, "subtitle_lang_cell"):
+                self.subtitle_lang_cell.setVisible(True)
         self.subs_lang.blockSignals(False)
 
     def _clear_format_quality(self):
@@ -1083,7 +1012,13 @@ class Downloader(QMainWindow, PagesMixin):
         if not hasattr(self, "downloads_header"):
             return
         self._reorder_download_rows()
-        total = self._layout_widget_count(self.active_downloads_layout) + self._layout_widget_count(self.completed_downloads_layout)
+        active_count = self._layout_widget_count(self.active_downloads_layout)
+        total = active_count + self._layout_widget_count(self.completed_downloads_layout)
+        
+        # Update sidebar downloads badge counter
+        if hasattr(self, "downloads_counter"):
+            self.downloads_counter.set_count(active_count)
+            
         self.downloads_header.setText(f"Active downloads ({total})")
         if hasattr(self, "library_empty_label") and self.library_empty_label:
             self.library_empty_label.setVisible(total == 0)
@@ -1843,17 +1778,19 @@ class Downloader(QMainWindow, PagesMixin):
         return APP_VERSION
 
     def _show_terms_if_needed(self):
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
         accepted = self.settings.value("terms_accepted", False, type=bool)
         if accepted:
             return
-        dialog = TermsDialog(self._terms_text(), self)
+        dialog = TermsDialog(self._terms_text(), self.dark_mode, self)
         if dialog.exec() == QDialog.Accepted:
             self.settings.setValue("terms_accepted", True)
         else:
             self.close()
 
     def show_terms_dialog(self):
-        dialog = TermsDialog(self._terms_text(), self)
+        dialog = TermsDialog(self._terms_text(), self.dark_mode, self)
         dialog.exec()
 
     def _animate_button_text(self, button, text):
@@ -2056,10 +1993,7 @@ class Downloader(QMainWindow, PagesMixin):
     def _build_library_item(self, item):
         card = QFrame()
         card.setObjectName("LibraryCard")
-        card.setContextMenuPolicy(Qt.CustomContextMenu)
-        card.customContextMenuRequested.connect(
-            lambda pos, i=item, w=card: self._show_library_context_menu(i, w, pos)
-        )
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout = QHBoxLayout(card)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
@@ -2081,15 +2015,18 @@ class Downloader(QMainWindow, PagesMixin):
         thumb_btn.clicked.connect(lambda: self.play_history_item(item))
 
         info_layout = QVBoxLayout()
-        title = QLabel(item.get("title") or "Unknown")
+        title_text = item.get("title") or "Unknown"
+        title = ElidedLabel(title_text)
         title.setObjectName("LibraryTitle")
         info_layout.addWidget(title)
 
         filepath = item.get("filepath") or ""
         if filepath:
-            info_layout.addWidget(QLabel(os.path.basename(filepath)))
+            filename = os.path.basename(filepath)
+            file_label = ElidedLabel(filename)
+            info_layout.addWidget(file_label)
         else:
-            missing = QLabel("File path not available")
+            missing = ElidedLabel("File path not available")
             missing.setObjectName("MutedText")
             info_layout.addWidget(missing)
 
@@ -2164,6 +2101,7 @@ class Downloader(QMainWindow, PagesMixin):
 
     # ---------- FETCH VIDEO INFO ----------
     def fetch_info(self):
+        self._collapse_details()
         url = self.url_input.text().strip()
         if not url:
             return
@@ -2295,6 +2233,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.download_btn.setEnabled(True)
         self._set_config_enabled(True)
         self._sync_download_button_text()
+        self._expand_details()
 
     def on_fetch_error(self, msg):
         clean = re.sub(r"\x1b\[[0-9;]*m", "", msg)
@@ -3146,9 +3085,11 @@ class Downloader(QMainWindow, PagesMixin):
 
             if item.get("size"):
                 if downloaded_text is not None and total_text is not None:
-                    item["size"].setText(f"Downloaded: {downloaded_text} MB / {total_text} MB")
+                    item["size"].setVisible(True)
+                    item["size"].setText(f"{downloaded_text} MB / {total_text} MB")
                 elif downloaded_text is not None:
-                    item["size"].setText(f"Downloaded: {downloaded_text} MB")
+                    item["size"].setVisible(True)
+                    item["size"].setText(f"{downloaded_text} MB")
 
             if speed and item.get("speed"):
                 item["speed"].setText(f"Speed: {speed}")
@@ -3405,7 +3346,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._release_cancel_gate_if_safe(start_pending=False)
         queue_manager.clear_queue()
         self._show_downloads_panel(False)
-        self._expand_details()
+        self._collapse_details()
         self._clear_downloads_list()
         self.active_download_item = None
         self._update_global_progress()
@@ -3433,6 +3374,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.download_btn.setEnabled(False)
         self._reset_download_ui()
         self.url_input.clear()
+        self._collapse_details()
         self.title.setText("Title: -")
         self.size.setText("Estimated size: -")
         self._last_downloaded_bytes = None
@@ -3867,13 +3809,13 @@ class Downloader(QMainWindow, PagesMixin):
         effective_browser = self._effective_browser_auth()
         for indicator, status in self.cookie_status_widgets:
             if effective_browser:
-                indicator.setStyleSheet("border-radius: 6px; background: #2ecc71;")
+                indicator.setStyleSheet("border-radius: 6px; background: #10b981;")
                 status.setText("Browser connected")
             elif effective_file:
-                indicator.setStyleSheet("border-radius: 6px; background: #2ecc71;")
+                indicator.setStyleSheet("border-radius: 6px; background: #10b981;")
                 status.setText("Cookies file loaded")
             else:
-                indicator.setStyleSheet("border-radius: 6px; background: #f39c12;")
+                indicator.setStyleSheet("border-radius: 6px; background: #f59e0b;")
                 status.setText("Browser not connected" if self.restricted_mode else "Normal mode")
         if hasattr(self, "restricted_mode_cb"):
             self.restricted_mode_cb.setChecked(self.restricted_mode)
@@ -4083,8 +4025,8 @@ class Downloader(QMainWindow, PagesMixin):
         return False
 
     def show_cookies_help(self):
-        self._show_message_dialog(
-            "How To Add Cookies",
+        from ui.dialogs import CookiesHelpDialog
+        dialog = CookiesHelpDialog(
             "Normal mode works for public videos without cookies.\n\n"
             "Manual cookies (cookies.txt):\n"
             "1. Install a cookies export extension in your browser.\n"
@@ -4092,8 +4034,11 @@ class Downloader(QMainWindow, PagesMixin):
             "3. Save the file as cookies.txt.\n"
             "4. In the Cookies tab, click “Set Cookies File” and select it.\n"
             "5. Keep the file private and refresh it when it expires.\n\n"
-            "Do not share your cookies with anyone."
+            "Do not share your cookies with anyone.",
+            self.dark_mode,
+            self
         )
+        dialog.exec()
 
     def closeEvent(self, event):
         running_download_threads = any(

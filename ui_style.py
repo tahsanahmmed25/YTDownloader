@@ -76,7 +76,7 @@ QScrollArea#GlassScroll > QWidget {{
 }}
 
 QFrame#Sidebar {{
-    background: transparent;
+    background: {bg_surface};
     border: none;
     border-right: 1px solid {border};
 }}

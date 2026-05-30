@@ -1022,7 +1022,7 @@ class Downloader(QMainWindow, PagesMixin):
             
         self.downloads_header.setText(f"Active downloads ({total})")
         if hasattr(self, "library_empty_label") and self.library_empty_label:
-            self.library_empty_label.setVisible(total == 0)
+            self.library_empty_label.setVisible(active_count == 0)
         if hasattr(self, "downloads_panel") and self.downloads_panel:
             self.downloads_panel.setVisible(True)
         if hasattr(self, "reset_btn_downloads") and self.reset_btn_downloads:
@@ -1906,6 +1906,14 @@ class Downloader(QMainWindow, PagesMixin):
         self.settings.setValue("show_thumbnail", self.show_thumbnail)
         if hasattr(self, "thumbnail"):
             self.thumbnail.setVisible(self.show_thumbnail)
+        if hasattr(self, "show_thumb_cb") and self.show_thumb_cb.isChecked() != self.show_thumbnail:
+            self.show_thumb_cb.blockSignals(True)
+            self.show_thumb_cb.setChecked(self.show_thumbnail)
+            self.show_thumb_cb.blockSignals(False)
+        if hasattr(self, "show_thumbnails_pref_cb") and self.show_thumbnails_pref_cb.isChecked() != self.show_thumbnail:
+            self.show_thumbnails_pref_cb.blockSignals(True)
+            self.show_thumbnails_pref_cb.setChecked(self.show_thumbnail)
+            self.show_thumbnails_pref_cb.blockSignals(False)
 
     def _on_url_changed(self, _text):
         if self._info_ready:
@@ -1969,6 +1977,7 @@ class Downloader(QMainWindow, PagesMixin):
         if not history:
             empty = QLabel("No downloads yet.")
             empty.setObjectName("MutedText")
+            empty.setAlignment(Qt.AlignCenter)
             self.library_layout.addWidget(empty)
             self.library_layout.addStretch(1)
             return

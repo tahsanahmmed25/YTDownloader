@@ -479,9 +479,6 @@ class NavButton(QPushButton):
             pen = QPen(QBrush(grad), 1.0)
             painter.setPen(pen)
             painter.drawRoundedRect(rect, radius, radius)
-        else:
-            painter.setPen(QColor("#e5e5e5" if not dark else "#2a2a2a"))
-            painter.drawRoundedRect(rect, radius, radius)
 
         # Fix 6: High contrast text colors
         if is_active:

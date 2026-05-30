@@ -475,7 +475,7 @@ class PagesMixin:
         layout.addWidget(config_card)
 
         # Download Button
-        self.download_btn = DownloadButton("Start download")
+        self.download_btn = DownloadButton("Start Download")
         self.download_btn.setObjectName("DownloadButton")
         self.download_btn.setFixedHeight(40)
         self.download_btn.setEnabled(False)
@@ -526,8 +526,9 @@ class PagesMixin:
         self.downloads_list_layout.setAlignment(Qt.AlignTop)
 
         # Empty Label
-        self.library_empty_label = QLabel("No active, queued, or paused downloads.")
+        self.library_empty_label = QLabel("No active downloads")
         self.library_empty_label.setObjectName("PageSubtitle")
+        self.library_empty_label.setAlignment(Qt.AlignCenter)
         self.library_empty_label.setStyleSheet("")
         self.downloads_list_layout.addWidget(self.library_empty_label)
 
@@ -918,7 +919,7 @@ class PagesMixin:
         card_layout.setContentsMargins(14, 14, 14, 14)
         card_layout.setSpacing(8)
 
-        title = QLabel("Simple YouTube Downloader")
+        title = QLabel("YT Downloader Pro")
         title.setObjectName("SettingLabel")
         card_layout.addWidget(title)
         

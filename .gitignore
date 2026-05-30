@@ -167,3 +167,9 @@ obf/
 *.pem
 *.passwd
 
+# Local design / spec files
+design.md
+architecture.md
+ui_audit_report.md
+yt-downloader-pro-design.html
+run.sh

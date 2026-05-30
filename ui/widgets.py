@@ -446,25 +446,12 @@ class ToastFrame(QFrame):
 
 # ── NavButton ─────────────────────────────────────────────────────────────────
 class NavButton(QPushButton):
-    def __init__(self, text, dot_color, parent=None):
+    def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self.setObjectName("NavButton")
         self.setCheckable(True)
         self.setFocusPolicy(Qt.NoFocus)
         self.setCursor(Qt.ArrowCursor)
-        self.dot_color = QColor(dot_color)
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        
-        # Draw 5x5px dot centered vertically, left padding offset
-        x = 12
-        y = (self.height() - 5) / 2
-        painter.setBrush(self.dot_color)
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(QRectF(x, y, 5, 5), 2.5, 2.5)
 
 
 # ── StatusBadge ───────────────────────────────────────────────────────────────

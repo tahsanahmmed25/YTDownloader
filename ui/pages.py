@@ -183,8 +183,8 @@ class PagesMixin:
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 10, 20, 20)
-        layout.setSpacing(6)
+        layout.setContentsMargins(20, 8, 20, 20)
+        layout.setSpacing(8)
 
         # Header
         header = self._create_page_header("Download media", "Paste a YouTube URL to get started")
@@ -349,10 +349,10 @@ class PagesMixin:
                 btn.style().polish(btn)
 
         def on_pill_clicked(btn):
-            if btn == self.pill_playlist:
-                self.playlist_toggle.setChecked(True)
-            else:
-                self.playlist_toggle.setChecked(False)
+            # Only update visual state. Playlist mode flag is tracked internally
+            # by _on_playlist_toggle but we do NOT propagate here to avoid UI
+            # side-effects (placeholder changes, combo reset).
+            self._active_is_playlist = (btn == self.pill_playlist)
             _update_pill_styles()
         self.pill_group.buttonClicked.connect(on_pill_clicked)
 
@@ -650,10 +650,9 @@ class PagesMixin:
         self.show_thumbnails_pref_cb.setChecked(self.show_thumbnail)
         self.show_thumbnails_pref_cb.toggled.connect(self._on_show_thumbnail_toggle)
 
-        # 4. Restricted Mode Row
-        self.restricted_mode_cb = ToggleSwitch(self.dark_mode, self)
-        self.restricted_mode_cb.setChecked(self.restricted_mode)
-        self.restricted_mode_cb.toggled.connect(self._on_restricted_mode_toggle)
+        # 4. Restricted Mode — widget now lives on the Restricted Mode (Cookies) page.
+        #    A hidden dummy is created in the dummy block below to prevent any
+        #    early attribute access errors in backend code.
 
         # 5. Speed Limit Row
         self.speed_limit_spin = QSpinBox()
@@ -706,7 +705,6 @@ class PagesMixin:
         card_layout.addWidget(create_setting_row("Save folder", self.download_dir, self.change_btn))
         card_layout.addWidget(create_setting_row("Dark mode", "", self.dark_mode_cb))
         card_layout.addWidget(create_setting_row("Show thumbnails", "", self.show_thumbnails_pref_cb))
-        card_layout.addWidget(create_setting_row("Restricted mode", "Force cookie auth on downloads", self.restricted_mode_cb))
         card_layout.addWidget(create_setting_row("Speed limit", "", self.speed_limit_spin))
         card_layout.addWidget(create_setting_row("Default quality", "", self.pref_quality_combo))
         card_layout.addWidget(create_setting_row("Default format", "", self.pref_format_combo))
@@ -750,8 +748,45 @@ class PagesMixin:
         layout.setSpacing(8)
 
         # Page Header
-        header = self._create_page_header("Cookies", "Manage browser authentication and cookies files")
+        header = self._create_page_header("Restricted Mode", "Manage authentication and access settings")
         layout.addWidget(header)
+
+        # ── Restricted Mode Toggle Card ──────────────────────────────────────
+        rm_card = QFrame()
+        rm_card.setObjectName("Card")
+        rm_card_layout = QVBoxLayout(rm_card)
+        rm_card_layout.setContentsMargins(14, 14, 14, 14)
+        rm_card_layout.setSpacing(0)
+
+        rm_row_widget = QWidget()
+        rm_row_layout = QHBoxLayout(rm_row_widget)
+        rm_row_layout.setContentsMargins(0, 4, 0, 4)
+        rm_row_layout.setSpacing(12)
+
+        rm_label_block = QWidget()
+        rm_label_block_layout = QVBoxLayout(rm_label_block)
+        rm_label_block_layout.setContentsMargins(0, 0, 0, 0)
+        rm_label_block_layout.setSpacing(2)
+
+        rm_main_label = QLabel("Restricted mode")
+        rm_main_label.setObjectName("SettingLabel")
+        rm_label_block_layout.addWidget(rm_main_label)
+
+        rm_sub_label = QLabel("Force cookie auth on downloads")
+        rm_sub_label.setObjectName("SettingSubLabel")
+        rm_sub_label.setStyleSheet("font-size: 11px;")
+        rm_label_block_layout.addWidget(rm_sub_label)
+
+        rm_label_block.setLayout(rm_label_block_layout)
+        rm_row_layout.addWidget(rm_label_block, 1)
+
+        self.restricted_mode_cb = ToggleSwitch(self.dark_mode, self)
+        self.restricted_mode_cb.setChecked(self.restricted_mode)
+        self.restricted_mode_cb.toggled.connect(self._on_restricted_mode_toggle)
+        rm_row_layout.addWidget(self.restricted_mode_cb)
+
+        rm_card_layout.addWidget(rm_row_widget)
+        layout.addWidget(rm_card)
 
         card = QFrame()
         card.setObjectName("Card")

@@ -1,6 +1,6 @@
 LIGHT = {
-    "bg_window":       "#ffffff",
-    "bg_surface":      "#f7f7f7",
+    "bg_window":       "#f5f5f5",
+    "bg_surface":      "#efefef",
     "bg_input":        "#f7f7f7",
     "bg_card":         "#ffffff",
     "bg_hover":        "#f0f0f0",

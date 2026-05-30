@@ -319,7 +319,7 @@ class Downloader(QMainWindow, PagesMixin):
         QTimer.singleShot(0, self._load_persistent_queue)
         self._init_tray()
 
-        QTimer.singleShot(0, self._show_terms_if_needed)
+        QTimer.singleShot(300, self._show_terms_if_needed)
         if self.check_updates_on_startup:
             QTimer.singleShot(250, self.start_update_check)
         QTimer.singleShot(400, self._maybe_show_cookie_reminder)
@@ -385,15 +385,15 @@ class Downloader(QMainWindow, PagesMixin):
         sidebar_layout.addWidget(main_label)
         sidebar_layout.addSpacing(2)
 
-        self.nav_home_btn = self._add_nav_button("Home", self.page_downloader, "home", "#4f8dff")
+        self.nav_home_btn = self._add_nav_button("Home", self.page_downloader, "home", "⌂")
         
-        self.nav_library_btn = self._add_nav_button("Downloads", self.page_library, "downloads", "#10b981")
+        self.nav_library_btn = self._add_nav_button("Downloads", self.page_library, "downloads", "↓")
         # Add NavCounter to Downloads Button layout
         self.downloads_counter = NavCounter(0)
         self.downloads_counter.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.nav_library_btn.layout().addWidget(self.downloads_counter)
 
-        self.nav_history_btn = self._add_nav_button("History", self.page_history, "history", "#f59e0b")
+        self.nav_history_btn = self._add_nav_button("History", self.page_history, "history", "⏱")
 
         sidebar_layout.addSpacing(12)
 
@@ -402,9 +402,9 @@ class Downloader(QMainWindow, PagesMixin):
         sidebar_layout.addWidget(settings_label)
         sidebar_layout.addSpacing(2)
 
-        self.nav_pref_btn = self._add_nav_button("Preferences", self.page_options, "preferences", "#8b5cf6")
-        self.nav_cookies_btn = self._add_nav_button("Cookies", self.page_cookies, "cookies", "#e11d48")
-        self.nav_about_btn = self._add_nav_button("About", self.page_about, "about", "#06b6d4")
+        self.nav_pref_btn = self._add_nav_button("Preferences", self.page_options, "preferences", "⚙")
+        self.nav_cookies_btn = self._add_nav_button("Restricted Mode", self.page_cookies, "cookies", "🔒")
+        self.nav_about_btn = self._add_nav_button("About", self.page_about, "about", "ⓘ")
 
         sidebar_layout.addStretch(1)
 
@@ -433,16 +433,24 @@ class Downloader(QMainWindow, PagesMixin):
         toast_layout.addWidget(self.toast_label)
         self.toast.hide()
 
-    def _add_nav_button(self, label, page, page_name, dot_color="#a0a0a0"):
-        btn = NavButton("", dot_color)
+    def _add_nav_button(self, label, page, page_name, icon_char=""):
+        btn = NavButton("")  # Text rendered via inner QLabel; not as QPushButton text
         btn.setObjectName("NavButton")
         btn.setProperty("page", page_name)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedHeight(32)
 
         btn_layout = QHBoxLayout(btn)
-        btn_layout.setContentsMargins(24, 0, 10, 0)
-        btn_layout.setSpacing(8)
+        btn_layout.setContentsMargins(10, 0, 10, 0)
+        btn_layout.setSpacing(6)
+
+        if icon_char:
+            icon_label = QLabel(icon_char)
+            icon_label.setFixedWidth(18)
+            icon_label.setAlignment(Qt.AlignCenter)
+            icon_label.setStyleSheet("font-size: 13px;")
+            icon_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            btn_layout.addWidget(icon_label)
 
         label_widget = QLabel(label)
         label_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -1779,6 +1787,12 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _show_terms_if_needed(self):
         from PySide6.QtWidgets import QApplication
+        # Ensure the main window is fully painted and visible before any modal
+        # dialog opens — this prevents a blank transient "YTDownloader" window.
+        if not self.isVisible():
+            self.show()
+        self.raise_()
+        self.activateWindow()
         QApplication.processEvents()
         accepted = self.settings.value("terms_accepted", False, type=bool)
         if accepted:

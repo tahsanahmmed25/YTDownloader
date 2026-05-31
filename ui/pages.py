@@ -18,8 +18,11 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QCoreApplication
 from PySide6.QtGui import QFont, QColor, QPixmap, QIcon
+
+QCoreApplication.setOrganizationName("Tahsan")
+QCoreApplication.setApplicationName("YTDownloader")
 
 from ui.widgets import (
     FadingTextButton, PasteButton, BrandIcon, DownloadButton, GradientButton,
@@ -48,13 +51,31 @@ class PagesMixin:
             self.size.setText("—")
             self.size.setStyleSheet(f"color: {t['text_tertiary']}; font-size: 12px;")
             self.reset_btn.setEnabled(False)
-            self.show_thumb_cb.setEnabled(False)
         else:
             self.thumbnail.setStyleSheet("border-radius: 6px;")
             self.title.setStyleSheet("")
             self.size.setStyleSheet("")
             self.reset_btn.setEnabled(True)
-            self.show_thumb_cb.setEnabled(True)
+
+    def _on_show_thumb_changed(self, checked: bool):
+        self.settings.setValue("show_thumbnails", checked)
+        self.settings.setValue("show_thumbnail", checked)
+        self.show_thumbnail = checked
+        if hasattr(self, "thumbnail") and self.thumbnail:
+            self.thumbnail.setVisible(checked)
+        if hasattr(self, "thumb_label") and self.thumb_label:
+            self.thumb_label.setVisible(checked)
+        win = self.window()
+        for obj in (self, win):
+            if obj:
+                if hasattr(obj, 'home_page') and hasattr(obj.home_page, 'show_thumb_toggle'):
+                    obj.home_page.show_thumb_toggle.blockSignals(True)
+                    obj.home_page.show_thumb_toggle.setChecked(checked)
+                    obj.home_page.show_thumb_toggle.blockSignals(False)
+                if hasattr(obj, 'prefs_page') and hasattr(obj.prefs_page, 'show_thumb_toggle'):
+                    obj.prefs_page.show_thumb_toggle.blockSignals(True)
+                    obj.prefs_page.show_thumb_toggle.setChecked(checked)
+                    obj.prefs_page.show_thumb_toggle.blockSignals(False)
 
     def _create_page_header(self, title, subtitle):
         header = QWidget()
@@ -83,11 +104,16 @@ class PagesMixin:
         layout.setSpacing(2)
         
         key_label = QLabel(label_text.upper())
-        key_label.setObjectName("SectionLabel")
+        key_label.setObjectName("CellKey")
         
         combos = widget.findChildren(QComboBox) if not isinstance(widget, QComboBox) else [widget]
         for combo in combos:
-            combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 16px; padding: 0px; margin: 0px;")
+            combo.setObjectName("CellValue")
+            combo.setStyleSheet("background: transparent; border: none; padding: 0px; margin: 0px;")
+            
+        labels = widget.findChildren(QLabel) if not isinstance(widget, QLabel) else [widget]
+        for label in labels:
+            label.setObjectName("CellValue")
         
         layout.addWidget(key_label)
         layout.addWidget(widget)
@@ -215,6 +241,7 @@ class PagesMixin:
     def _build_downloader_page(self):
         page = QWidget()
         page.setObjectName("Page")
+        self.home_page = page
         layout = QVBoxLayout(page)
         layout.setContentsMargins(20, 8, 20, 20)
         layout.setSpacing(8)
@@ -334,10 +361,15 @@ class PagesMixin:
         preview_action_layout = QHBoxLayout()
         preview_action_layout.setSpacing(12)
 
-        self.show_thumb_cb = QCheckBox("Show thumbnail")
-        self.show_thumb_cb.setChecked(self.show_thumbnail)
-        self.show_thumb_cb.toggled.connect(self._on_show_thumbnail_toggle)
-        preview_action_layout.addWidget(self.show_thumb_cb)
+        self.show_thumb_toggle = QCheckBox("Show thumbnail")
+        self.show_thumb_cb = self.show_thumb_toggle
+        self.thumb_label = self.thumbnail
+        page.show_thumb_toggle = self.show_thumb_toggle
+        
+        self.show_thumb_toggle.setChecked(self.settings.value("show_thumbnails", True, type=bool))
+        self.thumbnail.setVisible(self.settings.value("show_thumbnails", True, type=bool))
+        self.show_thumb_toggle.toggled.connect(self._on_show_thumb_changed)
+        preview_action_layout.addWidget(self.show_thumb_toggle)
 
         self.reset_btn = QPushButton("Reset")
         self.reset_btn.setObjectName("PasteButton")
@@ -655,6 +687,7 @@ class PagesMixin:
     def _build_options_page(self):
         page = QWidget()
         page.setObjectName("Page")
+        self.prefs_page = page
         layout = QVBoxLayout(page)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
@@ -674,7 +707,7 @@ class PagesMixin:
             row_frame = QFrame()
             row_frame.setObjectName("PrefRow")
             row_layout = QHBoxLayout(row_frame)
-            row_layout.setContentsMargins(0, 10, 0, 10)
+            row_layout.setContentsMargins(0, 12, 0, 12)
             row_layout.setSpacing(12)
 
             label_block = QWidget()
@@ -712,12 +745,13 @@ class PagesMixin:
         self.change_btn.adjustSize()
         self.change_btn.clicked.connect(self.change_download_dir)
 
-
-
         # 3. Show Thumbnails Row
         self.show_thumbnails_pref_cb = ToggleSwitch(self.dark_mode, self)
-        self.show_thumbnails_pref_cb.setChecked(self.show_thumbnail)
-        self.show_thumbnails_pref_cb.toggled.connect(self._on_show_thumbnail_toggle)
+        self.show_thumb_toggle = self.show_thumbnails_pref_cb
+        page.show_thumb_toggle = self.show_thumb_toggle
+        
+        self.show_thumb_toggle.setChecked(self.settings.value("show_thumbnails", True, type=bool))
+        self.show_thumb_toggle.toggled.connect(self._on_show_thumb_changed)
 
         # 4. Restricted Mode — widget now lives on the Restricted Mode (Cookies) page.
         #    A hidden dummy is created in the dummy block below to prevent any
@@ -728,11 +762,16 @@ class PagesMixin:
         self.speed_limit_spin.setRange(0, 100000)
         self.speed_limit_spin.setSingleStep(250)
         self.speed_limit_spin.setValue(self.speed_limit_kbps)
+        self.speed_limit_spin.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.speed_limit_spin.adjustSize()
         self.speed_limit_spin.valueChanged.connect(self._on_speed_limit_changed)
 
         # 6. Default Quality Row — Fix 11: full quality list
         self.pref_quality_combo = AnimatedComboBox()
         self.default_quality_combo = self.pref_quality_combo
+        self.pref_quality_combo.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.pref_quality_combo.setMinimumContentsLength(6)
+        self.pref_quality_combo.adjustSize()
         self.pref_quality_combo.blockSignals(True)
         self.pref_quality_combo.addItems([
             "Best", "4320p (8K)", "2160p (4K)", "1440p (2K)",
@@ -748,6 +787,9 @@ class PagesMixin:
         # 7. Default Format Row — Fix 10
         self.pref_format_combo = AnimatedComboBox()
         self.default_format_combo = self.pref_format_combo
+        self.pref_format_combo.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.pref_format_combo.setMinimumContentsLength(6)
+        self.pref_format_combo.adjustSize()
         self.pref_format_combo.blockSignals(True)
         self.pref_format_combo.addItems(["MP4", "MKV", "WebM", "MP3", "M4A"])
         self.pref_format_combo.blockSignals(False)
@@ -760,6 +802,9 @@ class PagesMixin:
         # 8. Default Audio Codec Row — Fix 10
         self.pref_audio_combo = AnimatedComboBox()
         self.default_audio_combo = self.pref_audio_combo
+        self.pref_audio_combo.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.pref_audio_combo.setMinimumContentsLength(6)
+        self.pref_audio_combo.adjustSize()
         self.pref_audio_combo.blockSignals(True)
         self.pref_audio_combo.addItems(["AAC", "MP3", "Opus", "Flac", "Best"])
         self.pref_audio_combo.blockSignals(False)
@@ -770,15 +815,14 @@ class PagesMixin:
         self.pref_audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
 
-        from PySide6.QtCore import QSettings
         self.default_quality_combo.currentTextChanged.connect(
-            lambda v: QSettings().setValue("default_quality", v)
+            lambda v: self.settings.setValue("default_quality", v)
         )
         self.default_format_combo.currentTextChanged.connect(
-            lambda v: QSettings().setValue("default_format", v)
+            lambda v: self.settings.setValue("default_format", v)
         )
         self.default_audio_combo.currentTextChanged.connect(
-            lambda v: QSettings().setValue("default_audio", v)
+            lambda v: self.settings.setValue("default_audio", v)
         )
 
         # Build rows
@@ -1008,12 +1052,9 @@ class PagesMixin:
         return page
 
     def load_defaults_from_prefs(self):
-        from PySide6.QtCore import QSettings
-        s = QSettings()
-        
-        quality = s.value("default_quality", "1080p")
-        fmt     = s.value("default_format",  "MP4")
-        audio   = s.value("default_audio",   "MP3")
+        quality = self.settings.value("default_quality", "1080p")
+        fmt     = self.settings.value("default_format",  "MP4")
+        audio   = self.settings.value("default_audio",   "MP3")
         
         # Populate combos with default options if empty on startup
         if self.quality.count() == 0:

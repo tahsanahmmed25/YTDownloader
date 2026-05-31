@@ -259,11 +259,24 @@ QFrame#Card QLabel#SettingLabel {{
 QFrame#PrefRow {{
     border: none;
     border-bottom: 1px solid {border};
-    padding: 10px 0;
+    min-height: 52px;
 }}
 
 QFrame#PrefRow:last-child {{
     border-bottom: none;
+}}
+
+QFrame#PrefRow QComboBox {{
+    min-width: 80px;
+    padding: 5px 10px;
+}}
+QFrame#PrefRow QSpinBox {{
+    min-width: 80px;
+    padding: 5px 10px;
+}}
+QFrame#PrefRow QPushButton#GhostButton {{
+    min-width: 70px;
+    padding: 6px 14px;
 }}
 
 QFrame#ConfigCell {{
@@ -285,12 +298,18 @@ QFrame#ConfigCell:hover {{
     border: 1px solid {border_focus};
 }}
 
-QFrame#ConfigCell QLabel {{
-    font-size: 16px;
+QFrame#ConfigCell QLabel#CellKey {{
+    font-size: 11px;
+    font-weight: 500;
+    color: {text_primary};
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }}
 
-QFrame#ConfigCell QLabel#SectionLabel {{
+QFrame#ConfigCell QLabel#CellValue, QFrame#ConfigCell QComboBox#CellValue {{
     font-size: 13px;
+    font-weight: 400;
+    color: {text_secondary};
 }}
 
 QProgressBar {{

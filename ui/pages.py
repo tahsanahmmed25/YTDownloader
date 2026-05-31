@@ -243,7 +243,7 @@ class PagesMixin:
         page.setObjectName("Page")
         self.home_page = page
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 8, 20, 20)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
 
         # Header
@@ -573,17 +573,23 @@ class PagesMixin:
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
 
-        # Header Title + Subtitle
+        # Header Title + Subtitle wrapped in PageHeader
+        header = QWidget()
+        header.setObjectName("PageHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 8)
+        header_layout.setSpacing(2)
+
         self.library_header_title = QLabel("Downloads")
         self.library_header_title.setObjectName("PageTitle")
 
         self.library_header_subtitle = QLabel("No active downloads")
-
         self.library_header_subtitle.setObjectName("PageSubtitle")
         self.library_header_subtitle.setStyleSheet("font-size: 12px;")
 
-        layout.addWidget(self.library_header_title)
-        layout.addWidget(self.library_header_subtitle)
+        header_layout.addWidget(self.library_header_title)
+        header_layout.addWidget(self.library_header_subtitle)
+        layout.addWidget(header)
 
         # Scroll Area
         self.downloads_scroll = QScrollArea()

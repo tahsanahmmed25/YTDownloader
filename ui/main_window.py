@@ -2430,6 +2430,17 @@ class Downloader(QMainWindow, PagesMixin):
             if not self._info_ready:
                 return
 
+            # Check if this exact download (identical URL, quality, container) is already in progress or queued
+            is_dup = False
+            for task in list(self._active_tasks.values()) + list(self._pending_tasks) + list(self._paused_tasks.values()):
+                p = task.get("payload") or {}
+                if p.get("url") == url and p.get("quality") == quality and p.get("container") == container:
+                    is_dup = True
+                    break
+            if is_dup:
+                self._show_error_dialog("Error", "This media download is already in progress or queued.")
+                return
+
             subtitles = self.subs_checkbox.isChecked()
             subtitles_langs = ""
             if hasattr(self, "subs_lang") and self.subs_lang and self.subs_lang.isEnabled():
@@ -3259,7 +3270,29 @@ class Downloader(QMainWindow, PagesMixin):
         if not isinstance(payload, dict) or not payload.get("url"):
             return False
 
-        task_id = saved.get("id") or uuid.uuid4().hex
+        task_id = saved.get("id")
+        url = payload.get("url")
+        quality = payload.get("quality")
+        container = payload.get("container")
+
+        # Prevent duplicate tasks by task_id
+        if task_id and (task_id in self._active_tasks or 
+                        any(t["id"] == task_id for t in self._pending_tasks) or 
+                        task_id in self._paused_tasks):
+            return False
+
+        # Prevent duplicate tasks by URL + quality + container
+        is_dup = False
+        for task in list(self._active_tasks.values()) + list(self._pending_tasks) + list(self._paused_tasks.values()):
+            p = task.get("payload") or {}
+            if p.get("url") == url and p.get("quality") == quality and p.get("container") == container:
+                is_dup = True
+                break
+        if is_dup:
+            return False
+
+        if not task_id:
+            task_id = uuid.uuid4().hex
         title_text = saved.get("title") or payload.get("url") or "Queued download"
         saved_state = (saved.get("state") or "queued").lower()
         state = TASK_STATE_PAUSED if saved_state == TASK_STATE_PAUSED else TASK_STATE_QUEUED

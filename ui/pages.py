@@ -32,6 +32,19 @@ from ui.widgets import (
 
 
 
+class InvisiblePlaceholderButton(QPushButton):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setFixedSize(0, 0)
+        self.hide()
+
+    def setVisible(self, visible):
+        pass
+
+    def show(self):
+        pass
+
+
 class PagesMixin:
     def _style_btn(self, btn):
         btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
@@ -202,23 +215,14 @@ class PagesMixin:
         status_label._item_speed = speed_label
 
         # Hidden buttons to prevent crashes and ghost windows
-        pause_btn = QPushButton("Pause", frame)
+        pause_btn = InvisiblePlaceholderButton("Pause", frame)
         self._style_btn(pause_btn)
-        pause_btn.setVisible = lambda visible: None
-        pause_btn.show = lambda: None
-        pause_btn.hide()
         
-        cancel_btn = QPushButton("Cancel", frame)
+        cancel_btn = InvisiblePlaceholderButton("Cancel", frame)
         self._style_btn(cancel_btn)
-        cancel_btn.setVisible = lambda visible: None
-        cancel_btn.show = lambda: None
-        cancel_btn.hide()
         
-        open_btn = QPushButton("Open", frame)
+        open_btn = InvisiblePlaceholderButton("Open", frame)
         self._style_btn(open_btn)
-        open_btn.setVisible = lambda visible: None
-        open_btn.show = lambda: None
-        open_btn.hide()
 
         layout.addWidget(thumbnail)
         layout.addWidget(info_widget, 1)

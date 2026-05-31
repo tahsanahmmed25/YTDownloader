@@ -138,10 +138,10 @@ class PagesMixin:
         frame = QFrame()
         frame.setObjectName("Card")
         frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        frame.setFixedHeight(56)
+        frame.setFixedHeight(62)
         
         layout = QHBoxLayout(frame)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(14, 6, 14, 6)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignVCenter)
 
@@ -157,7 +157,7 @@ class PagesMixin:
         info_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
         info_layout = QVBoxLayout(info_widget)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(4)
+        info_layout.setSpacing(2)
 
         title_label = QLabel(title)
         title_label.setObjectName("TaskTitle")
@@ -180,7 +180,7 @@ class PagesMixin:
 
         speed_label = QLabel("0.0 KB/s")
         speed_label.setObjectName("MetaLabel")
-        speed_label.setStyleSheet("font-size: 12px;")
+        speed_label.setStyleSheet("font-size: 10px;")
 
         info_layout.addWidget(title_label)
         info_layout.addWidget(progress)
@@ -574,21 +574,9 @@ class PagesMixin:
         layout.setSpacing(8)
 
         # Header Title + Subtitle wrapped in PageHeader
-        header = QWidget()
-        header.setObjectName("PageHeader")
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 8)
-        header_layout.setSpacing(2)
-
-        self.library_header_title = QLabel("Downloads")
-        self.library_header_title.setObjectName("PageTitle")
-
-        self.library_header_subtitle = QLabel("No active downloads")
-        self.library_header_subtitle.setObjectName("PageSubtitle")
-        self.library_header_subtitle.setStyleSheet("font-size: 12px;")
-
-        header_layout.addWidget(self.library_header_title)
-        header_layout.addWidget(self.library_header_subtitle)
+        header = self._create_page_header("Downloads", "Manage your downloads")
+        self.library_header_title = header.findChild(QLabel, "PageTitle")
+        self.library_header_subtitle = header.findChild(QLabel, "PageSubtitle")
         layout.addWidget(header)
 
         # Scroll Area
@@ -608,10 +596,12 @@ class PagesMixin:
         self.downloads_list_layout.setAlignment(Qt.AlignTop)
 
         # Empty Label
-        self.library_empty_label = QLabel("No active downloads")
+        self.library_empty_label = QLabel("")
         self.library_empty_label.setObjectName("PageSubtitle")
         self.library_empty_label.setAlignment(Qt.AlignCenter)
         self.library_empty_label.setStyleSheet("")
+        self.library_empty_label.setVisible(False)
+        self.library_empty_label.setFixedHeight(0)
         self.downloads_list_layout.addWidget(self.library_empty_label)
 
         # Child layouts for active & completed tasks

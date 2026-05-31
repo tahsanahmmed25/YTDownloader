@@ -1150,19 +1150,6 @@ class Downloader(QMainWindow, PagesMixin):
     def _sync_downloads_panel_height(self, total_items=None):
         if not hasattr(self, "downloads_scroll") or not hasattr(self, "downloads_panel"):
             return
-        if total_items is None:
-            total_items = self._layout_widget_count(self.active_downloads_layout) + self._layout_widget_count(self.completed_downloads_layout)
-        max_visible = max(260, self.height() - 120)
-        desired = 132 + max(0, total_items) * 118
-        if total_items <= 0:
-            scroll_h = 160
-        else:
-            scroll_h = min(max_visible, desired)
-
-        self.downloads_scroll.setMinimumHeight(min(scroll_h, 160))
-        self.downloads_scroll.setMaximumHeight(max_visible)
-        self.downloads_scroll.setFixedHeight(scroll_h)
-
         if self.downloads_panel.isVisible():
             panel_cap = max(320, self.height() - 90)
             panel_h = max(136, min(panel_cap, self.downloads_panel.sizeHint().height()))

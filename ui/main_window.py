@@ -69,6 +69,7 @@ from ui.widgets import (
 )
 from ui.dialogs import TermsDialog
 from ui.pages import PagesMixin
+from ui.themes import DEFAULT_THEME
 from workers import UpdateWorker, UpdateDownloadWorker, FetchWorker, PlaylistWorker, DownloadWorker
 from updates.manager import custom_update_urls_enabled, validate_update_url
 from core.models import (
@@ -129,6 +130,7 @@ class Downloader(QMainWindow, PagesMixin):
 
         self.settings = QSettings(APP_ORG, APP_NAME)
         self.dark_mode = self.settings.value("dark_mode", False, type=bool)
+        self.current_theme_name = self.settings.value("theme", DEFAULT_THEME)
         self._apply_theme()
         self.show_thumbnail = self.settings.value("show_thumbnail", True, type=bool)
         self.restricted_mode = self.settings.value("restricted_mode", False, type=bool)
@@ -347,12 +349,12 @@ class Downloader(QMainWindow, PagesMixin):
         brand_layout.setSpacing(8)
 
         # Custom gradient BrandIcon
-        brand_icon = BrandIcon(self.dark_mode)
+        self.brand_icon = BrandIcon(28)
 
         self.brand_name = QLabel("YT DL Pro")
         self.brand_name.setObjectName("BrandName")
 
-        brand_layout.addWidget(brand_icon)
+        brand_layout.addWidget(self.brand_icon)
         brand_layout.addWidget(self.brand_name)
         brand_layout.addStretch(1)
 
@@ -365,10 +367,12 @@ class Downloader(QMainWindow, PagesMixin):
 
         self.pages = QStackedWidget()
 
+        from ui.pages import ThemesPage
         self.page_downloader = self._build_downloader_page()
         self.page_library = self._build_library_page()
         self.page_history = self._build_history_page()
         self.page_options = self._build_options_page()
+        self.page_themes = ThemesPage(self)
         self.page_cookies = self._build_cookies_page()
         self.page_about = self._build_about_page()
 
@@ -376,6 +380,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.pages.addWidget(self.page_library)
         self.pages.addWidget(self.page_history)
         self.pages.addWidget(self.page_options)
+        self.pages.addWidget(self.page_themes)
         self.pages.addWidget(self.page_cookies)
         self.pages.addWidget(self.page_about)
         self.pages.currentChanged.connect(self._on_page_changed)
@@ -403,6 +408,7 @@ class Downloader(QMainWindow, PagesMixin):
         sidebar_layout.addSpacing(2)
 
         self.nav_pref_btn = self._add_nav_button("Preferences", self.page_options, "preferences", "⚙")
+        self.nav_themes_btn = self._add_nav_button("Themes", self.page_themes, "themes", "🎨")
         self.nav_cookies_btn = self._add_nav_button("Restricted Mode", self.page_cookies, "cookies", "🔒")
         self.nav_about_btn = self._add_nav_button("About", self.page_about, "about", "ⓘ")
 
@@ -436,6 +442,8 @@ class Downloader(QMainWindow, PagesMixin):
     def _switch_page(self, page, page_name):
         self.pages.setCurrentWidget(page)
         self.set_active_nav(page_name)
+        if page_name == "home":
+            self.load_defaults_from_prefs()
 
     def _add_nav_button(self, label, page, page_name, icon_char=""):
         btn = NavButton("")
@@ -450,7 +458,7 @@ class Downloader(QMainWindow, PagesMixin):
         btn_layout.setContentsMargins(10, 0, 10, 0)
         btn_layout.addStretch(1)
 
-        btn.clicked.connect(lambda p=page, n=page_name: self._switch_page(p, n))
+        btn.clicked.connect(lambda checked=False, p=page, n=page_name: self._switch_page(p, n))
         self.nav_group.addButton(btn)
         self._nav_buttons.append(btn)
         self.sidebar.layout().addWidget(btn)
@@ -875,7 +883,10 @@ class Downloader(QMainWindow, PagesMixin):
         )
 
     def _apply_theme(self):
-        self.setStyleSheet(dark_style if self.dark_mode else style)
+        from ui_style import get_stylesheet
+        sheet = get_stylesheet(dark=self.dark_mode, theme_name=self.current_theme_name)
+        self.setStyleSheet(sheet)
+        self._refresh_all_nav_buttons()
         self._apply_combo_popup_theme()
 
         # Update dark_mode state on custom widgets dynamically
@@ -888,6 +899,24 @@ class Downloader(QMainWindow, PagesMixin):
         for widget in self.findChildren(BrandIcon):
             widget.dark_mode = self.dark_mode
             widget.update()
+
+    def _refresh_all_nav_buttons(self):
+        if not hasattr(self, '_nav_buttons') or not self._nav_buttons:
+            return
+        for btn in self._nav_buttons:
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            btn.update()
+        # Also repaint the brand icon
+        if hasattr(self, 'brand_icon'):
+            self.brand_icon.update()
+
+    def apply_theme(self, theme_name):
+        self.settings.setValue("theme", theme_name)
+        self.current_theme_name = theme_name
+        self._apply_theme()
+        if hasattr(self, 'page_themes') and hasattr(self.page_themes, 'update_card_selection'):
+            self.page_themes.update_card_selection()
 
     def _apply_combo_popup_theme(self):
         combo = getattr(self, "browser_auth_combo", None)
@@ -1991,6 +2020,7 @@ class Downloader(QMainWindow, PagesMixin):
             if not self._library_load_more_btn:
                 self._library_load_more_btn = QPushButton("Load more")
                 self._library_load_more_btn.setObjectName("GhostButton")
+                self._style_btn(self._library_load_more_btn)
                 self._library_load_more_btn.clicked.connect(self._load_more_library)
             try:
                 self.library_layout.addWidget(self._library_load_more_btn)
@@ -1998,6 +2028,7 @@ class Downloader(QMainWindow, PagesMixin):
                 # Fallback: recreate if Qt already deleted the cached instance.
                 self._library_load_more_btn = QPushButton("Load more")
                 self._library_load_more_btn.setObjectName("GhostButton")
+                self._style_btn(self._library_load_more_btn)
                 self._library_load_more_btn.clicked.connect(self._load_more_library)
                 self.library_layout.addWidget(self._library_load_more_btn)
         self.library_layout.addStretch(1)
@@ -2052,6 +2083,7 @@ class Downloader(QMainWindow, PagesMixin):
         btn_row = QHBoxLayout()
         open_btn = QPushButton("Open Folder")
         open_btn.setObjectName("GhostButton")
+        self._style_btn(open_btn)
         if filepath:
             open_btn.clicked.connect(lambda: self._open_folder(filepath))
         else:
@@ -2060,11 +2092,13 @@ class Downloader(QMainWindow, PagesMixin):
 
         remove_btn = QPushButton("Remove")
         remove_btn.setObjectName("GhostButton")
+        self._style_btn(remove_btn)
         remove_btn.clicked.connect(lambda: self.remove_history_item(item, delete_file=False))
         btn_row.addWidget(remove_btn)
 
         delete_btn = QPushButton("Delete File")
         delete_btn.setObjectName("GhostButton")
+        self._style_btn(delete_btn)
         delete_btn.clicked.connect(lambda: self.remove_history_item(item, delete_file=True))
         btn_row.addWidget(delete_btn)
         btn_row.addStretch(1)

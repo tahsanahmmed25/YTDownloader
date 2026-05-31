@@ -92,7 +92,6 @@ class PasteButton(QToolButton):
         self.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(40)
-        self.setFixedWidth(84)
 
 
 class NavRingSpinner(QWidget):
@@ -227,31 +226,40 @@ class MarqueeLabel(QLabel):
 
 
 # ── BrandIcon ────────────────────────────────────────────────────────────────
-class BrandIcon(QLabel):
-    def __init__(self, dark_mode=False, parent=None):
+class BrandIcon(QWidget):
+    def __init__(self, size=28, parent=None):
         super().__init__(parent)
-        self.setFixedSize(24, 24)
-        self.dark_mode = dark_mode
+        self.setFixedSize(size, size)
 
     def paintEvent(self, event):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        theme_name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        theme = get_theme(theme_name)
+
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        
-        dark_mode = getattr(self.window(), "dark_mode", False)
-        t = DARK if dark_mode else LIGHT
-        
-        bg_color = QColor(t["accent"])
-        arrow_color = QColor(t["text_on_accent"])
-        
-        painter.setBrush(bg_color)
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 7, 7)
-        
-        painter.setPen(QPen(arrow_color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        painter.drawLine(12, 6, 12, 14)
-        painter.drawLine(8, 10, 12, 14)
-        painter.drawLine(16, 10, 12, 14)
-        painter.drawLine(8, 17, 16, 17)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(0, 0, self.width(), self.height())
+
+        # Rounded square background using accent color
+        accent = QColor(theme["accent_dark"] if dark else theme["accent_light"])
+        path = QPainterPath()
+        path.addRoundedRect(rect, 7, 7)
+        painter.fillPath(path, accent)
+
+        # Draw white download arrow icon centered
+        painter.setPen(QPen(QColor("#ffffff"), 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        cx = self.width() / 2
+        cy = self.height() / 2
+        # Arrow shaft
+        painter.drawLine(QPointF(cx, cy - 5), QPointF(cx, cy + 3))
+        # Arrow head
+        painter.drawLine(QPointF(cx - 4, cy - 1), QPointF(cx, cy + 3))
+        painter.drawLine(QPointF(cx + 4, cy - 1), QPointF(cx, cy + 3))
+        # Base line
+        painter.drawLine(QPointF(cx - 5, cy + 5), QPointF(cx + 5, cy + 5))
+        painter.end()
 
 
 # ── DownloadButton ────────────────────────────────────────────────────────────
@@ -270,23 +278,32 @@ class DownloadButton(QPushButton):
         self.shadow_effect.setColor(QColor(124, 58, 237, 76))
         self.setGraphicsEffect(self.shadow_effect)
 
+    def _get_theme(self):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        return get_theme(name), dark
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
         
-        dark_mode = getattr(self.window(), "dark_mode", False)
+        theme, dark_mode = self._get_theme()
         t = DARK if dark_mode else LIGHT
         
         if self.isEnabled():
             rect = self.rect()
             grad = QLinearGradient(rect.left(), 0, rect.right(), 0)
-            grad.setColorAt(0.0, QColor("#0d9488"))
-            grad.setColorAt(0.5, QColor("#0891b2"))
-            grad.setColorAt(1.0, QColor("#0e7490"))
+            grad.setColorAt(0.0, QColor(theme["grad_start"]))
+            grad.setColorAt(1.0, QColor(theme["grad_end"]))
             painter.setBrush(QBrush(grad))
             self.shadow_effect.setEnabled(True)
-            self.shadow_effect.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(13, 148, 136, 76))
+            
+            accent_color = QColor(theme["accent_dark"] if dark_mode else theme["accent_light"])
+            accent_color.setAlpha(76)
+            self.shadow_effect.setColor(QColor(0, 0, 0, 150) if dark_mode else accent_color)
             text_color = QColor("#ffffff")
             icon_color = QColor("#ffffff")
         else:
@@ -403,29 +420,31 @@ class ToggleSwitch(QAbstractButton):
         self._anim.setEndValue(22 if checked else 2)
         self._anim.start()
 
+    def _get_theme(self):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        return get_theme(name), dark
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         
-        rect = QRectF(0, 0, 38, 20)
+        theme, dark = self._get_theme()
+        on_color = QColor(theme["accent_dark"] if dark else theme["accent_light"])
+        off_color = QColor("#d0d0d0" if not dark else "#3a3a3a")
+        track_color = on_color if self.isChecked() else off_color
         
-        if self.isChecked():
-            painter.setBrush(QColor("#22c55e"))
-            painter.setPen(QPen(QColor("#16a34a"), 1))
-        else:
-            bg = QColor("#3a3a3a") if self.dark_mode else QColor("#ede9fe")
-            border = QColor("#555555") if self.dark_mode else QColor("#c4b5fd")
-            painter.setBrush(bg)
-            painter.setPen(QPen(border, 1))
-            
+        rect = QRectF(0, 0, 38, 20)
+        painter.setBrush(track_color)
+        painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(rect, 10, 10)
         
         painter.setBrush(QColor(0, 0, 0, 33))
-        painter.setPen(Qt.NoPen)
         painter.drawEllipse(self._knob_x, 4, 14, 14)
         
         painter.setBrush(QColor("#ffffff"))
-        painter.setPen(Qt.NoPen)
         painter.drawEllipse(self._knob_x, 3, 14, 14)
 
 
@@ -458,43 +477,56 @@ class NavButton(QPushButton):
         self.icon_char = ""
         self.label_text = ""
 
+    def _get_theme(self):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        return get_theme(name), dark
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = 6
         is_active = self.property("active") == "true"
-        dark = self.window().dark_mode if hasattr(self.window(), 'dark_mode') else False
 
-        # Fix 5: Transparent active background
-        bg = QColor("transparent")
+        theme, dark = self._get_theme()
+
+        # Background: always transparent
         path = QPainterPath()
         path.addRoundedRect(rect, radius, radius)
-        painter.fillPath(path, bg)
+        painter.fillPath(path, QColor("transparent"))
 
         if is_active:
+            # Accent gradient border
             grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
-            grad.setColorAt(0.0, QColor("#0d9488"))
-            grad.setColorAt(1.0, QColor("#0891b2"))
+            grad.setColorAt(0.0, QColor(theme["nav_border_dark"] if dark else theme["nav_border_light"]))
+            grad.setColorAt(1.0, QColor(theme["grad_end"]))
             pen = QPen(QBrush(grad), 1.0)
             painter.setPen(pen)
-            painter.drawRoundedRect(rect, radius, radius)
+        else:
+            # Subtle neutral border — always present on ALL nav items
+            subtle = QColor("#d0d0d0") if not dark else QColor("#2e2e2e")
+            painter.setPen(QPen(subtle, 1.0))
 
-        # Fix 6: High contrast text colors
+        painter.drawRoundedRect(rect, radius, radius)
+
+        # High contrast text colors
         if is_active:
-            text_color = QColor("#1a1a1a" if not dark else "#f0f0f0")
+            text_color = QColor(theme["nav_active_text_dark"] if dark else theme["nav_active_text_light"])
         else:
             text_color = QColor("#3a3a3a" if not dark else "#b0b0b0")
 
         icon_rect = QRectF(rect.left() + 10, rect.top(), 20, rect.height())
         text_rect = QRectF(rect.left() + 30, rect.top(), rect.width() - 34, rect.height())
 
-        # Fix 7: Bolder active icon size and color
+        # Bolder active icon size and color
         icon_font = QFont(self.font())
         if is_active:
             icon_font.setPixelSize(15)
             icon_font.setWeight(QFont.Medium)
-            icon_color = QColor("#0d9488") if not dark else QColor("#2dd4bf")
+            icon_color = QColor(theme["accent_dark"] if dark else theme["accent_light"])
         else:
             icon_font.setPixelSize(14)
             icon_font.setWeight(QFont.Normal)
@@ -581,20 +613,32 @@ class GradientButton(QPushButton):
         self._shadow.setColor(QColor(124, 58, 237, 77))  # rgba(124,58,237,0.30)
         self.setGraphicsEffect(self._shadow)
 
+    def _get_theme(self):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        return get_theme(name), dark
+
+    def sizeHint(self):
+        base = super().sizeHint()
+        fm = self.fontMetrics()
+        text_w = fm.horizontalAdvance(self.text()) + 32  # 16px padding each side
+        return QSize(max(base.width(), text_w), base.height())
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
 
-        dark_mode = getattr(self.window(), "dark_mode", False)
+        theme, dark_mode = self._get_theme()
         t = DARK if dark_mode else LIGHT
 
         if self.isEnabled():
             rect = self.rect()
             grad = QLinearGradient(rect.left(), 0, rect.right(), 0)
-            grad.setColorAt(0.0, QColor("#0d9488"))
-            grad.setColorAt(0.5, QColor("#0891b2"))
-            grad.setColorAt(1.0, QColor("#0e7490"))
+            grad.setColorAt(0.0, QColor(theme["grad_start"]))
+            grad.setColorAt(1.0, QColor(theme["grad_end"]))
             painter.setBrush(QBrush(grad))
             self._shadow.setEnabled(True)
             self._shadow.setColor(QColor(0, 0, 0, 150) if dark_mode else QColor(13, 148, 136, 77))
@@ -671,20 +715,34 @@ class PrimaryButton(QPushButton):
         self.setObjectName("PrimaryButton")
         self.setCursor(Qt.PointingHandCursor)
 
+    def _get_theme(self):
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        return get_theme(name), dark
+
+    def sizeHint(self):
+        base = super().sizeHint()
+        fm = self.fontMetrics()
+        text_w = fm.horizontalAdvance(self.text()) + 32  # 16px padding each side
+        return QSize(max(base.width(), text_w), base.height())
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         rect = self.rect()
         radius = 8
-        dark = self.window().dark_mode if hasattr(self.window(), 'dark_mode') else False
+
+        theme, dark = self._get_theme()
 
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), radius, radius)
 
         if self.isEnabled():
             grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.top())
-            grad.setColorAt(0.0, QColor("#0d9488"))
-            grad.setColorAt(1.0, QColor("#0891b2"))
+            grad.setColorAt(0.0, QColor(theme["grad_start"]))
+            grad.setColorAt(1.0, QColor(theme["grad_end"]))
             painter.fillPath(path, QBrush(grad))
             painter.setPen(QColor("#ffffff"))
         else:

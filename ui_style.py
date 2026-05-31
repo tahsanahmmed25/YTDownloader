@@ -51,9 +51,22 @@ DARK = {
 }
 
 
-def build_stylesheet(t: dict) -> str:
+def build_stylesheet(t: dict, theme: dict, dark: bool) -> str:
     t_copy = dict(t)
-    t_copy["nav_color"] = "#b0b0b0" if t.get("bg_window") == "#0f0f0f" else "#3a3a3a"
+    t_copy["nav_color"] = "#b0b0b0" if dark else "#3a3a3a"
+    
+    accent         = theme["accent_dark"]        if dark else theme["accent_light"]
+    accent_hover   = theme["accent_hover_dark"]  if dark else theme["accent_hover_light"]
+    nav_border     = theme["nav_border_dark"]     if dark else theme["nav_border_light"]
+    accent_text    = theme["accent_text"]
+    
+    t_copy["accent"] = accent
+    t_copy["accent_hover"] = accent_hover
+    t_copy["nav_border"] = nav_border
+    t_copy["text_on_accent"] = accent_text
+    
+    t_copy["progress_fill"] = accent
+    t_copy["border_focus"] = accent
     template = """
 QMainWindow, QWidget {{
     color: {text_primary};
@@ -105,7 +118,7 @@ QPushButton#NavButton {{
     padding: 7px 10px;
     text-align: left;
     color: {nav_color};
-    font-size: 13px;
+    font-size: 14px;
 }}
 
 QPushButton#NavButton:hover {{
@@ -115,6 +128,7 @@ QPushButton#NavButton:hover {{
 
 QPushButton#NavButton[active="true"] {{
     background: transparent;
+    border-color: {nav_border};
     color: {text_primary};
     font-weight: 500;
 }}
@@ -129,7 +143,7 @@ QLineEdit {{
     border-radius: 8px;
     padding: 7px 10px;
     color: {text_primary};
-    font-size: 13px;
+    font-size: 14px;
     selection-background-color: {accent};
 }}
 
@@ -137,41 +151,58 @@ QLineEdit:focus {{
     border: 1px solid {border_focus};
 }}
 
+QPushButton {{
+    padding-left: 12px;
+    padding-right: 12px;
+}}
+
 QPushButton#PrimaryButton {{
+    background: {accent};
     color: {text_on_accent};
     border: none;
     border-radius: 8px;
     padding: 7px 14px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
+}}
+
+QPushButton#PrimaryButton:hover {{
+    background: {accent_hover};
 }}
 
 QPushButton#DownloadButton {{
     color: {text_on_accent};
     border: none;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
 }}
 
 QPushButton#GhostButton {{
-    background: {bg_card};
+    background: {bg_surface};
     color: {text_primary};
     border: 1px solid {border};
     border-radius: 8px;
-    padding: 7px 14px;
-    font-size: 13px;
+    padding: 7px 16px;
+    font-size: 14px;
+    font-weight: 400;
+    min-width: 0px;
 }}
 
 QPushButton#GhostButton:hover {{
     background: {bg_hover};
+    border-color: {border_focus};
+}}
+
+QPushButton#GhostButton:pressed {{
+    background: {bg_active};
 }}
 
 QPushButton#PillButton {{
     background: transparent;
     border: none;
     border-radius: 20px;
-    padding: 3px 10px;
+    padding: 4px 12px;
     font-size: 11px;
     color: {text_tertiary};
 }}
@@ -181,6 +212,24 @@ QPushButton#PillButton[active="true"] {{
     border: 1px solid {border};
     color: {text_primary};
     font-weight: 500;
+}}
+
+QPushButton#PasteButton, QToolButton#PasteButton {{
+    background: {bg_surface};
+    color: {text_primary};
+    border: 1px solid {border};
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 14px;
+    font-weight: 400;
+    min-width: 0px;
+}}
+QPushButton#PasteButton:hover, QToolButton#PasteButton:hover {{
+    background: {bg_hover};
+    border-color: {border_focus};
+}}
+QPushButton#PasteButton:pressed, QToolButton#PasteButton:pressed {{
+    background: {bg_active};
 }}
 
 QFrame#Card, QFrame#OptionsCard {{
@@ -203,7 +252,7 @@ QFrame#Card QLabel {{
 
 QFrame#Card QLabel#SettingLabel {{
     color: {text_primary};
-    font-size: 13px;
+    font-size: 14px;
     background: transparent;
 }}
 
@@ -219,7 +268,7 @@ QFrame#ConfigCell:hover {{
 }}
 
 QFrame#ConfigCell QLabel {{
-    font-size: 14px;
+    font-size: 15px;
 }}
 
 QFrame#ConfigCell QLabel#SectionLabel {{
@@ -279,7 +328,7 @@ QComboBox {{
     border-radius: 8px;
     padding: 6px 10px;
     color: {text_primary};
-    font-size: 13px;
+    font-size: 14px;
 }}
 
 QComboBox:focus {{
@@ -332,7 +381,7 @@ QSpinBox {{
     border-radius: 8px;
     padding: 7px 10px;
     color: {text_primary};
-    font-size: 13px;
+    font-size: 14px;
     selection-background-color: {accent};
 }}
 
@@ -345,7 +394,7 @@ QLabel#BadgeSuccess {{
     color: {success_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
 }}
 
@@ -354,7 +403,7 @@ QLabel#BadgeWarning {{
     color: {warning_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
 }}
 
@@ -363,7 +412,7 @@ QLabel#BadgeError {{
     color: {error_text};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
 }}
 
@@ -372,7 +421,7 @@ QLabel#BadgeNeutral {{
     color: {text_secondary};
     border-radius: 20px;
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
 }}
 
@@ -406,16 +455,20 @@ QCheckBox::indicator:checked {{
 }}
 
 QLabel#SectionLabel {{
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.08em;
     color: {text_tertiary};
 }}
 
 /* Styled label types to fix dark mode contrast issues */
+QLabel#PageTitle {{
+    font-size: 18px;
+}}
+
 QLabel#PageSubtitle {{
     color: {text_secondary};
-    font-size: 13px;
+    font-size: 14px;
 }}
 
 QLabel#MetaLabel {{
@@ -427,9 +480,13 @@ QLabel#SettingSubLabel, QLabel#InfoSubtle, QLabel#ToggleLabel {{
     color: {text_secondary};
 }}
 
+QLabel#SettingSubLabel {{
+    font-size: 12px;
+}}
+
 QLabel#TaskTitle, QLabel#InfoTitle {{
     color: {text_primary};
-    font-size: 12px;
+    font-size: 13px;
 }}
 
 /* Flat dialog styling */
@@ -459,7 +516,7 @@ QDialog QPushButton {{
     border-radius: 8px;
     padding: 7px 18px;
     color: {text_primary};
-    font-size: 13px;
+    font-size: 14px;
 }}
 
 QDialog QPushButton:hover {{
@@ -469,5 +526,13 @@ QDialog QPushButton:hover {{
     return template.format(**t_copy)
 
 
-style = build_stylesheet(LIGHT)
-dark_style = build_stylesheet(DARK)
+from ui.themes import get_theme, DEFAULT_THEME
+
+def get_stylesheet(dark: bool = False, theme_name: str = DEFAULT_THEME) -> str:
+    t = DARK if dark else LIGHT
+    theme = get_theme(theme_name)
+    return build_stylesheet(t, theme, dark)
+
+# Keep these for backward compatibility
+style = get_stylesheet(dark=False)
+dark_style = get_stylesheet(dark=True)

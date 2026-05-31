@@ -29,6 +29,11 @@ from ui.widgets import (
 
 
 class PagesMixin:
+    def _style_btn(self, btn):
+        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        btn.setMinimumWidth(0)
+        btn.adjustSize()
+
     def _create_page_header(self, title, subtitle):
         header = QWidget()
         header.setObjectName("PageHeader")
@@ -149,10 +154,13 @@ class PagesMixin:
 
         # Hidden buttons to prevent crashes
         pause_btn = QPushButton("Pause")
+        self._style_btn(pause_btn)
         pause_btn.hide()
         cancel_btn = QPushButton("Cancel")
+        self._style_btn(cancel_btn)
         cancel_btn.hide()
         open_btn = QPushButton("Open")
+        self._style_btn(open_btn)
         open_btn.hide()
 
         layout.addWidget(thumbnail)
@@ -250,9 +258,10 @@ class PagesMixin:
 
         # Fix 14 — visible Paste button
         self.paste_url_btn = QPushButton("Paste")
-        self.paste_url_btn.setObjectName("GhostButton")
-        self.paste_url_btn.setFixedWidth(60)
-        self.paste_url_btn.setFixedHeight(32)
+        self.paste_url_btn.setObjectName("PasteButton")
+        self.paste_url_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.paste_url_btn.setMinimumWidth(0)
+        self.paste_url_btn.adjustSize()
         self.paste_url_btn.clicked.connect(self._paste_from_clipboard)
 
         url_card_layout.addWidget(self.paste_url_btn)
@@ -308,7 +317,10 @@ class PagesMixin:
         preview_action_layout.addWidget(self.show_thumb_cb)
 
         self.reset_btn = QPushButton("Reset")
-        self.reset_btn.setObjectName("GhostButton")
+        self.reset_btn.setObjectName("PasteButton")
+        self.reset_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.reset_btn.setMinimumWidth(0)
+        self.reset_btn.adjustSize()
         self.reset_btn.clicked.connect(self.clear_homepage_ui)
         preview_action_layout.addWidget(self.reset_btn)
         info_layout.addLayout(preview_action_layout)
@@ -328,16 +340,19 @@ class PagesMixin:
         self.pill_video.setProperty("active", "true")
         self.pill_video.setCheckable(True)
         self.pill_video.setChecked(True)
+        self._style_btn(self.pill_video)
 
         self.pill_audio = QPushButton("Audio")
         self.pill_audio.setObjectName("PillButton")
         self.pill_audio.setProperty("active", "false")
         self.pill_audio.setCheckable(True)
+        self._style_btn(self.pill_audio)
 
         self.pill_playlist = QPushButton("Playlist")
         self.pill_playlist.setObjectName("PillButton")
         self.pill_playlist.setProperty("active", "false")
         self.pill_playlist.setCheckable(True)
+        self._style_btn(self.pill_playlist)
 
         self.pill_group.addButton(self.pill_video)
         self.pill_group.addButton(self.pill_audio)
@@ -403,6 +418,7 @@ class PagesMixin:
         self.format_combo.setMaxVisibleItems(10)
         self.format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.quality = QComboBox()
+        self.quality_combo = self.quality
         self.quality.setMaxVisibleItems(10)
         self.quality.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.subs_lang = QComboBox()
@@ -488,6 +504,7 @@ class PagesMixin:
         self._clear_format_quality()
         self._set_config_enabled(False)
 
+        self.load_defaults_from_prefs()
         return page
 
     def _build_library_page(self):
@@ -552,6 +569,7 @@ class PagesMixin:
         self.downloads_header = QLabel(page)
         self.downloads_header.hide()
         self.reset_btn_downloads = QPushButton(page)
+        self._style_btn(self.reset_btn_downloads)
         self.reset_btn_downloads.hide()
 
         return page
@@ -578,6 +596,7 @@ class PagesMixin:
 
         clear_btn = QPushButton("Clear History")
         clear_btn.setObjectName("GhostButton")
+        self._style_btn(clear_btn)
         clear_btn.clicked.connect(self.clear_library)
         controls_row.addWidget(clear_btn)
         layout.addLayout(controls_row)
@@ -670,13 +689,13 @@ class PagesMixin:
         self.download_dir_input.setObjectName("SettingSubLabel")
         self.download_dir_input.setStyleSheet("font-size: 11px;")
         self.change_btn = QPushButton("Change")
-        self.change_btn.setObjectName("GhostButton")
+        self.change_btn.setObjectName("PasteButton")
+        self.change_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.change_btn.setMinimumWidth(0)
+        self.change_btn.adjustSize()
         self.change_btn.clicked.connect(self.change_download_dir)
 
-        # 2. Dark Mode Row
-        self.dark_mode_cb = ToggleSwitch(self.dark_mode, self)
-        self.dark_mode_cb.setChecked(self.dark_mode)
-        self.dark_mode_cb.toggled.connect(self._on_dark_mode_toggle)
+
 
         # 3. Show Thumbnails Row
         self.show_thumbnails_pref_cb = ToggleSwitch(self.dark_mode, self)
@@ -696,18 +715,22 @@ class PagesMixin:
 
         # 6. Default Quality Row — Fix 11: full quality list
         self.pref_quality_combo = QComboBox()
+        self.default_quality_combo = self.pref_quality_combo
         self.pref_quality_combo.blockSignals(True)
         self.pref_quality_combo.addItems([
             "Best", "4320p (8K)", "2160p (4K)", "1440p (2K)",
             "1080p", "720p", "480p", "360p", "240p", "144p", "Worst"
         ])
         self.pref_quality_combo.blockSignals(False)
-        self.pref_quality_combo.setCurrentText("1080p")
+        self.pref_quality_combo.setCurrentText(
+            self.settings.value("default_quality", "1080p", type=str)
+        )
         self.pref_quality_combo.setMaxVisibleItems(12)
         self.pref_quality_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # 7. Default Format Row — Fix 10
         self.pref_format_combo = QComboBox()
+        self.default_format_combo = self.pref_format_combo
         self.pref_format_combo.blockSignals(True)
         self.pref_format_combo.addItems(["MP4", "MKV", "WebM", "MP3", "M4A"])
         self.pref_format_combo.blockSignals(False)
@@ -716,12 +739,10 @@ class PagesMixin:
         )
         self.pref_format_combo.setMaxVisibleItems(10)
         self.pref_format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.pref_format_combo.currentTextChanged.connect(
-            lambda v: self.settings.setValue("default_format", v)
-        )
 
         # 8. Default Audio Codec Row — Fix 10
         self.pref_audio_combo = QComboBox()
+        self.default_audio_combo = self.pref_audio_combo
         self.pref_audio_combo.blockSignals(True)
         self.pref_audio_combo.addItems(["AAC", "MP3", "Opus", "Flac", "Best"])
         self.pref_audio_combo.blockSignals(False)
@@ -730,13 +751,20 @@ class PagesMixin:
         )
         self.pref_audio_combo.setMaxVisibleItems(10)
         self.pref_audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.pref_audio_combo.currentTextChanged.connect(
-            lambda v: self.settings.setValue("default_audio", v)
+
+        from PySide6.QtCore import QSettings
+        self.default_quality_combo.currentTextChanged.connect(
+            lambda v: QSettings().setValue("default_quality", v)
+        )
+        self.default_format_combo.currentTextChanged.connect(
+            lambda v: QSettings().setValue("default_format", v)
+        )
+        self.default_audio_combo.currentTextChanged.connect(
+            lambda v: QSettings().setValue("default_audio", v)
         )
 
         # Build rows
         card_layout.addWidget(create_setting_row("Save folder", self.download_dir, self.change_btn))
-        card_layout.addWidget(create_setting_row("Dark mode", "", self.dark_mode_cb))
         card_layout.addWidget(create_setting_row("Show thumbnails", "", self.show_thumbnails_pref_cb))
         card_layout.addWidget(create_setting_row("Speed limit", "", self.speed_limit_spin))
         card_layout.addWidget(create_setting_row("Default quality", "", self.pref_quality_combo))
@@ -758,10 +786,13 @@ class PagesMixin:
         self.essentials_progress.hide()
         
         self.install_essentials_btn = QPushButton()
+        self._style_btn(self.install_essentials_btn)
         self.install_essentials_btn.hide()
         self.reinstall_essentials_btn = QPushButton()
+        self._style_btn(self.reinstall_essentials_btn)
         self.reinstall_essentials_btn.hide()
         self.update_essentials_btn = QPushButton()
+        self._style_btn(self.update_essentials_btn)
         self.update_essentials_btn.hide()
 
         self.check_updates_cb = QCheckBox()
@@ -850,10 +881,12 @@ class PagesMixin:
         yt_btn_row = QHBoxLayout()
         self.yt_login_btn = QPushButton("🔑  Login to YouTube")
         self.yt_login_btn.setObjectName("GhostButton")
+        self._style_btn(self.yt_login_btn)
         self.yt_login_btn.clicked.connect(self._yt_open_login_dialog)
 
         self.yt_logout_btn = QPushButton("Disconnect")
         self.yt_logout_btn.setObjectName("GhostButton")
+        self._style_btn(self.yt_logout_btn)
         self.yt_logout_btn.clicked.connect(self._yt_logout)
 
         yt_btn_row.addWidget(self.yt_login_btn)
@@ -868,10 +901,14 @@ class PagesMixin:
 
         btn_row = QHBoxLayout()
         self.set_cookies_btn = QPushButton("Set Cookies File")
-        self.set_cookies_btn.setObjectName("GhostButton")
+        self.set_cookies_btn.setObjectName("PasteButton")
+        self.set_cookies_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.set_cookies_btn.setMinimumWidth(0)
+        self.set_cookies_btn.adjustSize()
         self.set_cookies_btn.clicked.connect(self.set_cookies_file)
         self.clear_cookies_btn = QPushButton("Clear Cookies File")
         self.clear_cookies_btn.setObjectName("GhostButton")
+        self._style_btn(self.clear_cookies_btn)
         self.clear_cookies_btn.clicked.connect(self.clear_cookies_file)
         btn_row.addWidget(self.set_cookies_btn)
         btn_row.addWidget(self.clear_cookies_btn)
@@ -880,6 +917,7 @@ class PagesMixin:
 
         self.help_btn = QPushButton("How To Add Cookies")
         self.help_btn.setObjectName("GhostButton")
+        self._style_btn(self.help_btn)
         self.help_btn.clicked.connect(self.show_cookies_help)
         card_layout.addWidget(self.help_btn)
 
@@ -896,8 +934,10 @@ class PagesMixin:
         self.browser_profile_input = QLineEdit()
         self.browser_profile_input.hide()
         self.browser_connect_btn = QPushButton()
+        self._style_btn(self.browser_connect_btn)
         self.browser_connect_btn.hide()
         self.browser_disconnect_btn = QPushButton()
+        self._style_btn(self.browser_disconnect_btn)
         self.browser_disconnect_btn.hide()
 
         return page
@@ -950,3 +990,210 @@ class PagesMixin:
         layout.addWidget(card)
         layout.addStretch(1)
         return page
+
+    def load_defaults_from_prefs(self):
+        from PySide6.QtCore import QSettings
+        s = QSettings()
+        
+        quality = s.value("default_quality", "1080p")
+        fmt     = s.value("default_format",  "MP4")
+        audio   = s.value("default_audio",   "Best")
+
+        # Set the combobox/config cell to match saved defaults
+        idx = self.quality.findText(quality)
+        if idx >= 0:
+            self.quality.setCurrentIndex(idx)
+        
+        idx = self.format_combo.findText(fmt)
+        if idx >= 0:
+            self.format_combo.setCurrentIndex(idx)
+        
+        idx = self.audio_combo.findText(audio)
+        if idx >= 0:
+            self.audio_combo.setCurrentIndex(idx)
+
+
+class ThemeCard(QFrame):
+    def __init__(self, theme_name, display_name, description, accent_color, is_selected, parent_page):
+        super().__init__()
+        self.theme_name = theme_name
+        self.parent_page = parent_page
+        self.setObjectName("Card")
+        self.setFixedHeight(88)
+        self.setCursor(Qt.PointingHandCursor)
+
+        layout = QHBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        # Left: accent dot
+        self.dot = QLabel()
+        self.dot.setFixedSize(36, 36)
+        self.dot.setStyleSheet(f"border-radius: 18px; background-color: {accent_color};")
+        layout.addWidget(self.dot)
+
+        # Center: text layout
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.name_label = QLabel(display_name)
+        self.name_label.setObjectName("BrandName")
+        self.name_label.setStyleSheet("font-size: 13px; font-weight: 500; background: transparent;")
+
+        self.desc_label = QLabel(description)
+        self.desc_label.setObjectName("SettingSubLabel")
+        self.desc_label.setStyleSheet("font-size: 11px; background: transparent;")
+
+        text_layout.addWidget(self.name_label)
+        text_layout.addWidget(self.desc_label)
+        layout.addLayout(text_layout)
+        layout.addStretch(1)
+
+        # Right: selected indicator
+        self.indicator = QLabel()
+        self.indicator.setFixedSize(18, 18)
+        self.indicator.setAlignment(Qt.AlignCenter)
+        self.update_selection(is_selected, accent_color)
+        layout.addWidget(self.indicator)
+
+    def update_selection(self, is_selected, accent_color):
+        if is_selected:
+            self.indicator.setText("✓")
+            self.indicator.setStyleSheet(
+                f"border-radius: 9px; background-color: {accent_color}; color: #ffffff; font-size: 10px; font-weight: bold; border: none;"
+            )
+        else:
+            self.indicator.setText("")
+            self.indicator.setStyleSheet(
+                "border-radius: 9px; background: transparent; border: 1px solid #888888;"
+            )
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent_page.select_theme(self.theme_name)
+        super().mousePressEvent(event)
+
+
+class ThemesPage(QWidget):
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+        self.setObjectName("ThemesPage")
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header
+        header = QWidget()
+        header.setObjectName("PageHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 8)
+        header_layout.setSpacing(2)
+
+        title_label = QLabel("Themes")
+        title_label.setObjectName("PageTitle")
+        title_label.setStyleSheet("font-size: 16px; font-weight: 500;")
+
+        subtitle_label = QLabel("Choose an accent color style for the app")
+        subtitle_label.setObjectName("PageSubtitle")
+        subtitle_label.setStyleSheet("font-size: 13px;")
+
+        header_layout.addWidget(title_label)
+        header_layout.addWidget(subtitle_label)
+        layout.addWidget(header)
+
+        # Dark mode card
+        dark_card = QFrame()
+        dark_card.setObjectName("Card")
+        row = QHBoxLayout(dark_card)
+        row.setContentsMargins(14, 12, 14, 12)
+        row.setSpacing(12)
+
+        # Left side — label block
+        label_col = QVBoxLayout()
+        label_col.setSpacing(2)
+        title_lbl = QLabel("Dark mode")
+        title_lbl.setObjectName("SettingLabel")
+        sub_lbl = QLabel("Switch between light and dark interface")
+        sub_lbl.setObjectName("SettingSubLabel")
+        label_col.addWidget(title_lbl)
+        label_col.addWidget(sub_lbl)
+
+        row.addLayout(label_col)
+        row.addStretch()
+
+        # Right side — toggle switch
+        self.dark_toggle = ToggleSwitch()
+        win = self.main_window if self.main_window else self.window()
+        self.dark_toggle.setChecked(getattr(win, 'dark_mode', False))
+        self.dark_toggle.toggled.connect(self._on_dark_toggled)
+        row.addWidget(self.dark_toggle)
+
+        layout.addWidget(dark_card)
+
+        # Theme Grid
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setSpacing(10)
+        layout.addLayout(self.grid_layout)
+        layout.addStretch(1)
+
+        self.cards = {}
+        self.populate_themes()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'dark_toggle'):
+            win = self.main_window if self.main_window else self.window()
+            self.dark_toggle.blockSignals(True)
+            self.dark_toggle.setChecked(getattr(win, 'dark_mode', False))
+            self.dark_toggle.blockSignals(False)
+
+    def _on_dark_toggled(self, checked: bool):
+        win = self.main_window if self.main_window else self.window()
+        if hasattr(win, 'dark_mode'):
+            win.dark_mode = checked
+            win._apply_theme()
+            self.dark_toggle.blockSignals(True)
+            self.dark_toggle.setChecked(checked)
+            self.dark_toggle.blockSignals(False)
+
+    def populate_themes(self):
+        from ui.themes import THEMES, all_theme_names
+        current_theme = getattr(self.main_window, 'current_theme_name', 'Teal Clarity')
+
+        # Remove old cards if any
+        for card in list(self.cards.values()):
+            self.grid_layout.removeWidget(card)
+            card.deleteLater()
+        self.cards.clear()
+
+        names = all_theme_names()
+        for idx, name in enumerate(names):
+            theme = THEMES[name]
+            is_selected = (name == current_theme)
+            card = ThemeCard(
+                theme_name=name,
+                display_name=theme["display_name"],
+                description=theme["description"],
+                accent_color=theme["accent_light"],
+                is_selected=is_selected,
+                parent_page=self
+            )
+            self.cards[name] = card
+            row = idx // 2
+            col = idx % 2
+            self.grid_layout.addWidget(card, row, col)
+
+    def select_theme(self, theme_name):
+        self.main_window.apply_theme(theme_name)
+
+    def update_card_selection(self):
+        from ui.themes import THEMES
+        current_theme = getattr(self.main_window, 'current_theme_name', 'Teal Clarity')
+        for name, card in self.cards.items():
+            is_selected = (name == current_theme)
+            theme = THEMES[name]
+            card.update_selection(is_selected, theme["accent_light"])
+

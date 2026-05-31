@@ -201,15 +201,23 @@ class PagesMixin:
         status_label._item_prog = progress
         status_label._item_speed = speed_label
 
-        # Hidden buttons to prevent crashes
-        pause_btn = QPushButton("Pause")
+        # Hidden buttons to prevent crashes and ghost windows
+        pause_btn = QPushButton("Pause", frame)
         self._style_btn(pause_btn)
+        pause_btn.setVisible = lambda visible: None
+        pause_btn.show = lambda: None
         pause_btn.hide()
-        cancel_btn = QPushButton("Cancel")
+        
+        cancel_btn = QPushButton("Cancel", frame)
         self._style_btn(cancel_btn)
+        cancel_btn.setVisible = lambda visible: None
+        cancel_btn.show = lambda: None
         cancel_btn.hide()
-        open_btn = QPushButton("Open")
+        
+        open_btn = QPushButton("Open", frame)
         self._style_btn(open_btn)
+        open_btn.setVisible = lambda visible: None
+        open_btn.show = lambda: None
         open_btn.hide()
 
         layout.addWidget(thumbnail)

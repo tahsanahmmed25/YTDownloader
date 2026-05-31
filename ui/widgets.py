@@ -537,7 +537,7 @@ class NavButton(QPushButton):
         painter.drawText(icon_rect, Qt.AlignVCenter | Qt.AlignLeft, self.icon_char if hasattr(self, 'icon_char') else '')
 
         label_font = QFont(self.font())
-        label_font.setPixelSize(13)
+        label_font.setPixelSize(14)
         painter.setFont(label_font)
         painter.setPen(text_color)
         painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, self.label_text if hasattr(self, 'label_text') else self.text())

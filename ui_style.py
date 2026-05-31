@@ -2,7 +2,7 @@ LIGHT = {
     "bg_window":      "#f7f7f7",
     "bg_surface":     "#efefef",
     "bg_input":       "#f7f7f7",
-    "bg_card":        "#ffffff",
+    "bg_card":        "#fafafa",
     "bg_hover":       "#f0f0f0",
     "bg_active":      "#f0fdfa",
     "border":         "#e5e5e5",

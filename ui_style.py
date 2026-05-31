@@ -203,7 +203,7 @@ QPushButton#PillButton {{
     border: none;
     border-radius: 20px;
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: 13px;
     color: {text_tertiary};
 }}
 
@@ -256,6 +256,16 @@ QFrame#Card QLabel#SettingLabel {{
     background: transparent;
 }}
 
+QFrame#PrefRow {{
+    border: none;
+    border-bottom: 1px solid {border};
+    padding: 10px 0;
+}}
+
+QFrame#PrefRow:last-child {{
+    border-bottom: none;
+}}
+
 QFrame#ConfigCell {{
     background: {bg_surface};
     border: 1px solid {border};
@@ -263,16 +273,24 @@ QFrame#ConfigCell {{
     padding: 8px 10px;
 }}
 
+QFrame#ConfigCell[disabled="true"] {{
+    opacity: 0.5;
+}}
+
+QFrame#ConfigCell[disabled="true"] QComboBox {{
+    color: {text_tertiary};
+}}
+
 QFrame#ConfigCell:hover {{
     border: 1px solid {border_focus};
 }}
 
 QFrame#ConfigCell QLabel {{
-    font-size: 15px;
+    font-size: 16px;
 }}
 
 QFrame#ConfigCell QLabel#SectionLabel {{
-    font-size: 11px;
+    font-size: 13px;
 }}
 
 QProgressBar {{

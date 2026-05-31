@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QPushButton, QToolButton, QStyle, QStyleOptionButton,
     QStylePainter, QGraphicsOpacityEffect, QSizePolicy, QFrame, QAbstractButton,
-    QProgressBar
+    QProgressBar, QComboBox
 )
-from PySide6.QtCore import Qt, QPropertyAnimation, Property, QTimer, QSize, QRectF, QPointF, QEasingCurve
+from PySide6.QtCore import Qt, QPropertyAnimation, Property, QTimer, QSize, QRectF, QPointF, QEasingCurve, QAbstractAnimation
 from PySide6.QtGui import QColor, QPalette, QPainter, QPen, QLinearGradient, QBrush, QPainterPath, QFont
 
 from ui_style import DARK, LIGHT
@@ -753,6 +753,22 @@ class PrimaryButton(QPushButton):
         painter.setFont(self.font())
         painter.drawText(rect, Qt.AlignCenter, self.text())
         painter.end()
+
+
+class AnimatedComboBox(QComboBox):
+    def showPopup(self):
+        super().showPopup()
+        popup = self.findChild(QFrame)
+        if popup:
+            effect = QGraphicsOpacityEffect(popup)
+            popup.setGraphicsEffect(effect)
+            anim = QPropertyAnimation(effect, b"opacity", popup)
+            anim.setDuration(150)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.start(QAbstractAnimation.DeleteWhenStopped)
+
 
 
 

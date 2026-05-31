@@ -24,8 +24,9 @@ from PySide6.QtGui import QFont, QColor, QPixmap, QIcon
 from ui.widgets import (
     FadingTextButton, PasteButton, BrandIcon, DownloadButton, GradientButton,
     DownloadProgressBar, ToggleSwitch, ToastFrame, NavButton, StatusBadge,
-    SectionLabel, NavCounter, PrimaryButton
+    SectionLabel, NavCounter, PrimaryButton, AnimatedComboBox
 )
+
 
 
 class PagesMixin:
@@ -33,6 +34,27 @@ class PagesMixin:
         btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         btn.setMinimumWidth(0)
         btn.adjustSize()
+
+    def _set_metadata_placeholder(self, is_placeholder):
+        from ui_style import DARK, LIGHT
+        dark = getattr(self, "dark_mode", False)
+        t = DARK if dark else LIGHT
+        
+        if is_placeholder:
+            self.thumbnail.clear()
+            self.thumbnail.setStyleSheet(f"border-radius: 6px; background-color: {t['bg_surface']};")
+            self.title.setText("No video selected")
+            self.title.setStyleSheet(f"color: {t['text_tertiary']}; font-style: italic; font-size: 13px; font-weight: normal;")
+            self.size.setText("—")
+            self.size.setStyleSheet(f"color: {t['text_tertiary']}; font-size: 12px;")
+            self.reset_btn.setEnabled(False)
+            self.show_thumb_cb.setEnabled(False)
+        else:
+            self.thumbnail.setStyleSheet("border-radius: 6px;")
+            self.title.setStyleSheet("")
+            self.size.setStyleSheet("")
+            self.reset_btn.setEnabled(True)
+            self.show_thumb_cb.setEnabled(True)
 
     def _create_page_header(self, title, subtitle):
         header = QWidget()
@@ -43,7 +65,6 @@ class PagesMixin:
         
         t_label = QLabel(title)
         t_label.setObjectName("PageTitle")
-        t_label.setStyleSheet("font-size: 16px; font-weight: 500;")
         
         sub_label = QLabel(subtitle)
         sub_label.setObjectName("PageSubtitle")
@@ -52,6 +73,7 @@ class PagesMixin:
         layout.addWidget(t_label)
         layout.addWidget(sub_label)
         return header
+
 
     def _create_config_cell(self, label_text, widget):
         cell = QFrame()
@@ -62,15 +84,16 @@ class PagesMixin:
         
         key_label = QLabel(label_text.upper())
         key_label.setObjectName("SectionLabel")
-        key_label.setStyleSheet("font-size: 11px; font-weight: 500;")
         
         combos = widget.findChildren(QComboBox) if not isinstance(widget, QComboBox) else [widget]
         for combo in combos:
-            combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 14px; padding: 0px; margin: 0px;")
+            combo.setStyleSheet("background: transparent; border: none; font-weight: 500; font-size: 16px; padding: 0px; margin: 0px;")
         
         layout.addWidget(key_label)
         layout.addWidget(widget)
         return cell
+
+
 
     def _create_toggle_row(self, label_text, toggle_switch):
         row = QHBoxLayout()
@@ -223,6 +246,8 @@ class PagesMixin:
         # URL Input Card
         url_card = QFrame()
         url_card.setObjectName("Card")
+        url_card.setMinimumHeight(72)
+        url_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         url_card_layout = QHBoxLayout(url_card)
         url_card_layout.setContentsMargins(14, 14, 14, 14)
         url_card_layout.setSpacing(8)
@@ -241,6 +266,7 @@ class PagesMixin:
         self.fetch_btn = PrimaryButton("Analyze")
         self.fetch_btn.setObjectName("PrimaryButton")
         self.fetch_btn.setFixedHeight(32)
+        self.fetch_btn.setFixedWidth(110)
 
         self.fetch_spinner = QProgressBar()
         self.fetch_spinner.setObjectName("FetchBar")
@@ -269,10 +295,9 @@ class PagesMixin:
         url_card_layout.addWidget(self.fetch_btn)
         layout.addWidget(url_card)
 
-        # Video details container (collapsed on startup)
+        # Video details container (always visible)
         self.details_container = QWidget()
-        self.details_container.setVisible(False)
-        self.details_container.setMaximumHeight(0)
+        self.details_container.setVisible(True)
         details_layout = QVBoxLayout(self.details_container)
         details_layout.setContentsMargins(0, 0, 0, 0)
         details_layout.setSpacing(0)
@@ -286,7 +311,7 @@ class PagesMixin:
 
         self.thumbnail = QLabel()
         self.thumbnail.setObjectName("PreviewThumb")
-        self.thumbnail.setFixedSize(120, 68)
+        self.thumbnail.setFixedSize(80, 50)
         self.thumbnail.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.thumbnail.setScaledContents(True)
         self.thumbnail.setStyleSheet("")
@@ -299,11 +324,9 @@ class PagesMixin:
         self.title.setObjectName("InfoTitle")
         self.title.setWordWrap(True)
         self.title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.title.setStyleSheet("font-size: 12px; font-weight: 500;")
 
         self.size = QLabel("Estimated size: -")
         self.size.setObjectName("InfoSubtle")
-        self.size.setStyleSheet("font-size: 11px;")
 
         info_layout.addWidget(self.title)
         info_layout.addWidget(self.size)
@@ -382,7 +405,7 @@ class PagesMixin:
             _update_pill_styles()
         self.playlist_toggle.toggled.connect(on_playlist_toggled)
 
-        self.subs_mode_combo = QComboBox()
+        self.subs_mode_combo = AnimatedComboBox()
         self.subs_mode_combo.blockSignals(True)
         self.subs_mode_combo.addItems(["None", "Download", "Embed"])
         self.subs_mode_combo.blockSignals(False)
@@ -414,19 +437,19 @@ class PagesMixin:
         self.subs_checkbox.toggled.connect(lambda _: sync_subs_mode_from_checkboxes())
         self.embed_subs_checkbox.toggled.connect(lambda _: sync_subs_mode_from_checkboxes())
 
-        self.format_combo = QComboBox()
+        self.format_combo = AnimatedComboBox()
         self.format_combo.setMaxVisibleItems(10)
         self.format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.quality = QComboBox()
+        self.quality = AnimatedComboBox()
         self.quality_combo = self.quality
         self.quality.setMaxVisibleItems(10)
         self.quality.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.subs_lang = QComboBox()
+        self.subs_lang = AnimatedComboBox()
         self.subs_lang.setMaxVisibleItems(10)
         self.subs_lang.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # Create audio_combo for Audio config cell
-        self.audio_combo = QComboBox()
+        self.audio_combo = AnimatedComboBox()
         self.audio_combo.setMaxVisibleItems(10)
         self.audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.audio_combo.addItems(["Best", "AAC", "MP3", "Opus", "FLAC", "Vorbis"])
@@ -477,10 +500,10 @@ class PagesMixin:
         config_grid_layout.setContentsMargins(0, 0, 0, 0)
 
         cell_quality = self._create_config_cell("Quality", self.quality)
-        cell_format = self._create_config_cell("Format", self.format_combo)
-        cell_audio = self._create_config_cell("Audio", self.audio_combo)
+        cell_format = self._create_config_cell("Video Format", self.format_combo)
+        cell_audio = self._create_config_cell("Audio Format", self.audio_combo)
         self.subtitle_lang_cell = self._create_config_cell("Subtitles", self.subs_container)
-        self.subtitle_lang_cell.setVisible(False)
+        self.subtitle_lang_cell.setVisible(True)
 
         config_grid_layout.addWidget(cell_quality, 0, 0)
         config_grid_layout.addWidget(cell_format, 0, 1)
@@ -501,11 +524,15 @@ class PagesMixin:
 
         self.fetch_btn.clicked.connect(self.fetch_info)
         self.download_btn.clicked.connect(self.start_download)
+        
+        self.config_cells = [cell_quality, cell_format, cell_audio, self.subtitle_lang_cell]
+        self._set_metadata_placeholder(True)
         self._clear_format_quality()
         self._set_config_enabled(False)
 
         self.load_defaults_from_prefs()
         return page
+
 
     def _build_library_page(self):
         page = QWidget()
@@ -517,9 +544,9 @@ class PagesMixin:
         # Header Title + Subtitle
         self.library_header_title = QLabel("Downloads")
         self.library_header_title.setObjectName("PageTitle")
-        self.library_header_title.setStyleSheet("font-size: 15px; font-weight: 500;")
 
         self.library_header_subtitle = QLabel("No active downloads")
+
         self.library_header_subtitle.setObjectName("PageSubtitle")
         self.library_header_subtitle.setStyleSheet("font-size: 12px;")
 
@@ -644,8 +671,9 @@ class PagesMixin:
         card_layout.setSpacing(0)
 
         def create_setting_row(label_text, sublabel_text, control_widget, is_last=False):
-            row_widget = QWidget()
-            row_layout = QHBoxLayout(row_widget)
+            row_frame = QFrame()
+            row_frame.setObjectName("PrefRow")
+            row_layout = QHBoxLayout(row_frame)
             row_layout.setContentsMargins(0, 10, 0, 10)
             row_layout.setSpacing(12)
 
@@ -667,22 +695,11 @@ class PagesMixin:
             row_layout.addWidget(label_block, 1)
             row_layout.addWidget(control_widget)
 
-            wrapper = QWidget()
-            wrapper_layout = QVBoxLayout(wrapper)
-            wrapper_layout.setContentsMargins(0, 0, 0, 0)
-            wrapper_layout.setSpacing(0)
-            wrapper_layout.addWidget(row_widget)
+            if is_last:
+                row_frame.setStyleSheet("border-bottom: none;")
 
-            if not is_last:
-                divider = QFrame()
-                divider.setFrameShape(QFrame.HLine)
-                divider.setFrameShadow(QFrame.Plain)
-                divider.setFixedHeight(1)
-                divider.setObjectName("Divider")
-                divider.setStyleSheet("")
-                wrapper_layout.addWidget(divider)
+            return row_frame
 
-            return wrapper
 
         # 1. Save Folder Row
         self.download_dir_input = QLabel(self.download_dir)
@@ -714,7 +731,7 @@ class PagesMixin:
         self.speed_limit_spin.valueChanged.connect(self._on_speed_limit_changed)
 
         # 6. Default Quality Row — Fix 11: full quality list
-        self.pref_quality_combo = QComboBox()
+        self.pref_quality_combo = AnimatedComboBox()
         self.default_quality_combo = self.pref_quality_combo
         self.pref_quality_combo.blockSignals(True)
         self.pref_quality_combo.addItems([
@@ -729,7 +746,7 @@ class PagesMixin:
         self.pref_quality_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # 7. Default Format Row — Fix 10
-        self.pref_format_combo = QComboBox()
+        self.pref_format_combo = AnimatedComboBox()
         self.default_format_combo = self.pref_format_combo
         self.pref_format_combo.blockSignals(True)
         self.pref_format_combo.addItems(["MP4", "MKV", "WebM", "MP3", "M4A"])
@@ -741,7 +758,7 @@ class PagesMixin:
         self.pref_format_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # 8. Default Audio Codec Row — Fix 10
-        self.pref_audio_combo = QComboBox()
+        self.pref_audio_combo = AnimatedComboBox()
         self.default_audio_combo = self.pref_audio_combo
         self.pref_audio_combo.blockSignals(True)
         self.pref_audio_combo.addItems(["AAC", "MP3", "Opus", "Flac", "Best"])
@@ -751,6 +768,7 @@ class PagesMixin:
         )
         self.pref_audio_combo.setMaxVisibleItems(10)
         self.pref_audio_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
 
         from PySide6.QtCore import QSettings
         self.default_quality_combo.currentTextChanged.connect(
@@ -980,8 +998,6 @@ class PagesMixin:
         notice_label.setWordWrap(True)
         notice_label.setObjectName("SettingSubLabel")
         notice_label.setStyleSheet("font-size: 11px;")
-        card_layout.addWidget(notice_label)
-
         self.terms_btn = QPushButton("View Terms && Privacy")
         self.terms_btn.setObjectName("GhostButton")
         self.terms_btn.clicked.connect(self.show_terms_dialog)
@@ -997,20 +1013,42 @@ class PagesMixin:
         
         quality = s.value("default_quality", "1080p")
         fmt     = s.value("default_format",  "MP4")
-        audio   = s.value("default_audio",   "Best")
+        audio   = s.value("default_audio",   "MP3")
+        
+        # Populate combos with default options if empty on startup
+        if self.quality.count() == 0:
+            self.quality.addItems(["Auto (Best)", "720p", "1080p", "2K", "4K"])
+        if self.format_combo.count() == 0:
+            self.format_combo.addItems(["Auto", "MP4", "MKV", "WEBM"])
+        if self.audio_combo.count() == 0:
+            self.audio_combo.addItems(["Best", "AAC", "MP3", "Opus", "FLAC", "Vorbis"])
+        if self.subs_lang.count() == 0:
+            self.subs_lang.addItem("None")
 
         # Set the combobox/config cell to match saved defaults
         idx = self.quality.findText(quality)
         if idx >= 0:
             self.quality.setCurrentIndex(idx)
+        else:
+            self.quality.addItem(quality)
+            self.quality.setCurrentText(quality)
         
         idx = self.format_combo.findText(fmt)
         if idx >= 0:
             self.format_combo.setCurrentIndex(idx)
+        else:
+            self.format_combo.addItem(fmt)
+            self.format_combo.setCurrentText(fmt)
         
         idx = self.audio_combo.findText(audio)
         if idx >= 0:
             self.audio_combo.setCurrentIndex(idx)
+        else:
+            self.audio_combo.addItem(audio)
+            self.audio_combo.setCurrentText(audio)
+
+        self.subs_mode_combo.setCurrentText("None")
+        self.subs_lang.setCurrentText("None")
 
 
 class ThemeCard(QFrame):
@@ -1094,9 +1132,9 @@ class ThemesPage(QWidget):
 
         title_label = QLabel("Themes")
         title_label.setObjectName("PageTitle")
-        title_label.setStyleSheet("font-size: 16px; font-weight: 500;")
 
         subtitle_label = QLabel("Choose an accent color style for the app")
+
         subtitle_label.setObjectName("PageSubtitle")
         subtitle_label.setStyleSheet("font-size: 13px;")
 

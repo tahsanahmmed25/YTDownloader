@@ -438,6 +438,7 @@ class Downloader(QMainWindow, PagesMixin):
         self.toast_label.setWordWrap(True)
         toast_layout.addWidget(self.toast_label)
         self.toast.hide()
+        self._apply_theme()
 
     def _switch_page(self, page, page_name):
         self.pages.setCurrentWidget(page)
@@ -582,15 +583,10 @@ class Downloader(QMainWindow, PagesMixin):
         pass
 
     def _collapse_details(self):
-        if not hasattr(self, "details_container") or not self.details_container:
-            return
-        self.details_container.setVisible(False)
+        pass
 
     def _expand_details(self):
-        if not hasattr(self, "details_container") or not self.details_container:
-            return
-        self.details_container.setVisible(True)
-        self.details_container.setMaximumHeight(9999)
+        pass
 
     def _show_downloads_panel(self, show=True):
         if not hasattr(self, "downloads_panel"):
@@ -637,10 +633,16 @@ class Downloader(QMainWindow, PagesMixin):
             self._downloads_anim.start()
 
     def _set_config_enabled(self, enabled):
-        if not hasattr(self, "config_content") or not self.config_content:
+        if not hasattr(self, "config_cells") or not self.config_cells:
             return
-        self.config_content.setEnabled(bool(enabled))
-        self.config_content.setVisible(True)
+        prop_val = "false" if enabled else "true"
+        for cell in self.config_cells:
+            cell.setProperty("disabled", prop_val)
+            cell.style().unpolish(cell)
+            cell.style().polish(cell)
+            from PySide6.QtWidgets import QComboBox
+            for combo in cell.findChildren(QComboBox):
+                combo.setEnabled(bool(enabled))
 
     def _set_config_visible(self, visible, animate=True):
         self._set_config_enabled(visible)
@@ -884,10 +886,18 @@ class Downloader(QMainWindow, PagesMixin):
 
     def _apply_theme(self):
         from ui_style import get_stylesheet
+        from ui.themes import get_theme
         sheet = get_stylesheet(dark=self.dark_mode, theme_name=self.current_theme_name)
         self.setStyleSheet(sheet)
         self._refresh_all_nav_buttons()
         self._apply_combo_popup_theme()
+
+        # Update page title colors to match theme accent
+        theme = get_theme(self.current_theme_name)
+        accent = theme["accent_dark"] if self.dark_mode else theme["accent_light"]
+        for label in self.findChildren(QLabel):
+            if label.objectName() == "PageTitle":
+                label.setStyleSheet(f"color: {accent}; font-size: 18px; font-weight: 500;")
 
         # Update dark_mode state on custom widgets dynamically
         for widget in self.findChildren(ToggleSwitch):
@@ -1010,17 +1020,11 @@ class Downloader(QMainWindow, PagesMixin):
         if not available:
             self.subs_lang.addItem("Not available")
             self.subs_lang.setEnabled(False)
-            # Fix 12 — hide subtitle cell when no subtitles are available
-            if hasattr(self, "subtitle_lang_cell"):
-                self.subtitle_lang_cell.setVisible(False)
         else:
             self.subs_lang.addItem("Any")
             for lang in available:
                 self.subs_lang.addItem(lang)
             self.subs_lang.setEnabled(True)
-            # Fix 12 — reveal subtitle cell when subtitles are available
-            if hasattr(self, "subtitle_lang_cell"):
-                self.subtitle_lang_cell.setVisible(True)
         self.subs_lang.blockSignals(False)
 
     def _clear_format_quality(self):
@@ -2194,9 +2198,12 @@ class Downloader(QMainWindow, PagesMixin):
             self.url_input.deselect()
         except Exception:
             pass
-        self.title.setText("Title: -")
-        self.size.setText("Estimated size: -")
-        self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
+        if hasattr(self, "_set_metadata_placeholder"):
+            self._set_metadata_placeholder(True)
+        else:
+            self.title.setText("Title: -")
+            self.size.setText("Estimated size: -")
+            self.thumbnail.clear()
         self._clear_format_quality()
 
         cookiefile = self._effective_cookie_file()
@@ -2248,6 +2255,8 @@ class Downloader(QMainWindow, PagesMixin):
                       available_formats=None,
                       available_qualities=None,
                       available_subtitles=None):
+        if hasattr(self, "_set_metadata_placeholder"):
+            self._set_metadata_placeholder(False)
         self.title.setText(f"Title: {title}")
         if size == "Unknown":
             self.size.setText("Estimated size: Unknown")
@@ -2264,7 +2273,7 @@ class Downloader(QMainWindow, PagesMixin):
             pix.loadFromData(thumb_bytes)
             self._set_preview_thumbnail(pix)
         else:
-            self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
+            self.thumbnail.clear()
 
         self._apply_format_options(available_formats)
         self._apply_quality_options(available_qualities)
@@ -2303,6 +2312,12 @@ class Downloader(QMainWindow, PagesMixin):
         self._estimated_size_mb = None
         self.download_btn.setEnabled(False)
         self._set_config_enabled(False)
+        if hasattr(self, "_set_metadata_placeholder"):
+            self._set_metadata_placeholder(True)
+        else:
+            self.title.setText("Title: -")
+            self.size.setText("Estimated size: -")
+            self.thumbnail.clear()
         self._sync_download_button_text()
 
     def _on_cookie_lock(self, browser_name, msg):
@@ -3000,18 +3015,7 @@ class Downloader(QMainWindow, PagesMixin):
                     anchor_widget=self.nav_library_btn
                 )
             if self._tray and self._tray.isVisible():
-                app_in_foreground = (
-                    QApplication.applicationState() == Qt.ApplicationActive
-                    and self.isVisible()
-                    and not self.isMinimized()
-                )
-                if not app_in_foreground:
-                    self._tray.showMessage(
-                        "Download complete",
-                        task.get("title") or "Download finished",
-                        QSystemTrayIcon.Information,
-                        2000
-                    )
+                pass
         except Exception:
             _log.exception("UI update failed while completing task %s", task_id)
         self._update_global_progress()
@@ -3365,16 +3369,18 @@ class Downloader(QMainWindow, PagesMixin):
         self.download_btn.setEnabled(False)
         self._reset_download_ui()
         self.url_input.clear()
-        self.title.setText("Title: -")
-        self.size.setText("Estimated size: -")
+        if hasattr(self, "_set_metadata_placeholder"):
+            self._set_metadata_placeholder(True)
+        else:
+            self.title.setText("Title: -")
+            self.size.setText("Estimated size: -")
+            self.thumbnail.clear()
         self._last_downloaded_bytes = None
         self._last_total_bytes = None
         self._last_progress_value = 0
         if getattr(self, "progress", None):
             self.progress.setValue(0)
             self.progress.setFormat("0%")
-        self.thumbnail.clear()
-        self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
         self._clear_format_quality()
         self.subs_checkbox.setChecked(False)
         self.embed_subs_checkbox.setChecked(False)
@@ -3428,16 +3434,18 @@ class Downloader(QMainWindow, PagesMixin):
         self._reset_download_ui()
         self.url_input.clear()
         self._collapse_details()
-        self.title.setText("Title: -")
-        self.size.setText("Estimated size: -")
+        if hasattr(self, "_set_metadata_placeholder"):
+            self._set_metadata_placeholder(True)
+        else:
+            self.title.setText("Title: -")
+            self.size.setText("Estimated size: -")
+            self.thumbnail.clear()
         self._last_downloaded_bytes = None
         self._last_total_bytes = None
         self._last_progress_value = 0
         if getattr(self, "progress", None):
             self.progress.setValue(0)
             self.progress.setFormat("0%")
-        self.thumbnail.clear()
-        self.thumbnail.setPixmap(self._placeholder_pixmap(self.thumbnail.size()))
         self._clear_format_quality()
         self.subs_checkbox.setChecked(False)
         self.embed_subs_checkbox.setChecked(False)

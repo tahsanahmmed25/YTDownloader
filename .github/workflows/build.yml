@@ -315,18 +315,18 @@ jobs:
             --icon "YTDownloaderPro.app" 200 190 \
             --hide-extension "YTDownloaderPro.app" \
             --app-drop-link 600 185 \
-            "dist_installer/YTDownloaderPro.dmg" \
+            "dist_installer/YTDownloaderPro-macOS.dmg" \
             "dist/YTDownloaderPro.app"
 
       - name: Verify macOS DMG
         run: |
-          test -s dist_installer/YTDownloaderPro.dmg
-          shasum -a 256 dist_installer/YTDownloaderPro.dmg | tee dist_installer/SHA256SUMS-mac.txt
+          test -s dist_installer/YTDownloaderPro-macOS.dmg
+          shasum -a 256 dist_installer/YTDownloaderPro-macOS.dmg | tee dist_installer/SHA256SUMS-mac.txt
 
       - name: Upload macOS DMG to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist_installer/YTDownloaderPro.dmg
+            dist_installer/YTDownloaderPro-macOS.dmg
             dist_installer/SHA256SUMS-mac.txt

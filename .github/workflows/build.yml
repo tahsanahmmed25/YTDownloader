@@ -327,7 +327,7 @@ jobs:
           Compress-Archive -Path "dist/YTDownloaderPro" -DestinationPath "dist_installer/YTDownloaderPro-windows-x64.zip" -Force
 
       - name: Install WiX Toolset
-        run: dotnet tool install --global wix
+        run: dotnet tool install --global wix --version 5.0.2
 
       - name: Build MSI installer
         shell: pwsh

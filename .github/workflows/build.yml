@@ -326,6 +326,43 @@ jobs:
         run: |
           Compress-Archive -Path "dist/YTDownloaderPro" -DestinationPath "dist_installer/YTDownloaderPro-windows-x64.zip" -Force
 
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix
+
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
+          if (-not $version -or $version -eq "main" -or $version -eq "master") { $version = "3.0.0" }
+          $distDir = (Resolve-Path "dist/YTDownloaderPro").Path
+
+          # Generate WiX source with file harvesting
+          $wxsContent = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="YTDownloaderPro"
+                     Manufacturer="Tahsan Ahmmed"
+                     Version="$version"
+                     UpgradeCode="7B3A4E5F-1C2D-4A6B-9E8F-0D1C2B3A4E5F">
+              <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+              <MediaTemplate EmbedCab="yes" />
+              <StandardDirectory Id="ProgramFiles6432Folder">
+                <Directory Id="INSTALLFOLDER" Name="YTDownloaderPro">
+                  <Files Include="$distDir\**" />
+                </Directory>
+              </StandardDirectory>
+            </Package>
+          </Wix>
+          "@
+
+          $wxsContent | Set-Content -Path "YTDownloaderPro.wxs" -Encoding UTF8
+          wix build YTDownloaderPro.wxs -o dist_installer/YTDownloaderPro-windows-x64.msi
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "MSI build failed — skipping MSI package"
+            # Create empty marker so downstream steps know to skip
+            "MSI_SKIPPED" | Set-Content -Path "dist_installer/.msi_skipped"
+          }
+
       - name: Verify and checksum Windows packages
         shell: pwsh
         run: |
@@ -339,6 +376,10 @@ jobs:
           $hashZip = (Get-FileHash "dist_installer/YTDownloaderPro-windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
           "$hashExe  YTDownloaderPro-Setup.exe" | Set-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
           "$hashZip  YTDownloaderPro-windows-x64.zip" | Add-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
+          if (Test-Path "dist_installer/YTDownloaderPro-windows-x64.msi") {
+            $hashMsi = (Get-FileHash "dist_installer/YTDownloaderPro-windows-x64.msi" -Algorithm SHA256).Hash.ToLower()
+            "$hashMsi  YTDownloaderPro-windows-x64.msi" | Add-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
+          }
 
       - name: Upload Windows packages to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -346,6 +387,7 @@ jobs:
         with:
           files: |
             dist_installer/YTDownloaderPro-Setup.exe
+            dist_installer/YTDownloaderPro-windows-x64.msi
             dist_installer/YTDownloaderPro-windows-x64.zip
             dist_installer/SHA256SUMS-windows.txt
 

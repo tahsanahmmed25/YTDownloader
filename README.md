@@ -1,6 +1,6 @@
 # YT Downloader Pro
 
-**A clean, fast YouTube downloader for Windows and Linux.**
+<p align="center"><b>A clean, fast YouTube downloader for Windows, Linux, and macOS.</b></p>
 
 > ⚠️ Always download from the official source: [github.com/tahsanahmmed25/YTDownloaderPro](https://github.com/tahsanahmmed25/YTDownloaderPro)
 
@@ -72,6 +72,18 @@ sudo apt install libfuse2 libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0 lib
 
 ---
 
+## 🍎 macOS Quick Start
+
+1. Download `YTDownloaderPro-macOS.dmg` from the Releases page
+2. Double-click the DMG and drag **YTDownloaderPro** into your **Applications** folder
+3. Open it from your Applications folder
+4. If macOS warns about an unsigned developer, right-click the app icon and select **Open**, or run:
+   ```bash
+   xattr -cr /Applications/YTDownloaderPro.app
+   ```
+
+---
+
 ## 🔒 Restricted Mode
 
 For age-restricted or members-only videos, go to **Restricted Mode** in the sidebar and choose:
@@ -86,12 +98,12 @@ Your cookies never leave your computer.
 
 ## ⚙️ System Requirements
 
-| | Linux | Windows |
-| - | ----- | ------- |
-| OS | Any 64-bit distro (Ubuntu 20.04+) | Windows 10/11 64-bit |
-| CPU | x86_64 | x86_64 |
-| RAM | 512 MB | 512 MB |
-| Disk | 500 MB | 500 MB |
+| | Linux | Windows | macOS |
+| - | ----- | ------- | ----- |
+| OS | Any 64-bit distro (Ubuntu 20.04+) | Windows 10/11 64-bit | macOS 12+ |
+| CPU | x86_64 | x86_64 | Apple Silicon / Intel |
+| RAM | 512 MB | 512 MB | 512 MB |
+| Disk | 500 MB | 500 MB | 500 MB |
 
 ---
 
@@ -106,6 +118,8 @@ Your cookies never leave your computer.
 **FFmpeg merge failed (Linux)** — Run `sudo apt install ffmpeg`.
 
 **"Failed to decrypt browser cookies" on Linux** — Switch to Firefox or use the Login to YouTube option.
+
+**macOS: "damaged" or "cannot be opened because developer cannot be verified"** — Right-click the app in Applications and click **Open**, or run: `xattr -cr /Applications/YTDownloaderPro.app`
 
 ---
 

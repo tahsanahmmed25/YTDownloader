@@ -1,4 +1,4 @@
-name: Build — Windows & Linux
+name: Build — Windows, Linux & macOS
  
 on:
   push:
@@ -273,3 +273,60 @@ jobs:
           files: |
             dist_installer/YTDownloaderPro-Setup.exe
             dist_installer/SHA256SUMS-windows.txt
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # macOS — DMG installer
+  # ══════════════════════════════════════════════════════════════════════════
+  build-mac:
+    name: macOS DMG
+    runs-on: macos-latest
+    needs: prepare-release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.lock
+          python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
+
+      - name: Build with PyInstaller
+        run: |
+          python -m PyInstaller --clean -y YTDownloaderPro.spec
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Package as DMG
+        run: |
+          mkdir -p dist_installer
+          create-dmg \
+            --volname "YTDownloaderPro" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "YTDownloaderPro.app" 200 190 \
+            --hide-extension "YTDownloaderPro.app" \
+            --app-drop-link 600 185 \
+            "dist_installer/YTDownloaderPro.dmg" \
+            "dist/YTDownloaderPro.app"
+
+      - name: Verify macOS DMG
+        run: |
+          test -s dist_installer/YTDownloaderPro.dmg
+          shasum -a 256 dist_installer/YTDownloaderPro.dmg | tee dist_installer/SHA256SUMS-mac.txt
+
+      - name: Upload macOS DMG to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist_installer/YTDownloaderPro.dmg
+            dist_installer/SHA256SUMS-mac.txt

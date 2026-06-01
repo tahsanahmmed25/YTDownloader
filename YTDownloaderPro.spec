@@ -10,6 +10,8 @@ from pyinstaller_common import make_spec_config
 
 
 _spec = make_spec_config(_SPEC_DIR, "main.py", [_SPEC_DIR])
+if sys.platform == 'darwin':
+    _spec["exe"]["icon"] = None
 
 a = Analysis(**_spec["analysis"])
 pyz = PYZ(a.pure)
@@ -28,3 +30,11 @@ coll = COLLECT(
     a.datas,
     **_spec["collect"],
 )
+
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='YTDownloaderPro.app',
+        icon=None,
+        bundle_identifier='com.tahsan.ytdownloaderpro',
+    )

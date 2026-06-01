@@ -168,7 +168,12 @@ jobs:
           mkdir -p dist_installer
           ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloaderPro-linux-x86_64.AppImage"
 
-      - name: Build DEB and TAR.GZ packages
+      - name: Install packaging tools (alien and rpm)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends alien rpm
+
+      - name: Build DEB, RPM, and TAR.GZ packages
         run: |
           set -euo pipefail
           VERSION="${{ github.ref_name }}"
@@ -214,7 +219,11 @@ jobs:
 
           dpkg-deb --build "$DEBDIR" "dist_installer/YTDownloaderPro-linux-amd64.deb"
 
-          # 2. Build portable .tar.gz package
+          # 2. Build .rpm package using alien from the .deb
+          alien --to-rpm --scripts dist_installer/YTDownloaderPro-linux-amd64.deb
+          mv ytdownloaderpro-*.rpm dist_installer/YTDownloaderPro-linux-x86_64.rpm
+
+          # 3. Build portable .tar.gz package
           tar -czf "dist_installer/YTDownloaderPro-linux-x86_64.tar.gz" -C dist YTDownloaderPro
 
       - name: Verify and checksum Linux packages
@@ -222,10 +231,12 @@ jobs:
           set -euo pipefail
           test -s dist_installer/YTDownloaderPro-linux-x86_64.AppImage
           test -s dist_installer/YTDownloaderPro-linux-amd64.deb
+          test -s dist_installer/YTDownloaderPro-linux-x86_64.rpm
           test -s dist_installer/YTDownloaderPro-linux-x86_64.tar.gz
           
           sha256sum dist_installer/YTDownloaderPro-linux-x86_64.AppImage | tee dist_installer/SHA256SUMS-linux.txt
           sha256sum dist_installer/YTDownloaderPro-linux-amd64.deb >> dist_installer/SHA256SUMS-linux.txt
+          sha256sum dist_installer/YTDownloaderPro-linux-x86_64.rpm >> dist_installer/SHA256SUMS-linux.txt
           sha256sum dist_installer/YTDownloaderPro-linux-x86_64.tar.gz >> dist_installer/SHA256SUMS-linux.txt
 
       - name: Smoke test Linux AppImage
@@ -247,6 +258,7 @@ jobs:
           files: |
             dist_installer/YTDownloaderPro-linux-x86_64.AppImage
             dist_installer/YTDownloaderPro-linux-amd64.deb
+            dist_installer/YTDownloaderPro-linux-x86_64.rpm
             dist_installer/YTDownloaderPro-linux-x86_64.tar.gz
             dist_installer/SHA256SUMS-linux.txt
 

@@ -1,12 +1,16 @@
-# YT Downloader Pro
+<h1 align="center">YT Downloader Pro</h1>
 
 <p align="center"><b>A clean, fast YouTube downloader for Windows, Linux, and macOS.</b></p>
 
-> ⚠️ Always download from the official source: [github.com/tahsanahmmed25/YTDownloaderPro](https://github.com/tahsanahmmed25/YTDownloaderPro)
+<p align="center">
+  ⚠️ Always download from the official source: <a href="https://github.com/tahsanahmmed25/YTDownloaderPro">github.com/tahsanahmmed25/YTDownloaderPro</a>
+</p>
 
-[![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloaderPro?label=latest)](https://github.com/tahsanahmmed25/YTDownloaderPro/releases/latest)
-[![License](https://img.shields.io/badge/license-Custom-red)](https://github.com/tahsanahmmed25/YTDownloaderPro/blob/main/LICENSE)
-[![Build](https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml)
+<p align="center">
+  <a href="https://github.com/tahsanahmmed25/YTDownloaderPro/releases/latest"><img src="https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloaderPro?label=latest" alt="Latest Release"></a>
+  <a href="https://github.com/tahsanahmmed25/YTDownloaderPro/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Custom-red" alt="License"></a>
+  <a href="https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml"><img src="https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+</p>
 
 ---
 

@@ -114,10 +114,8 @@ jobs:
           python -m pip install -r requirements-dev.lock
           python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
-
-
       - name: Build with PyInstaller
-        run: python -m PyInstaller --clean -y YTDownloader_linux.spec
+        run: python -m PyInstaller --clean -y YTDownloaderPro_linux.spec
 
       - name: Download verified appimagetool
         env:
@@ -137,50 +135,50 @@ jobs:
       - name: Build AppImage
         run: |
           set -euo pipefail
-          APPDIR="dist/YTDownloader.AppDir"
+          APPDIR="dist/YTDownloaderPro.AppDir"
           mkdir -p "$APPDIR/usr/bin"
 
           # Copy PyInstaller bundle
-          cp -r dist/YTDownloader/. "$APPDIR/usr/bin/"
+          cp -r dist/YTDownloaderPro/. "$APPDIR/usr/bin/"
 
           # Desktop entry
-          cat > "$APPDIR/YTDownloader.desktop" <<'EOF'
+          cat > "$APPDIR/YTDownloaderPro.desktop" <<'EOF'
           [Desktop Entry]
-          Name=YTDownloader
-          Exec=YTDownloader
-          Icon=YTDownloader
+          Name=YTDownloaderPro
+          Exec=YTDownloaderPro
+          Icon=YTDownloaderPro
           Type=Application
           Categories=AudioVideo;Network;
-          Comment=Simple YouTube Downloader by Tahsan
+          Comment=YTDownloaderPro - YouTube Video Downloader
           EOF
 
           # Icon
-          cp icons/download.png "$APPDIR/YTDownloader.png"
+          cp icons/download.png "$APPDIR/YTDownloaderPro.png"
 
           # AppRun
           cat > "$APPDIR/AppRun" <<'APPRUN'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
           export PATH="$HERE/usr/bin:$PATH"
-          export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
-          exec "$HERE/usr/bin/YTDownloader" "$@"
+          export LD_LIBRARY_PATH="$HERE/usr/bin/_internal/PySide6/Qt/lib:$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+          exec "$HERE/usr/bin/YTDownloaderPro" "$@"
           APPRUN
           chmod +x "$APPDIR/AppRun"
 
           mkdir -p dist_installer
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloader-linux-x86_64.AppImage"
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloaderPro-linux-x86_64.AppImage"
 
       - name: Verify Linux AppImage
         run: |
           set -euo pipefail
-          test -s dist_installer/YTDownloader-linux-x86_64.AppImage
-          file dist_installer/YTDownloader-linux-x86_64.AppImage | grep -E "ELF|AppImage"
-          sha256sum dist_installer/YTDownloader-linux-x86_64.AppImage | tee dist_installer/SHA256SUMS-linux.txt
+          test -s dist_installer/YTDownloaderPro-linux-x86_64.AppImage
+          file dist_installer/YTDownloaderPro-linux-x86_64.AppImage | grep -E "ELF|AppImage"
+          sha256sum dist_installer/YTDownloaderPro-linux-x86_64.AppImage | tee dist_installer/SHA256SUMS-linux.txt
 
       - name: Smoke test Linux AppImage
         run: |
           set +e
-          QT_QPA_PLATFORM=offscreen timeout 15s dist_installer/YTDownloader-linux-x86_64.AppImage
+          QT_QPA_PLATFORM=offscreen timeout 15s dist_installer/YTDownloaderPro-linux-x86_64.AppImage
           code=$?
           set -e
           if [ "$code" -ne 0 ] && [ "$code" -ne 124 ]; then
@@ -194,7 +192,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist_installer/YTDownloader-linux-x86_64.AppImage
+            dist_installer/YTDownloaderPro-linux-x86_64.AppImage
             dist_installer/SHA256SUMS-linux.txt
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -220,8 +218,6 @@ jobs:
           python -m pip install -r requirements-dev.lock
           python -c "import yt_dlp; print('yt-dlp version:', yt_dlp.version.__version__)"
 
-
-
       - name: Download verified yt-dlp.exe
         shell: pwsh
         run: |
@@ -239,14 +235,14 @@ jobs:
           Write-Host "Downloaded ffmpeg.exe + ffprobe.exe"
 
       - name: Build with PyInstaller
-        run: python -m PyInstaller --clean -y YTDownloader.spec
+        run: python -m PyInstaller --clean -y YTDownloaderPro.spec
 
       - name: Copy binaries into dist
         shell: pwsh
         run: |
-          Copy-Item "yt-dlp.exe"   "dist\YTDownloader\yt-dlp.exe"   -Force
-          Copy-Item "ffmpeg.exe"   "dist\YTDownloader\ffmpeg.exe"   -Force
-          Copy-Item "ffprobe.exe"  "dist\YTDownloader\ffprobe.exe"  -Force
+          Copy-Item "yt-dlp.exe"   "dist\YTDownloaderPro\yt-dlp.exe"   -Force
+          Copy-Item "ffmpeg.exe"   "dist\YTDownloaderPro\ffmpeg.exe"   -Force
+          Copy-Item "ffprobe.exe"  "dist\YTDownloaderPro\ffprobe.exe"  -Force
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -255,25 +251,25 @@ jobs:
         shell: pwsh
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $iscc "YTDownloader.iss"
+          & $iscc "YTDownloaderPro.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
       - name: Verify Windows installer
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist_installer/YTDownloader-Setup.exe")) {
+          if (-not (Test-Path "dist_installer/YTDownloaderPro-Setup.exe")) {
             throw "Installer was not produced"
           }
-          if ((Get-Item "dist_installer/YTDownloader-Setup.exe").Length -le 0) {
+          if ((Get-Item "dist_installer/YTDownloaderPro-Setup.exe").Length -le 0) {
             throw "Installer is empty"
           }
-          $hash = (Get-FileHash "dist_installer/YTDownloader-Setup.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  YTDownloader-Setup.exe" | Set-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
+          $hash = (Get-FileHash "dist_installer/YTDownloaderPro-Setup.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  YTDownloaderPro-Setup.exe" | Set-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
 
       - name: Upload Windows installer to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist_installer/YTDownloader-Setup.exe
+            dist_installer/YTDownloaderPro-Setup.exe
             dist_installer/SHA256SUMS-windows.txt

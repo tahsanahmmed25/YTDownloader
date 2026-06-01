@@ -74,7 +74,17 @@ jobs:
         with:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
-          generate_release_notes: true
+          body: |
+            Initial release of YTDownloaderPro ${{ github.ref_name }} under custom license.
+
+            ### What's New:
+            - **Modernized UI Redesign** — Migrated the visual layer of YTDownloaderPro to a clean, minimal, flat card-based layout. Includes customized sidebar navigation with colored dots, custom gradient action buttons, and flat preferences panels.
+            - **Cross-platform release binaries**:
+              - **Linux**: AppImage, DEB, RPM, and portable TAR.GZ.
+              - **macOS**: DMG installer and portable APP.TAR.GZ.
+              - **Windows**: Setup.exe installer, WiX-based MSI installer (silent/enterprise), and portable ZIP.
+
+            Full Changelog: https://github.com/tahsanahmmed25/YTDownloaderPro/compare/v2.9.9...${{ github.ref_name }}
 
       - name: Skip release creation for non-tag build
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

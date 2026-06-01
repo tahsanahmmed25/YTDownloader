@@ -1,6 +1,8 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *$py.class
 
 # C extensions
@@ -27,6 +29,7 @@ wheels/
 
 # PyInstaller
 *.manifest
+*.spec
 
 # Unit test / coverage reports
 htmlcov/
@@ -46,7 +49,6 @@ coverage.xml
 
 # Django stuff:
 *.log
-local_settings.py
 
 # Flask stuff:
 instance/
@@ -140,6 +142,7 @@ tools/hashes.txt
 *.AppImage
 SHA256SUMS*
 appimagetool-*.AppImage
+*.tmp
 
 # Build artifacts
 *.zip

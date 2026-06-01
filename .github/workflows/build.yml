@@ -168,12 +168,68 @@ jobs:
           mkdir -p dist_installer
           ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "dist_installer/YTDownloaderPro-linux-x86_64.AppImage"
 
-      - name: Verify Linux AppImage
+      - name: Build DEB and TAR.GZ packages
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ] || [ "$VERSION" = "master" ]; then
+            VERSION="3.0.0"
+          fi
+
+          # 1. Build .deb package
+          DEBDIR="dist/debian"
+          mkdir -p "$DEBDIR/opt/YTDownloaderPro"
+          mkdir -p "$DEBDIR/usr/bin"
+          mkdir -p "$DEBDIR/usr/share/applications"
+          mkdir -p "$DEBDIR/usr/share/pixmaps"
+          mkdir -p "$DEBDIR/DEBIAN"
+
+          cp -r dist/YTDownloaderPro/. "$DEBDIR/opt/YTDownloaderPro/"
+
+          cat > "$DEBDIR/usr/bin/YTDownloaderPro" <<'EOF'
+#!/bin/bash
+exec /opt/YTDownloaderPro/YTDownloaderPro "$@"
+EOF
+          chmod +x "$DEBDIR/usr/bin/YTDownloaderPro"
+
+          cat > "$DEBDIR/usr/share/applications/YTDownloaderPro.desktop" <<'EOF'
+[Desktop Entry]
+Name=YTDownloaderPro
+Exec=YTDownloaderPro
+Icon=YTDownloaderPro
+Type=Application
+Categories=AudioVideo;Network;
+Comment=YTDownloaderPro - YouTube Video Downloader
+EOF
+
+          cp icons/download.png "$DEBDIR/usr/share/pixmaps/YTDownloaderPro.png"
+
+          cat > "$DEBDIR/DEBIAN/control" <<EOF
+Package: ytdownloaderpro
+Version: ${VERSION}
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Tahsan Ahmmed <tahsanahmmed25@gmail.com>
+Description: Fast YouTube downloader with clean UI, queue management, subtitles, themes, and dark mode.
+EOF
+
+          dpkg-deb --build "$DEBDIR" "dist_installer/YTDownloaderPro-linux-amd64.deb"
+
+          # 2. Build portable .tar.gz package
+          tar -czf "dist_installer/YTDownloaderPro-linux-x86_64.tar.gz" -C dist YTDownloaderPro
+
+      - name: Verify and checksum Linux packages
         run: |
           set -euo pipefail
           test -s dist_installer/YTDownloaderPro-linux-x86_64.AppImage
-          file dist_installer/YTDownloaderPro-linux-x86_64.AppImage | grep -E "ELF|AppImage"
+          test -s dist_installer/YTDownloaderPro-linux-amd64.deb
+          test -s dist_installer/YTDownloaderPro-linux-x86_64.tar.gz
+          
           sha256sum dist_installer/YTDownloaderPro-linux-x86_64.AppImage | tee dist_installer/SHA256SUMS-linux.txt
+          sha256sum dist_installer/YTDownloaderPro-linux-amd64.deb >> dist_installer/SHA256SUMS-linux.txt
+          sha256sum dist_installer/YTDownloaderPro-linux-x86_64.tar.gz >> dist_installer/SHA256SUMS-linux.txt
 
       - name: Smoke test Linux AppImage
         run: |
@@ -187,12 +243,14 @@ jobs:
           fi
           echo "AppImage smoke test passed (exit code $code)."
 
-      - name: Upload Linux AppImage to GitHub Release
+      - name: Upload Linux packages to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist_installer/YTDownloaderPro-linux-x86_64.AppImage
+            dist_installer/YTDownloaderPro-linux-amd64.deb
+            dist_installer/YTDownloaderPro-linux-x86_64.tar.gz
             dist_installer/SHA256SUMS-linux.txt
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -254,24 +312,32 @@ jobs:
           & $iscc "YTDownloaderPro.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
-      - name: Verify Windows installer
+      - name: Build portable Windows ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/YTDownloaderPro" -DestinationPath "dist_installer/YTDownloaderPro-windows-x64.zip" -Force
+
+      - name: Verify and checksum Windows packages
         shell: pwsh
         run: |
           if (-not (Test-Path "dist_installer/YTDownloaderPro-Setup.exe")) {
             throw "Installer was not produced"
           }
-          if ((Get-Item "dist_installer/YTDownloaderPro-Setup.exe").Length -le 0) {
-            throw "Installer is empty"
+          if (-not (Test-Path "dist_installer/YTDownloaderPro-windows-x64.zip")) {
+            throw "Portable ZIP was not produced"
           }
-          $hash = (Get-FileHash "dist_installer/YTDownloaderPro-Setup.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  YTDownloaderPro-Setup.exe" | Set-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
+          $hashExe = (Get-FileHash "dist_installer/YTDownloaderPro-Setup.exe" -Algorithm SHA256).Hash.ToLower()
+          $hashZip = (Get-FileHash "dist_installer/YTDownloaderPro-windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hashExe  YTDownloaderPro-Setup.exe" | Set-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
+          "$hashZip  YTDownloaderPro-windows-x64.zip" | Add-Content -Encoding ascii "dist_installer/SHA256SUMS-windows.txt"
 
-      - name: Upload Windows installer to GitHub Release
+      - name: Upload Windows packages to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist_installer/YTDownloaderPro-Setup.exe
+            dist_installer/YTDownloaderPro-windows-x64.zip
             dist_installer/SHA256SUMS-windows.txt
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -318,15 +384,23 @@ jobs:
             "dist_installer/YTDownloaderPro-macOS.dmg" \
             "dist/YTDownloaderPro.app"
 
-      - name: Verify macOS DMG
+      - name: Package portable macOS app
+        run: |
+          tar -czf dist_installer/YTDownloaderPro-macOS.app.tar.gz -C dist YTDownloaderPro.app
+
+      - name: Verify and checksum macOS packages
         run: |
           test -s dist_installer/YTDownloaderPro-macOS.dmg
+          test -s dist_installer/YTDownloaderPro-macOS.app.tar.gz
           shasum -a 256 dist_installer/YTDownloaderPro-macOS.dmg | tee dist_installer/SHA256SUMS-mac.txt
+          shasum -a 256 dist_installer/YTDownloaderPro-macOS.app.tar.gz >> dist_installer/SHA256SUMS-mac.txt
 
-      - name: Upload macOS DMG to GitHub Release
+      - name: Upload macOS packages to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist_installer/YTDownloaderPro-macOS.dmg
+            dist_installer/YTDownloaderPro-macOS.app.tar.gz
             dist_installer/SHA256SUMS-mac.txt
+

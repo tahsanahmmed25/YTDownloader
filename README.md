@@ -20,9 +20,9 @@ Get the latest version from the **[Releases page](https://github.com/tahsanahmme
 
 | Platform | File | Notes |
 | -------- | ---- | ----- |
-| 🐧 Linux (Ubuntu, Zorin, Mint…) | `YTDownloaderPro-linux-x86_64.AppImage` | Download and run — no install needed |
-| 🪟 Windows 10/11 | `YTDownloaderPro-Setup.exe` | Run the installer |
-| 🍎 macOS 12+ | `YTDownloaderPro-macOS.dmg` | Open DMG, drag to Applications |
+| 🐧 Linux (Ubuntu, Zorin, Mint…) | `YTDownloaderPro-linux-x86_64.AppImage`<br>`YTDownloaderPro-linux-amd64.deb`<br>`YTDownloaderPro-linux-x86_64.tar.gz` | **AppImage:** Run directly (no install)<br>**DEB:** Installer package<br>**TAR.GZ:** Portable binary |
+| 🪟 Windows 10/11 | `YTDownloaderPro-Setup.exe`<br>`YTDownloaderPro-windows-x64.zip` | **Setup.exe:** Installer with shortcuts<br>**ZIP:** Portable standalone folder |
+| 🍎 macOS 12+ | `YTDownloaderPro-macOS.dmg`<br>`YTDownloaderPro-macOS.app.tar.gz` | **DMG:** Open DMG, drag to Applications<br>**TAR.GZ:** Portable standalone app bundle |
 
 > Windows SmartScreen or Linux may warn "unknown publisher" — this is expected for unsigned builds. Verify the SHA256 checksum from the release page before running.
 

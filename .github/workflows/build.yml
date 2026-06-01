@@ -187,33 +187,30 @@ jobs:
 
           cp -r dist/YTDownloaderPro/. "$DEBDIR/opt/YTDownloaderPro/"
 
-          cat > "$DEBDIR/usr/bin/YTDownloaderPro" <<'EOF'
-#!/bin/bash
-exec /opt/YTDownloaderPro/YTDownloaderPro "$@"
-EOF
+          echo -e '#!/bin/bash\nexec /opt/YTDownloaderPro/YTDownloaderPro "$@"' > "$DEBDIR/usr/bin/YTDownloaderPro"
           chmod +x "$DEBDIR/usr/bin/YTDownloaderPro"
 
-          cat > "$DEBDIR/usr/share/applications/YTDownloaderPro.desktop" <<'EOF'
-[Desktop Entry]
-Name=YTDownloaderPro
-Exec=YTDownloaderPro
-Icon=YTDownloaderPro
-Type=Application
-Categories=AudioVideo;Network;
-Comment=YTDownloaderPro - YouTube Video Downloader
-EOF
+          {
+            echo "[Desktop Entry]"
+            echo "Name=YTDownloaderPro"
+            echo "Exec=YTDownloaderPro"
+            echo "Icon=YTDownloaderPro"
+            echo "Type=Application"
+            echo "Categories=AudioVideo;Network;"
+            echo "Comment=YTDownloaderPro - YouTube Video Downloader"
+          } > "$DEBDIR/usr/share/applications/YTDownloaderPro.desktop"
 
           cp icons/download.png "$DEBDIR/usr/share/pixmaps/YTDownloaderPro.png"
 
-          cat > "$DEBDIR/DEBIAN/control" <<EOF
-Package: ytdownloaderpro
-Version: ${VERSION}
-Section: utils
-Priority: optional
-Architecture: amd64
-Maintainer: Tahsan Ahmmed <tahsanahmmed25@gmail.com>
-Description: Fast YouTube downloader with clean UI, queue management, subtitles, themes, and dark mode.
-EOF
+          {
+            echo "Package: ytdownloaderpro"
+            echo "Version: ${VERSION}"
+            echo "Section: utils"
+            echo "Priority: optional"
+            echo "Architecture: amd64"
+            echo "Maintainer: Tahsan Ahmmed <tahsanahmmed25@gmail.com>"
+            echo "Description: Fast YouTube downloader with clean UI, queue management, subtitles, themes, and dark mode."
+          } > "$DEBDIR/DEBIAN/control"
 
           dpkg-deb --build "$DEBDIR" "dist_installer/YTDownloaderPro-linux-amd64.deb"
 

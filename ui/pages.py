@@ -1,4 +1,5 @@
 import os
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -18,18 +19,207 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt, QSize, QCoreApplication
+from PySide6.QtCore import Qt, QSize, QCoreApplication, QObject, QThread, Signal, QTimer
 from PySide6.QtGui import QFont, QColor, QPixmap, QIcon
 
 QCoreApplication.setOrganizationName("Tahsan")
-QCoreApplication.setApplicationName("YTDownloader")
+QCoreApplication.setApplicationName("YTDownloaderPro")
 
 from ui.widgets import (
     FadingTextButton, PasteButton, BrandIcon, DownloadButton, GradientButton,
     DownloadProgressBar, ToggleSwitch, ToastFrame, NavButton, StatusBadge,
-    SectionLabel, NavCounter, PrimaryButton, AnimatedComboBox
+    SectionLabel, NavCounter, PrimaryButton, AnimatedComboBox, MarqueeLabel
 )
 
+class ThumbnailWorker(QThread):
+    ready = Signal(str, bytes)
+
+    def __init__(self, task_id: str, url: str, parent=None):
+        super().__init__(parent)
+        self.task_id = task_id
+        self.url = url
+
+    def run(self):
+        if not self.url:
+            return
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                self.url,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = response.read()
+            if data:
+                self.ready.emit(self.task_id, data)
+        except Exception:
+            pass
+
+
+class AnalyzeWorker(QThread):
+    result = Signal(dict)
+    error  = Signal(str)
+
+    def __init__(self, url: str, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self._process = None
+
+    def run(self):
+        try:
+            import subprocess, json, shutil
+
+            # If the project has a ytdlp_exe_manager, get the path from it:
+            try:
+                from ytdlp_exe_manager import get_exe_path
+                ytdlp_cmd = get_exe_path()
+            except ImportError:
+                try:
+                    from ytdlp_exe_manager import get_ytdlp_path
+                    ytdlp_cmd = get_ytdlp_path()
+                except ImportError:
+                    ytdlp_cmd = shutil.which('yt-dlp') or 'yt-dlp'
+
+            self._process = subprocess.Popen(
+                [
+                    ytdlp_cmd,
+                    '--dump-json',
+                    '--no-playlist',
+                    '--quiet',
+                    '--no-warnings',
+                    '--socket-timeout', '10',
+                    self.url
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True
+            )
+
+            stdout, stderr = self._process.communicate(timeout=25)
+
+            if self._process.returncode != 0:
+                err_msg = stderr.decode('utf-8', errors='replace').strip()
+                # Get first meaningful line of error
+                first_line = next(
+                    (l for l in err_msg.splitlines() if l.strip()),
+                    "Could not fetch video info"
+                )
+                self.error.emit(first_line)
+                return
+
+            raw = stdout.decode('utf-8', errors='replace').strip()
+            if not raw:
+                self.error.emit("No data returned from yt-dlp.")
+                return
+
+            info = json.loads(raw)
+
+            # Extract only what the UI needs
+            safe = {
+                "title":           info.get("title", "Unknown"),
+                "uploader":        info.get("uploader", ""),
+                "duration":        info.get("duration", 0),
+                "thumbnail":       info.get("thumbnail", ""),
+                "filesize_approx": info.get("filesize_approx", 0),
+                "webpage_url":     info.get("webpage_url", self.url),
+                "formats": [
+                    {
+                        "format_id":   f.get("format_id", ""),
+                        "ext":         f.get("ext", ""),
+                        "height":      f.get("height"),
+                        "fps":         f.get("fps"),
+                        "vcodec":      f.get("vcodec", ""),
+                        "acodec":      f.get("acodec", ""),
+                        "filesize":    f.get("filesize"),
+                        "format_note": f.get("format_note", ""),
+                    }
+                    for f in info.get("formats", [])
+                    if isinstance(f, dict)
+                ],
+                "subtitles":          list(info.get("subtitles", {}).keys()),
+                "automatic_captions": list(info.get("automatic_captions", {}).keys()),
+            }
+            self.result.emit(safe)
+
+        except subprocess.TimeoutExpired:
+            if self._process:
+                self._process.kill()
+            self.error.emit(
+                "Analysis timed out after 25 seconds. "
+                "Check your connection and try again."
+            )
+        except json.JSONDecodeError:
+            self.error.emit("Could not parse video info. Try a different URL.")
+        except FileNotFoundError:
+            self.error.emit(
+                "yt-dlp not found. Please ensure yt-dlp is installed."
+            )
+        except Exception as e:
+            self.error.emit(str(e).split('\n')[0][:120])
+
+    def cancel(self):
+        if self._process and self._process.poll() is None:
+            self._process.kill()
+        self.quit()
+
+
+
+class CombinedMetaLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._size_text = ""
+        self._speed_text = ""
+
+    def set_size_text(self, text):
+        self._size_text = text
+        self._update_display()
+
+    def set_speed_text(self, text):
+        self._speed_text = text
+        self._update_display()
+
+    def _update_display(self):
+        parts = []
+        if self._size_text:
+            parts.append(self._size_text)
+        if self._speed_text:
+            spd = self._speed_text
+            if spd.startswith("Speed: "):
+                spd = spd[len("Speed: "):]
+            parts.append(spd)
+        
+        combined = "  •  ".join(parts)
+        self.setText(combined)
+
+
+class SizeProxy(QObject):
+    def __init__(self, label):
+        super().__init__()
+        self.label = label
+
+    def setText(self, text):
+        self.label.set_size_text(text)
+
+    def setVisible(self, visible):
+        pass
+
+    def isVisible(self):
+        return True
+
+
+class SpeedProxy(QObject):
+    def __init__(self, label):
+        super().__init__()
+        self.label = label
+
+    def setText(self, text):
+        self.label.set_speed_text(text)
+
+    def setVisible(self, visible):
+        pass
+
+    def isVisible(self):
+        return True
 
 
 class InvisiblePlaceholderButton(QPushButton):
@@ -46,6 +236,216 @@ class InvisiblePlaceholderButton(QPushButton):
 
 
 class PagesMixin:
+    def _on_analyze_clicked(self):
+        # Fully clean up any previous worker before starting
+        if hasattr(self, '_analyze_worker') and self._analyze_worker is not None:
+            try:
+                self._analyze_worker.result.disconnect()
+                self._analyze_worker.error.disconnect()
+            except Exception:
+                pass
+            if self._analyze_worker.isRunning():
+                try:
+                    self._analyze_worker.cancel()
+                except Exception:
+                    self._analyze_worker.quit()
+                self._analyze_worker.wait(500)
+            self._analyze_worker = None
+
+        if hasattr(self, '_fetch_thread') and self._fetch_thread is not None:
+            try:
+                self._fetch_worker.info_ready.disconnect()
+                self._fetch_worker.error.disconnect()
+            except Exception:
+                pass
+            if self._fetch_thread.isRunning():
+                self._fetch_thread.quit()
+                self._fetch_thread.wait(500)
+            self._fetch_thread = None
+            self._fetch_worker = None
+
+        # Clear any previous error
+        if hasattr(self, 'error_label') and self.error_label:
+            self.error_label.setVisible(False)
+
+        url = self.url_input.text().strip()
+        if not url:
+            return
+        from downloader import is_valid_youtube_url
+        if not is_valid_youtube_url(url):
+            self._show_error_dialog("Error", "Please enter a valid YouTube link.")
+            return
+
+        self._info_ready = False
+        self._active_url = url
+        self.download_btn.setEnabled(False)
+        self._set_config_enabled(False)
+        self._set_analyzing_state(True)
+        try:
+            self.url_input.setCursorPosition(0)
+            self.url_input.deselect()
+        except Exception:
+            pass
+        self._set_metadata_placeholder(True)
+        self._clear_format_quality()
+
+        # Dynamic override of slots
+        self._on_analyze_result = self._custom_on_analyze_result
+        self._on_analyze_error = self._custom_on_analyze_error
+
+        # Start AnalyzeWorker QThread
+        self._analyze_worker = AnalyzeWorker(url, parent=self)
+        self._analyze_worker.result.connect(self._on_analyze_result)
+        self._analyze_worker.error.connect(self._on_analyze_error)
+        self._analyze_worker.start()
+
+    def _custom_on_analyze_result(self, safe):
+        self._set_analyzing_state(False)   # ← must be first line
+        
+        # 1. Title
+        title = safe.get("title", "Unknown")
+        self.title.setText(title)
+        if hasattr(self, "title_label") and self.title_label:
+            self.title_label.setText(title)
+            
+        # 2. Size
+        size_approx = safe.get("filesize_approx", 0)
+        size_mb = f"{size_approx / (1024*1024):.1f}" if size_approx else "Unknown"
+        self.size.setText(f"Estimated size: ~{size_mb} MB" if size_mb != "Unknown" else "Estimated size: Unknown")
+        try:
+            self._estimated_size_mb = float(size_mb) if size_mb != "Unknown" else None
+        except Exception:
+            self._estimated_size_mb = None
+            
+        # 3. Thumbnail (Fetch using ThumbnailWorker if not empty)
+        thumbnail = safe.get("thumbnail", "")
+        if thumbnail:
+            worker = ThumbnailWorker("preview", thumbnail, parent=self)
+            def on_preview_thumb_ready(task_id, data):
+                if data:
+                    from PySide6.QtGui import QPixmap
+                    pix = QPixmap()
+                    pix.loadFromData(data)
+                    self._set_preview_thumbnail(pix)
+            worker.ready.connect(on_preview_thumb_ready)
+            self._thumb_worker = worker
+            worker.start()
+        else:
+            self.thumbnail.clear()
+            
+        # 4. Formats & Qualities
+        from downloader import _available_format_quality
+        available_formats, available_qualities = _available_format_quality(safe)
+        
+        self._apply_format_options(available_formats)
+        self._apply_quality_options(available_qualities)
+        
+        # 5. Subtitles
+        subs = safe.get("subtitles", [])
+        self._apply_subtitle_options(subs)
+        
+        self._info_ready = True
+        self.download_btn.setEnabled(True)
+        self._set_config_enabled(True)
+        self._sync_download_button_text()
+        self._expand_details()
+        self._set_metadata_placeholder(False)
+        self._apply_defaults_after_populate()   # ← add this line last
+
+    def _custom_on_analyze_error(self, msg):
+        self._set_analyzing_state(False)   # ← must be first line
+        self._show_error_dialog("Error", msg)
+        self._info_ready = False
+        self._estimated_size_mb = None
+        self.download_btn.setEnabled(False)
+        self._set_config_enabled(False)
+        self._set_metadata_placeholder(True)
+        self._sync_download_button_text()
+        if hasattr(self, "error_label") and self.error_label:
+            self.error_label.setText(f"⚠ {msg}")
+            self.error_label.setVisible(True)
+
+    def _apply_defaults_after_populate(self):
+        from PySide6.QtCore import QSettings, Qt
+        s = QSettings()
+        quality_pref = s.value("default_quality", "1080p")
+        format_pref  = s.value("default_format",  "MP4")
+        audio_pref   = s.value("default_audio",   "MP3")
+
+        for combo, pref in [
+            (self.quality_combo, quality_pref),
+            (self.format_combo,  format_pref),
+            (self.audio_combo,   audio_pref),
+        ]:
+            if not combo:
+                continue
+            # Try exact match first
+            idx = combo.findText(pref, Qt.MatchFlag.MatchFixedString)
+            if idx < 0:
+                # Try case-insensitive partial match (e.g. "1080p" in "1080p (HD)")
+                idx = combo.findText(pref, Qt.MatchFlag.MatchContains)
+            if idx >= 0:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
+
+    def _on_task_card_thumbnail_ready(self, task_id: str, data: bytes):
+        if not data:
+            return
+        from PySide6.QtGui import QPixmap
+        pixmap = QPixmap()
+        pixmap.loadFromData(data)
+        if pixmap.isNull():
+            return
+
+        if not hasattr(self, "_task_cards") or not self._task_cards:
+            return
+        card = self._task_cards.get(task_id)
+        if card is None:
+            return
+        if hasattr(card, 'thumb_label') and card.thumb_label:
+            card.thumb_label.setPixmap(
+                pixmap.scaled(80, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            card.thumb_label.setText("")
+            card.thumb_label.setStyleSheet("""
+                background: #e5e5e5;
+                border-radius: 6px;
+                border: 1px solid #d0d0d0;
+            """)
+        
+        # Cache the pixmap
+        task = None
+        for t in getattr(self, "_pending_tasks", []):
+            if t.get("id") == task_id:
+                task = t
+                break
+        if not task:
+            for t in getattr(self, "_active_tasks", {}).values():
+                if t.get("id") == task_id:
+                    task = t
+                    break
+        if not task:
+            for t in getattr(self, "_paused_tasks", {}).values():
+                if t.get("id") == task_id:
+                    task = t
+                    break
+        if task:
+            payload = task.get("payload") or {}
+            url = payload.get("url")
+            if url:
+                if not hasattr(self, "_thumb_cache"):
+                    self._thumb_cache = {}
+                self._thumb_cache[url] = pixmap
+
+    def _on_paste_clicked(self):
+        from PySide6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        text = clipboard.text().strip()
+        if text:
+            self.url_input.setText(text)
+
+
     def _style_btn(self, btn):
         btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         btn.setMinimumWidth(0)
@@ -147,58 +547,76 @@ class PagesMixin:
         row.addStretch(1)
         return row
 
-    def build_task_card(self, title):
+    def build_task_card(self, task_id, title):
         frame = QFrame()
         frame.setObjectName("Card")
         frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        frame.setFixedHeight(62)
+        frame.setFixedHeight(72)
+
+        if not hasattr(self, "_task_cards"):
+            self._task_cards = {}
+        self._task_cards[task_id] = frame
         
         layout = QHBoxLayout(frame)
-        layout.setContentsMargins(14, 6, 14, 6)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(12)
         layout.setAlignment(Qt.AlignVCenter)
 
-        # 1. Thumbnail QLabel — 50x28px, border-radius: 6px
-        thumbnail = QLabel()
-        thumbnail.setFixedSize(50, 28)
-        thumbnail.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        thumbnail.setObjectName("TaskThumbnail")
-        thumbnail.setAlignment(Qt.AlignCenter)
+        # 1. Thumbnail QLabel — 80x46px (16:9 ratio)
+        thumb_label = QLabel()
+        thumb_label.setObjectName("TaskThumbnail")
+        thumb_label.setFixedSize(80, 46)
+        thumb_label.setScaledContents(False)
+        thumb_label.setAlignment(Qt.AlignCenter)
+        dark = getattr(self.window(), 'dark_mode', False)
+        thumb_bg   = "#242424" if dark else "#efefef"
+        thumb_border = "#333333" if dark else "#e0e0e0"
+        thumb_label.setStyleSheet(f"""
+            background: {thumb_bg};
+            border-radius: 6px;
+            border: 1px solid {thumb_border};
+            color: {'#555555' if dark else '#b0b0b0'};
+            font-size: 16px;
+        """)
+        thumb_label.setText("▶")
+
+        frame.thumb_label = thumb_label
+        frame.task_id = None
 
         # 2. Info column QVBoxLayout
         info_widget = QWidget()
         info_widget.setAttribute(Qt.WA_TransparentForMouseEvents)
         info_layout = QVBoxLayout(info_widget)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(2)
+        info_layout.setContentsMargins(0, 2, 0, 2)
+        info_layout.setSpacing(6)
 
-        title_label = QLabel(title)
+        # Row 1 — title (marquee)
+        title_label = MarqueeLabel(title)
         title_label.setObjectName("TaskTitle")
         title_label.setStyleSheet("font-size: 12px; font-weight: 500;")
-        
-        # Elide title text
-        metrics = title_label.fontMetrics()
-        elided = metrics.elidedText(title, Qt.ElideRight, 350)
-        title_label.setText(elided)
+        title_label.setFixedHeight(20)
 
+        # Row 2 — progress bar
         progress = QProgressBar()
-        progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        progress.setFixedHeight(4)
+        progress.setMinimum(0)
+        progress.setMaximum(100)
         progress.setValue(0)
         progress.setTextVisible(False)
+        progress.setFixedHeight(5)
+        progress.setMinimumWidth(100)
+        progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        progress.setContentsMargins(0, 0, 0, 0)
 
-        size_label = QLabel()
-        size_label.setObjectName("MetaLabel")
-        size_label.setVisible(False)
-
-        speed_label = QLabel("0.0 KB/s")
-        speed_label.setObjectName("MetaLabel")
-        speed_label.setStyleSheet("font-size: 10px;")
+        # Row 3 — size and speed on same line
+        meta_label = CombinedMetaLabel()
+        meta_label.setObjectName("MetaLabel")
+        meta_label.setStyleSheet("font-size: 10px;")
+        meta_label.setFixedHeight(16)
+        meta_label.set_speed_text("0.0 KB/s")
 
         info_layout.addWidget(title_label)
         info_layout.addWidget(progress)
-        info_layout.addWidget(size_label)
-        info_layout.addWidget(speed_label)
+        info_layout.addWidget(meta_label)
 
         # 3. Right side percentage or badges
         percentage_label = QLabel("0%")
@@ -212,22 +630,72 @@ class PagesMixin:
         status_label.hide()
         status_label._item_pct = percentage_label
         status_label._item_prog = progress
-        status_label._item_speed = speed_label
+        status_label._item_speed = meta_label
 
-        # Hidden buttons to prevent crashes and ghost windows
-        pause_btn = InvisiblePlaceholderButton("Pause", frame)
-        self._style_btn(pause_btn)
-        
-        cancel_btn = InvisiblePlaceholderButton("Cancel", frame)
-        self._style_btn(cancel_btn)
-        
+        orig_set_text = status_label.setText
+        def custom_set_text(text):
+            txt = (text or "").lower()
+            if "starting" in txt:
+                status_label.show()
+                status_label.setObjectName("BadgeNeutral")
+                QLabel.setText(status_label, "Starting...")
+                if status_label._item_pct: status_label._item_pct.hide()
+                if status_label._item_prog: status_label._item_prog.hide()
+                if status_label._item_speed: status_label._item_speed.hide()
+            elif "finalizing" in txt:
+                status_label.show()
+                status_label.setObjectName("BadgeNeutral")
+                QLabel.setText(status_label, "Finalizing...")
+                if status_label._item_pct: status_label._item_pct.hide()
+                if status_label._item_prog: status_label._item_prog.hide()
+                if status_label._item_speed: status_label._item_speed.hide()
+            elif "cancelling" in txt:
+                status_label.show()
+                status_label.setObjectName("BadgeWarning")
+                QLabel.setText(status_label, "Cancelling...")
+                if status_label._item_pct: status_label._item_pct.hide()
+                if status_label._item_prog: status_label._item_prog.hide()
+                if status_label._item_speed: status_label._item_speed.hide()
+            else:
+                orig_set_text(text)
+        status_label.setText = custom_set_text
+
+        # Functional active download controls
+        btn_group = QWidget(frame)
+        btn_group.setObjectName("ButtonGroup")
+        btn_group_layout = QHBoxLayout(btn_group)
+        btn_group_layout.setContentsMargins(0, 0, 0, 0)
+        btn_group_layout.setSpacing(6)
+        btn_group_layout.setAlignment(Qt.AlignCenter)
+
+        pause_btn = QPushButton("⏸")
+        pause_btn.setObjectName("CardIconButton")
+        pause_btn.setFixedSize(28, 28)
+        pause_btn.setCursor(Qt.PointingHandCursor)
+
+        resume_btn = QPushButton("▶")
+        resume_btn.setObjectName("CardIconButton")
+        resume_btn.setFixedSize(28, 28)
+        resume_btn.setCursor(Qt.PointingHandCursor)
+        resume_btn.setVisible(False)
+
+        cancel_btn = QPushButton("✕")
+        cancel_btn.setObjectName("CardIconButton")
+        cancel_btn.setProperty("action", "cancel")
+        cancel_btn.setFixedSize(28, 28)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+
+        btn_group_layout.addWidget(pause_btn)
+        btn_group_layout.addWidget(resume_btn)
+        btn_group_layout.addWidget(cancel_btn)
+
         open_btn = InvisiblePlaceholderButton("Open", frame)
-        self._style_btn(open_btn)
 
-        layout.addWidget(thumbnail)
+        layout.addWidget(thumb_label)
         layout.addWidget(info_widget, 1)
         layout.addWidget(percentage_label)
         layout.addWidget(status_label)
+        layout.addWidget(btn_group)
 
         # Wire value changes
         progress.valueChanged.connect(lambda val: percentage_label.setText(f"{val}%"))
@@ -239,21 +707,294 @@ class PagesMixin:
             "status_icon": QLabel(),
             "status_effect": QGraphicsOpacityEffect(),
             "progress": progress,
-            "speed": speed_label,
-            "size": size_label,
+            "speed": SpeedProxy(meta_label),
+            "size": SizeProxy(meta_label),
             "pause_btn": pause_btn,
+            "resume_btn": resume_btn,
             "cancel_btn": cancel_btn,
             "open_btn": open_btn,
             "percentage_label": percentage_label,
-            "thumbnail": thumbnail
+            "thumbnail": thumb_label
         }
         frame._download_item = item
+        QTimer.singleShot(300, title_label._check_and_start)
         return item
 
+    def _update_task_card(self, task_id, percent, speed=None, downloaded=None, total=None):
+        if not hasattr(self, "_task_cards"):
+            self._task_cards = {}
+        card = self._task_cards.get(task_id)
+        if card is None:
+            return
+        self.update_progress(task_id, percent, speed, downloaded, total)
+
     def _build_downloader_page(self):
+        # Helper to register task card mappings cleanly
+        def register_task_card(task_id, item):
+            if not task_id or not item:
+                return
+            if not hasattr(self, "_task_cards"):
+                self._task_cards = {}
+            frame = item.get("frame")
+            if frame:
+                self._task_cards[task_id] = frame
+                frame.task_id = task_id
+            item["task_id"] = task_id
+
+        # Dynamically wrap on_info_ready to update thumbnails on task cards
+        if hasattr(self, "on_info_ready"):
+            orig_on_info_ready = self.on_info_ready
+            def wrapped_on_info_ready(title, size, thumb_bytes, *args, **kwargs):
+                orig_on_info_ready(title, size, thumb_bytes, *args, **kwargs)
+                if hasattr(self, "title_label") and self.title_label:
+                    self.title_label.setText(title or "Unknown")
+                if thumb_bytes:
+                    from PySide6.QtGui import QPixmap
+                    pix = QPixmap()
+                    pix.loadFromData(thumb_bytes)
+                    if not pix.isNull():
+                        # Cache the pixmap under the active url
+                        if not hasattr(self, "_thumb_cache"):
+                            self._thumb_cache = {}
+                        url = getattr(self, "_active_url", "")
+                        if url:
+                            self._thumb_cache[url] = pix
+
+                        # Find matching cards and update their thumbnails
+                        active = getattr(self, "_active_tasks", {})
+                        pending = getattr(self, "_pending_tasks", [])
+                        paused = getattr(self, "_paused_tasks", {})
+                        for task in list(active.values()) + list(pending) + list(paused.values()):
+                            payload = task.get("payload") or {}
+                            if task.get("title") == title or payload.get("url") == url:
+                                item = task.get("item")
+                                if item:
+                                    card = item.get("frame")
+                                    if card and hasattr(card, "thumb_label") and card.thumb_label:
+                                        card.thumb_label.setPixmap(
+                                            pix.scaled(80, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                                        )
+                                        card.thumb_label.setText("")
+                                        card.thumb_label.setStyleSheet("""
+                                            background: #e5e5e5;
+                                            border-radius: 6px;
+                                            border: 1px solid #d0d0d0;
+                                        """)
+            self.on_info_ready = wrapped_on_info_ready
+
+        # Dynamically wrap _create_download_item to set the correct thumbnail on creation/reuse!
+        if hasattr(self, "_create_download_item"):
+            orig_create_download_item = self._create_download_item
+            def wrapped_create_download_item(task_id, title):
+                item = orig_create_download_item(task_id, title)
+                if item:
+                    # Clear thumbnail to placeholder
+                    thumb_label = item.get("thumbnail")
+                    if thumb_label:
+                        thumb_label.setPixmap(QPixmap())
+                        thumb_label.setText("▶")
+                        thumb_label.setStyleSheet("""
+                            background: #efefef;
+                            border-radius: 6px;
+                            border: 1px solid #e0e0e0;
+                            color: #b0b0b0;
+                            font-size: 16px;
+                        """)
+                    if item.get("frame"):
+                        item["frame"].task_id = None
+                    
+                    # Match preview thumbnail if title matches the current preview
+                    if hasattr(self, "thumbnail") and self.thumbnail:
+                        px = self.thumbnail.pixmap()
+                        if px and not px.isNull():
+                            current_title = ""
+                            if hasattr(self, "title") and self.title:
+                                current_title = self.title.text().replace("Title: ", "").strip()
+                            if current_title == title:
+                                if thumb_label:
+                                    thumb_label.setPixmap(
+                                        px.scaled(80, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                                    )
+                                    thumb_label.setText("")
+                                    thumb_label.setStyleSheet("""
+                                        background: #e5e5e5;
+                                        border-radius: 6px;
+                                        border: 1px solid #d0d0d0;
+                                    """)
+                return item
+            self._create_download_item = wrapped_create_download_item
+
+        # Dynamically wrap _queue_download to set/fetch thumbnail of the queued task card
+        if hasattr(self, "_queue_download"):
+            orig_queue_download = self._queue_download
+            def wrapped_queue_download(payload, title_text, announce=True, autostart=True):
+                res = orig_queue_download(payload, title_text, announce, autostart)
+                for task in getattr(self, "_pending_tasks", []):
+                    register_task_card(task.get("id"), task.get("item"))
+                for tid, task in getattr(self, "_active_tasks", {}).items():
+                    register_task_card(tid, task.get("item"))
+                for tid, task in getattr(self, "_paused_tasks", {}).items():
+                    register_task_card(tid, task.get("item"))
+
+                # Find the task we just queued
+                task = None
+                for t in getattr(self, "_pending_tasks", []):
+                    if t.get("payload") is payload or (t.get("title") == title_text and t.get("payload", {}).get("url") == payload.get("url")):
+                        task = t
+                        break
+                if not task:
+                    for t in getattr(self, "_active_tasks", {}).values():
+                        if t.get("payload") is payload or (t.get("title") == title_text and t.get("payload", {}).get("url") == payload.get("url")):
+                            task = t
+                            break
+                
+                if task:
+                    tid = task.get("id")
+                    item = task.get("item")
+                    if tid and item:
+                        url = payload.get("url")
+                        thumb_label = item.get("thumbnail")
+                        
+                        # 1. Try cache first
+                        cached_px = getattr(self, "_thumb_cache", {}).get(url)
+                        if cached_px and not cached_px.isNull():
+                            if thumb_label:
+                                thumb_label.setPixmap(
+                                    cached_px.scaled(80, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                                )
+                                thumb_label.setText("")
+                                thumb_label.setStyleSheet("""
+                                    background: #e5e5e5;
+                                    border-radius: 6px;
+                                    border: 1px solid #d0d0d0;
+                                """)
+                        else:
+                            # 2. Try playlist session entries next
+                            thumbnail_url = None
+                            session_id = payload.get("playlist_session_id")
+                            if session_id and session_id in getattr(self, "_playlist_sessions", {}):
+                                session = self._playlist_sessions[session_id]
+                                entries = session.get("entries") or []
+                                idx = payload.get("playlist_item_index", 0) - 1
+                                if 0 <= idx < len(entries):
+                                    entry = entries[idx]
+                                    thumbnail_url = entry.get("thumbnail")
+                            
+                            # 3. If we have a thumbnail URL, fetch asynchronously
+                            if thumbnail_url:
+                                worker = ThumbnailWorker(task_id=tid, url=thumbnail_url, parent=self)
+                                worker.ready.connect(self._on_task_card_thumbnail_ready)
+                                if not hasattr(self, "_thumbnail_workers"):
+                                    self._thumbnail_workers = {}
+                                self._thumbnail_workers[tid] = worker
+                                worker.finished.connect(lambda t_id=tid: self._thumbnail_workers.pop(t_id, None))
+                                worker.start()
+                return res
+            self._queue_download = wrapped_queue_download
+
+        # Dynamically wrap _restore_queued_task to map task_id to item/card
+        if hasattr(self, "_restore_queued_task"):
+            orig_restore_queued_task = self._restore_queued_task
+            def wrapped_restore_queued_task(saved):
+                res = orig_restore_queued_task(saved)
+                if res:
+                    for task in getattr(self, "_pending_tasks", []):
+                        register_task_card(task.get("id"), task.get("item"))
+                    for tid, task in getattr(self, "_paused_tasks", {}).items():
+                        register_task_card(tid, task.get("item"))
+                return res
+            self._restore_queued_task = wrapped_restore_queued_task
+
+        # Dynamically wrap _start_task to register task card mapping
+        if hasattr(self, "_start_task"):
+            orig_start_task = self._start_task
+            def wrapped_start_task(task):
+                orig_start_task(task)
+                if task:
+                    register_task_card(task.get("id"), task.get("item"))
+            self._start_task = wrapped_start_task
+
+        # Dynamically wrap update_progress to safeguard status label transitions
+        if hasattr(self, "update_progress"):
+            orig_update_progress = self.update_progress
+            def wrapped_update_progress(task_id, percent, speed=None, downloaded=None, total=None):
+                orig_update_progress(task_id, percent, speed, downloaded, total)
+                task = getattr(self, "_active_tasks", {}).get(task_id)
+                if task:
+                    item = task.get("item")
+                    if item and item.get("status"):
+                        status_lbl = item["status"]
+                        if status_lbl.text() in ("Queued", "Starting..."):
+                            status_lbl.setText("Downloading...")
+            self.update_progress = wrapped_update_progress
+
+
+        # Dynamically wrap _recycle_task_frame and _remove_active_item_with_fade to clean up references and workers
+        if hasattr(self, "_recycle_task_frame"):
+            orig_recycle_task_frame = self._recycle_task_frame
+            def wrapped_recycle_task_frame(task):
+                if task:
+                    tid = task.get("id")
+                    if tid:
+                        if hasattr(self, "_task_cards"):
+                            self._task_cards.pop(tid, None)
+                        worker = getattr(self, "_thumbnail_workers", {}).get(tid)
+                        if worker:
+                            try:
+                                worker.disconnect()
+                                worker.terminate()
+                            except Exception:
+                                pass
+                            self._thumbnail_workers.pop(tid, None)
+                        if hasattr(self, "_progress_started"):
+                            self._progress_started.pop(tid, None)
+                return orig_recycle_task_frame(task)
+            self._recycle_task_frame = wrapped_recycle_task_frame
+
+        if hasattr(self, "_remove_active_item_with_fade"):
+            orig_remove_active_item_with_fade = self._remove_active_item_with_fade
+            def wrapped_remove_active_item_with_fade(task):
+                if task:
+                    tid = task.get("id")
+                    if tid:
+                        if hasattr(self, "_task_cards"):
+                            self._task_cards.pop(tid, None)
+                        worker = getattr(self, "_thumbnail_workers", {}).get(tid)
+                        if worker:
+                            try:
+                                worker.disconnect()
+                                worker.terminate()
+                            except Exception:
+                                pass
+                            self._thumbnail_workers.pop(tid, None)
+                        if hasattr(self, "_progress_started"):
+                            self._progress_started.pop(tid, None)
+                return orig_remove_active_item_with_fade(task)
+            self._remove_active_item_with_fade = wrapped_remove_active_item_with_fade
+
         page = QWidget()
         page.setObjectName("Page")
         self.home_page = page
+
+        # Wrap _apply_theme to update the thumbnail placeholder stylesheet after setting theme stylesheet
+        if hasattr(self, '_apply_theme'):
+            orig_apply_theme = self._apply_theme
+            def wrapped_apply_theme(*args, **kwargs):
+                orig_apply_theme(*args, **kwargs)
+                if hasattr(self, 'home_page') and self.home_page and hasattr(self.home_page, 'thumb_label') and self.home_page.thumb_label:
+                    if getattr(self, 'dark_mode', False):
+                        self.home_page.thumb_label.setStyleSheet("""
+                            background: #242424;
+                            border-radius: 6px;
+                            border: 1px solid #333333;
+                        """)
+                    else:
+                        self.home_page.thumb_label.setStyleSheet("""
+                            background: #efefef;
+                            border-radius: 6px;
+                            border: 1px solid #e0e0e0;
+                        """)
+            self._apply_theme = wrapped_apply_theme
         layout = QVBoxLayout(page)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(8)
@@ -270,7 +1011,7 @@ class PagesMixin:
         layout.addWidget(self.playlist_toggle)
 
         self.paste_btn = PasteButton()
-        self.paste_btn.clicked.connect(self._paste_from_clipboard)
+        self.paste_btn.clicked.connect(self._on_paste_clicked)
         self.paste_btn.hide()
         layout.addWidget(self.paste_btn)
 
@@ -327,12 +1068,18 @@ class PagesMixin:
         self.paste_url_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.paste_url_btn.setMinimumWidth(0)
         self.paste_url_btn.adjustSize()
-        self.paste_url_btn.clicked.connect(self._paste_from_clipboard)
+        self.paste_url_btn.clicked.connect(self._on_paste_clicked)
 
         url_card_layout.addWidget(self.paste_url_btn)
         url_card_layout.addWidget(url_input_col, 1)
         url_card_layout.addWidget(self.fetch_btn)
         layout.addWidget(url_card)
+
+        self.error_label = QLabel()
+        self.error_label.setObjectName("BadgeError")
+        self.error_label.setWordWrap(True)
+        self.error_label.setVisible(False)
+        layout.addWidget(self.error_label)
 
         # Video details container (always visible)
         self.details_container = QWidget()
@@ -343,45 +1090,58 @@ class PagesMixin:
 
         preview_card = QFrame()
         preview_card.setObjectName("Card")
-        preview_layout = QHBoxLayout(preview_card)
+        self.result_card = preview_card
+        preview_layout = QVBoxLayout(preview_card)
         preview_layout.setContentsMargins(14, 14, 14, 14)
-        preview_layout.setSpacing(14)
-        preview_layout.setAlignment(Qt.AlignVCenter)
+        preview_layout.setSpacing(12)
+
+        row1_layout = QHBoxLayout()
+        row1_layout.setContentsMargins(0, 0, 0, 0)
+        row1_layout.setSpacing(14)
+        row1_layout.setAlignment(Qt.AlignVCenter)
 
         self.thumbnail = QLabel()
         self.thumbnail.setObjectName("PreviewThumb")
-        self.thumbnail.setFixedSize(80, 50)
+        self.thumbnail.setFixedSize(80, 46)
         self.thumbnail.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.thumbnail.setScaledContents(True)
-        self.thumbnail.setStyleSheet("")
+        self.thumbnail.setStyleSheet("""
+            background: #e5e5e5;
+            border-radius: 6px;
+            border: 1px solid #d0d0d0;
+        """)
 
-        info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(4)
+        title_size_layout = QVBoxLayout()
+        title_size_layout.setContentsMargins(0, 0, 0, 0)
+        title_size_layout.setSpacing(4)
 
         self.title = QLabel("Title: -")
-        self.title.setObjectName("InfoTitle")
+        self.title.setObjectName("TaskTitle")
         self.title.setWordWrap(True)
+        self.title.setMaximumHeight(44)
         self.title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         self.size = QLabel("Estimated size: -")
         self.size.setObjectName("InfoSubtle")
 
-        info_layout.addWidget(self.title)
-        info_layout.addWidget(self.size)
+        title_size_layout.addWidget(self.title)
+        title_size_layout.addWidget(self.size)
+        self.title_label = self.title
+        self.size_label = self.size
 
-        preview_action_layout = QHBoxLayout()
-        preview_action_layout.setSpacing(12)
+        row2_layout = QHBoxLayout()
+        row2_layout.setContentsMargins(0, 0, 0, 0)
+        row2_layout.setSpacing(12)
 
         self.show_thumb_toggle = QCheckBox("Show thumbnail")
         self.show_thumb_cb = self.show_thumb_toggle
         self.thumb_label = self.thumbnail
+        self.home_page.thumb_label = self.thumbnail
         page.show_thumb_toggle = self.show_thumb_toggle
         
         self.show_thumb_toggle.setChecked(self.settings.value("show_thumbnails", True, type=bool))
         self.thumbnail.setVisible(self.settings.value("show_thumbnails", True, type=bool))
         self.show_thumb_toggle.toggled.connect(self._on_show_thumb_changed)
-        preview_action_layout.addWidget(self.show_thumb_toggle)
 
         self.reset_btn = QPushButton("Reset")
         self.reset_btn.setObjectName("PasteButton")
@@ -389,11 +1149,16 @@ class PagesMixin:
         self.reset_btn.setMinimumWidth(0)
         self.reset_btn.adjustSize()
         self.reset_btn.clicked.connect(self.clear_homepage_ui)
-        preview_action_layout.addWidget(self.reset_btn)
-        info_layout.addLayout(preview_action_layout)
 
-        preview_layout.addWidget(self.thumbnail)
-        preview_layout.addLayout(info_layout, 1)
+        row2_layout.addWidget(self.show_thumb_toggle)
+        row2_layout.addStretch()
+        row2_layout.addWidget(self.reset_btn)
+
+        row1_layout.addWidget(self.thumbnail)
+        row1_layout.addLayout(title_size_layout, 1)
+
+        preview_layout.addLayout(row1_layout)
+        preview_layout.addLayout(row2_layout)
 
         details_layout.addWidget(preview_card)
         layout.addWidget(self.details_container)
@@ -566,7 +1331,7 @@ class PagesMixin:
 
         self.progress = None
 
-        self.fetch_btn.clicked.connect(self.fetch_info)
+        self.fetch_btn.clicked.connect(self._on_analyze_clicked)
         self.download_btn.clicked.connect(self.start_download)
         
         self.config_cells = [cell_quality, cell_format, cell_audio, self.subtitle_lang_cell]
@@ -574,7 +1339,9 @@ class PagesMixin:
         self._clear_format_quality()
         self._set_config_enabled(False)
 
-        self.load_defaults_from_prefs()
+        QTimer.singleShot(0, self.load_defaults_from_prefs)
+
+
         return page
 
 
@@ -824,14 +1591,11 @@ class PagesMixin:
 
 
         self.default_quality_combo.currentTextChanged.connect(
-            lambda v: self.settings.setValue("default_quality", v)
-        )
+            lambda v: QSettings().setValue("default_quality", v))
         self.default_format_combo.currentTextChanged.connect(
-            lambda v: self.settings.setValue("default_format", v)
-        )
+            lambda v: QSettings().setValue("default_format", v))
         self.default_audio_combo.currentTextChanged.connect(
-            lambda v: self.settings.setValue("default_audio", v)
-        )
+            lambda v: QSettings().setValue("default_audio", v))
 
         # Build rows
         card_layout.addWidget(create_setting_row("Save folder", self.download_dir, self.change_btn))
@@ -1034,11 +1798,11 @@ class PagesMixin:
         card_layout.addWidget(title)
         
         card_layout.addWidget(QLabel(f"Version: {self._version_text()}"))
-        card_layout.addWidget(QLabel("Created by: Tahsan"))
+        card_layout.addWidget(QLabel("Created by: Tahsan Ahmmed"))
         card_layout.addWidget(QLabel("A modern downloader built for speed and clarity."))
-        card_layout.addWidget(QLabel("License: GNU GPLv3"))
+        card_layout.addWidget(QLabel("License: Custom License — Personal use only. See LICENSE file."))
         
-        repo_link = QLabel('<a href="https://github.com/tahsanahmmed25/YTDownloader" style="color: inherit; text-decoration: none;">github.com/tahsanahmmed25/YTDownloader</a>')
+        repo_link = QLabel('<a href="https://github.com/tahsanahmmed25/YTDownloaderPro" style="color: inherit; text-decoration: none;">github.com/tahsanahmmed25/YTDownloaderPro</a>')
         repo_link.setObjectName("SettingSubLabel")
         repo_link.setOpenExternalLinks(True)
         card_layout.addWidget(repo_link)
@@ -1060,13 +1824,15 @@ class PagesMixin:
         return page
 
     def load_defaults_from_prefs(self):
-        quality = self.settings.value("default_quality", "1080p")
-        fmt     = self.settings.value("default_format",  "MP4")
-        audio   = self.settings.value("default_audio",   "MP3")
+        from PySide6.QtCore import QSettings
+        s = QSettings()
+        quality = s.value("default_quality", "1080p")
+        fmt     = s.value("default_format",  "MP4")
+        audio   = s.value("default_audio",   "MP3")
         
-        # Populate combos with default options if empty on startup
-        if self.quality.count() == 0:
-            self.quality.addItems(["Auto (Best)", "720p", "1080p", "2K", "4K"])
+        # Ensure combos have items so findText can succeed
+        if self.quality_combo.count() == 0:
+            self.quality_combo.addItems(["Auto (Best)", "720p", "1080p", "2K", "4K"])
         if self.format_combo.count() == 0:
             self.format_combo.addItems(["Auto", "MP4", "MKV", "WEBM"])
         if self.audio_combo.count() == 0:
@@ -1074,27 +1840,27 @@ class PagesMixin:
         if self.subs_lang.count() == 0:
             self.subs_lang.addItem("None")
 
-        # Set the combobox/config cell to match saved defaults
-        idx = self.quality.findText(quality)
-        if idx >= 0:
-            self.quality.setCurrentIndex(idx)
-        else:
-            self.quality.addItem(quality)
-            self.quality.setCurrentText(quality)
-        
-        idx = self.format_combo.findText(fmt)
-        if idx >= 0:
-            self.format_combo.setCurrentIndex(idx)
-        else:
-            self.format_combo.addItem(fmt)
-            self.format_combo.setCurrentText(fmt)
-        
-        idx = self.audio_combo.findText(audio)
-        if idx >= 0:
-            self.audio_combo.setCurrentIndex(idx)
-        else:
-            self.audio_combo.addItem(audio)
-            self.audio_combo.setCurrentText(audio)
+        for combo, value in [
+            (self.quality_combo, quality),
+            (self.format_combo, fmt),
+            (self.audio_combo, audio),
+        ]:
+            idx = combo.findText(value)
+            if idx < 0:
+                # Case-insensitive lookup helper
+                for i in range(combo.count()):
+                    if combo.itemText(i).lower() == str(value).lower():
+                        idx = i
+                        break
+            if idx >= 0:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
+            else:
+                combo.blockSignals(True)
+                combo.addItem(value)
+                combo.setCurrentText(value)
+                combo.blockSignals(False)
 
         self.subs_mode_combo.setCurrentText("None")
         self.subs_lang.setCurrentText("None")

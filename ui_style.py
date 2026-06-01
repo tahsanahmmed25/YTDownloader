@@ -65,7 +65,8 @@ def build_stylesheet(t: dict, theme: dict, dark: bool) -> str:
     t_copy["nav_border"] = nav_border
     t_copy["text_on_accent"] = accent_text
     
-    t_copy["progress_fill"] = accent
+    progress_fill = theme["accent_dark"] if dark else theme["accent_light"]
+    t_copy["progress_fill"] = progress_fill
     t_copy["border_focus"] = accent
     template = """
 QMainWindow, QWidget {{
@@ -323,6 +324,7 @@ QProgressBar {{
 QProgressBar::chunk {{
     background: {progress_fill};
     border-radius: 2px;
+    min-width: 5px;
 }}
 
 QProgressBar#FetchBar {{

@@ -139,7 +139,7 @@ def make_spec_config(spec_dir, entry_script, pathex):
         },
         "exe": {
             "exclude_binaries": True,
-            "name": "YTDownloader",
+            "name": "YTDownloaderPro",
             "debug": False,
             "bootloader_ignore_signals": False,
             "strip": False,
@@ -157,6 +157,6 @@ def make_spec_config(spec_dir, entry_script, pathex):
             "strip": False,
             "upx": False,
             "upx_exclude": [],
-            "name": "YTDownloader",
+            "name": "YTDownloaderPro",
         },
     }

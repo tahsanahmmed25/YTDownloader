@@ -2,7 +2,7 @@
 
 For usage problems, open a GitHub issue with:
 
-- YTDownloader version
+- YTDownloaderPro version
 - Operating system and architecture
 - Whether you used Normal Mode or Restricted Mode
 - Whether yt-dlp/FFmpeg were system-installed or app-managed

@@ -490,7 +490,7 @@ def _write_cookies_file(cookies: dict) -> str:
     try:
         lines = [
             "# Netscape HTTP Cookie File",
-            "# Managed by YTDownloader. Do not edit.",
+            "# Managed by YTDownloaderPro. Do not edit.",
             "",
         ]
         for key, cookie in cookies.items():

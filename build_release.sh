@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# build_release.sh — Linux build script for YTDownloader
-# Produces: dist/YTDownloader.AppImage
+# build_release.sh — Linux build script for YTDownloaderPro
+# Produces: dist/YTDownloaderPro.AppImage
 # Run from the project root: ./build_release.sh
 
 set -euo pipefail
@@ -11,10 +11,10 @@ if [[ "${YTDL_LOCAL_DEV_MODE:-false}" == "true" ]]; then
     export PATH="$SCRIPT_DIR/tools/bin:$PATH"
 fi
 # ── Colours ──────────────────────────────────────────────────────────────────
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-info()  { echo -e "${GREEN}[build]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[warn]${NC}  $*"; }
-error() { echo -e "${RED}[error]${NC} $*"; exit 1; }
+bin_name() { echo -e "\033[0;32m[build]\033[0m $*"; }
+info()  { echo -e "\033[0;32m[build]\033[0m $*"; }
+warn()  { echo -e "\033[1;33m[warn]\033[0m  $*"; }
+error() { echo -e "\033[0;31m[error]\033[0m $*"; exit 1; }
 
 # ── Python ───────────────────────────────────────────────────────────────────
 if [[ -f ".venv/bin/python" ]]; then
@@ -40,13 +40,13 @@ info "Running tests..."
 
 # ── PyInstaller ───────────────────────────────────────────────────────────────
 info "Running PyInstaller..."
-"$PYTHON" -m PyInstaller --clean -y YTDownloader_linux.spec
+"$PYTHON" -m PyInstaller --clean -y YTDownloaderPro_linux.spec
 
-DIST_DIR="$SCRIPT_DIR/dist/YTDownloader"
+DIST_DIR="$SCRIPT_DIR/dist/YTDownloaderPro"
 [[ -d "$DIST_DIR" ]] || error "PyInstaller output not found at $DIST_DIR"
 
 # ── AppImage structure ────────────────────────────────────────────────────────
-APPDIR="$SCRIPT_DIR/dist/YTDownloader.AppDir"
+APPDIR="$SCRIPT_DIR/dist/YTDownloaderPro.AppDir"
 info "Building AppDir at $APPDIR ..."
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
@@ -73,19 +73,19 @@ elif [[ -d "$SCRIPT_DIR/venv/lib/python3.12/site-packages/PySide6/Qt/plugins" ]]
 fi
 
 # Desktop entry (required by AppImage spec)
-cat > "$APPDIR/YTDownloader.desktop" <<'EOF'
+cat > "$APPDIR/YTDownloaderPro.desktop" <<'EOF'
 [Desktop Entry]
-Name=YTDownloader
-Exec=YTDownloader
-Icon=YTDownloader
+Name=YTDownloaderPro
+Exec=YTDownloaderPro
+Icon=YTDownloaderPro
 Type=Application
 Categories=AudioVideo;Network;
-Comment=Simple YouTube Downloader by Tahsan
+Comment=YTDownloaderPro - YouTube Video Downloader
 EOF
 
 # Icon
 if [[ -f "$SCRIPT_DIR/icons/download.png" ]]; then
-    cp "$SCRIPT_DIR/icons/download.png" "$APPDIR/YTDownloader.png"
+    cp "$SCRIPT_DIR/icons/download.png" "$APPDIR/YTDownloaderPro.png"
 else
     warn "icons/download.png not found; AppImage will have no icon."
 fi
@@ -97,7 +97,7 @@ HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="$HERE/usr/bin:$PATH"
 export LD_LIBRARY_PATH="$HERE/usr/bin/_internal/PySide6/Qt/lib:$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
 export QT_PLUGIN_PATH="$HERE/usr/bin/_internal/PySide6/Qt/plugins"
-exec "$HERE/usr/bin/YTDownloader" "$@"
+exec "$HERE/usr/bin/YTDownloaderPro" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 
@@ -119,7 +119,7 @@ echo "${APPIMAGETOOL_SHA256}  ${APPIMAGETOOL}" | sha256sum -c -
 chmod +x "$APPIMAGETOOL"
 
 # ── Build AppImage ────────────────────────────────────────────────────────────
-OUTPUT="$SCRIPT_DIR/dist_installer/YTDownloader-linux-x86_64.AppImage"
+OUTPUT="$SCRIPT_DIR/dist_installer/YTDownloaderPro-linux-x86_64.AppImage"
 mkdir -p "$SCRIPT_DIR/dist_installer"
 
 info "Building AppImage → $OUTPUT ..."

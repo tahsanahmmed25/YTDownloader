@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build a Windows desktop app called `Simple YouTube Downloader by Tahsan`.
+Build a Windows desktop app called `YTDownloaderPro`.
 
 The product is a polished YouTube video and playlist downloader with a modern PySide6 desktop UI, `yt-dlp` download engine, `ffmpeg` merge support, persistent history, cookie-based restricted video support, installer packaging, and GitHub-based update readiness.
 
@@ -32,8 +32,8 @@ Use:
 
 ## App Identity
 
-- App title: `Simple YouTube Downloader by Tahsan`
-- Sidebar brand label: `YTDownloader`
+- App title: `YTDownloaderPro`
+- Sidebar brand label: `YTDownloaderPro`
 - Version: `1.0.0` until changed intentionally
 - Platform target: Windows desktop
 - Icon assets:

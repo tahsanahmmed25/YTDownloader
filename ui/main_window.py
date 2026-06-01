@@ -1,4 +1,14 @@
 import sys
+import subprocess
+
+# Monkeypatch subprocess.Popen on Linux/macOS to avoid brief console/terminal window flashing
+if sys.platform != "win32":
+    _original_popen = subprocess.Popen
+    def _custom_popen(args, *args_list, **kwargs):
+        kwargs.setdefault("close_fds", True)
+        kwargs.setdefault("start_new_session", True)
+        return _original_popen(args, *args_list, **kwargs)
+    subprocess.Popen = _custom_popen
 import os
 import re
 import time
@@ -440,11 +450,26 @@ class Downloader(QMainWindow, PagesMixin):
         self.toast.hide()
         self._apply_theme()
 
-    def _switch_page(self, page, page_name):
+    def _switch_page(self, page, page_name=None):
+        if page_name is None:
+            page_name = page
+            for i in range(self.pages.count()):
+                w = self.pages.widget(i)
+                if w.objectName() == page_name or w == getattr(self, f"page_{page_name}", None):
+                    page = w
+                    break
+            else:
+                page = getattr(self, f"page_{page_name}", self.page_downloader)
+
         self.pages.setCurrentWidget(page)
         self.set_active_nav(page_name)
         if page_name == "home":
-            self.load_defaults_from_prefs()
+            if hasattr(self, "home_page") and self.home_page:
+                if not hasattr(self.home_page, "load_defaults_from_prefs"):
+                    self.home_page.load_defaults_from_prefs = self.load_defaults_from_prefs
+                self.home_page.load_defaults_from_prefs()
+            else:
+                self.load_defaults_from_prefs()
 
     def _add_nav_button(self, label, page, page_name, icon_char=""):
         btn = NavButton("")
@@ -720,12 +745,22 @@ class Downloader(QMainWindow, PagesMixin):
         self.cookie_status_widgets.append((dot, status))
         return row
 
-    def _create_download_item(self, title):
+    def _create_download_item(self, task_id, title):
         if hasattr(self, "_download_item_pool") and self._download_item_pool:
             item = self._download_item_pool.pop()
             self._reset_download_item(item, title)
+            if not hasattr(self, "_task_cards"):
+                self._task_cards = {}
+            self._task_cards[task_id] = item["frame"]
+            item["frame"].task_id = task_id
             return item
-        return self.build_task_card(title)
+        item = self.build_task_card(task_id, title)
+        item["pause_btn"].clicked.connect(self._on_pause_button_clicked)
+        if item.get("resume_btn"):
+            item["resume_btn"].clicked.connect(self._on_pause_button_clicked)
+        if item.get("cancel_btn"):
+            item["cancel_btn"].clicked.connect(self._on_cancel_button_clicked)
+        return item
 
     def _on_pause_button_clicked(self):
         btn = self.sender()
@@ -754,11 +789,13 @@ class Downloader(QMainWindow, PagesMixin):
         item["speed"].setText("Speed: -")
         item["size"].setText("Downloaded: -")
         item["pause_btn"].setEnabled(True)
-        item["pause_btn"].setText("Pause")
+        item["pause_btn"].setVisible(True)
+        if item.get("resume_btn"):
+            item["resume_btn"].setEnabled(True)
+            item["resume_btn"].setVisible(False)
         if item.get("cancel_btn"):
             item["cancel_btn"].setEnabled(True)
             item["cancel_btn"].setVisible(True)
-            item["cancel_btn"].setText("Cancel")
         item["open_btn"].setVisible(False)
 
     def _show_error_dialog(self, title, message):
@@ -885,9 +922,36 @@ class Downloader(QMainWindow, PagesMixin):
         )
 
     def _apply_theme(self):
-        from ui_style import get_stylesheet
+        from ui_style import get_stylesheet, DARK, LIGHT
         from ui.themes import get_theme
         sheet = get_stylesheet(dark=self.dark_mode, theme_name=self.current_theme_name)
+        
+        # Inject styling for CardIconButton dynamically to keep style.py clean and whitelisted
+        t = DARK if self.dark_mode else LIGHT
+        card_icon_qss = f"""
+QPushButton#CardIconButton {{
+    background: transparent;
+    border: 1px solid {t['border']};
+    border-radius: 6px;
+    color: {t['text_secondary']};
+    font-size: 12px;
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0px;
+}}
+
+QPushButton#CardIconButton:hover {{
+    background: {t['bg_hover']};
+    color: {t['text_primary']};
+}}
+
+QPushButton#CardIconButton[action="cancel"]:hover {{
+    color: #ef4444;
+}}
+"""
+        sheet += card_icon_qss
         self.setStyleSheet(sheet)
         self._refresh_all_nav_buttons()
         self._apply_combo_popup_theme()
@@ -909,6 +973,12 @@ class Downloader(QMainWindow, PagesMixin):
         for widget in self.findChildren(BrandIcon):
             widget.dark_mode = self.dark_mode
             widget.update()
+
+        # Force all visible progress bars to repaint
+        for pb in self.findChildren(QProgressBar):
+            pb.style().unpolish(pb)
+            pb.style().polish(pb)
+            pb.update()
 
     def _refresh_all_nav_buttons(self):
         if not hasattr(self, '_nav_buttons') or not self._nav_buttons:
@@ -1198,6 +1268,14 @@ class Downloader(QMainWindow, PagesMixin):
         frame = item.get("frame")
         if not frame:
             return
+
+        # Stop marquee timers when task card is recycled
+        title_label = item.get("title")
+        if title_label and hasattr(title_label, "_cleanup_timers"):
+            try:
+                title_label._cleanup_timers()
+            except Exception:
+                pass
         for layout in (
             getattr(self, "active_downloads_layout", None),
             getattr(self, "completed_downloads_layout", None)
@@ -1314,17 +1392,19 @@ class Downloader(QMainWindow, PagesMixin):
         item = task.get("item") or {}
         try:
             if item.get("status"):
-                item["status"].setText("")
+                item["status"].setText("Failed")
             if item.get("status_icon"):
                 self._set_status_icon(item["status_icon"], "failed", "✕")
                 self._animate_status_icon(item)
             if item.get("pause_btn"):
-                item["pause_btn"].setText("Failed")
+                item["pause_btn"].setVisible(False)
                 item["pause_btn"].setDisabled(True)
+            if item.get("resume_btn"):
+                item["resume_btn"].setVisible(False)
+                item["resume_btn"].setDisabled(True)
             if item.get("cancel_btn"):
-                item["cancel_btn"].setText("Failed")
-                item["cancel_btn"].setDisabled(True)
                 item["cancel_btn"].setVisible(False)
+                item["cancel_btn"].setDisabled(True)
             if item.get("frame") and self.active_downloads_layout:
                 self.active_downloads_layout.removeWidget(item["frame"])
             if item.get("frame") and self.completed_downloads_layout:
@@ -1355,11 +1435,14 @@ class Downloader(QMainWindow, PagesMixin):
             item = task.get("item") or {}
             status = item.get("status")
             pause_btn = item.get("pause_btn")
+            resume_btn = item.get("resume_btn")
             cancel_btn = item.get("cancel_btn")
             if status:
                 status.setText(reason_text or "Cancelling...")
             if pause_btn:
                 pause_btn.setEnabled(False)
+            if resume_btn:
+                resume_btn.setEnabled(False)
             if cancel_btn:
                 cancel_btn.setEnabled(False)
         if self._active_tasks:
@@ -1381,10 +1464,15 @@ class Downloader(QMainWindow, PagesMixin):
                         try:
                             _log.warning("Force terminating stuck cancelled download thread %s.", task_id)
                             thread.terminate()
-                            thread.wait(1000)
+                            thread.wait(500)
                         except Exception:
                             pass
-            self._release_cancel_gate_if_safe()
+            # Force-release the gate regardless — threads are killed, no need to wait
+            self._cancel_cleanup_pending = False
+            if self._cancel_grace_timer.isActive():
+                self._cancel_grace_timer.stop()
+            self._sync_download_button_text()
+            QTimer.singleShot(0, self._start_next_downloads)
             return
         for task_id in stale_ids:
             worker = self._download_workers.get(task_id)
@@ -1396,11 +1484,17 @@ class Downloader(QMainWindow, PagesMixin):
             thread = self._download_threads.get(task_id)
             if self._thread_is_running(thread):
                 try:
-                    thread.quit()
+                    _log.warning("Force terminating download thread for task %s.", task_id)
+                    thread.terminate()
+                    thread.wait(500)
                 except Exception:
                     pass
             self._mark_task_failed(task_id)
-        self._release_cancel_gate_if_safe()
+        # Force-release the gate regardless — threads are killed
+        self._cancel_cleanup_pending = False
+        if self._cancel_grace_timer.isActive():
+            self._cancel_grace_timer.stop()
+        self._sync_download_button_text()
         self._show_error_dialog(
             "Error",
             "Some downloads were force-stopped because they were not responding."
@@ -1447,9 +1541,10 @@ class Downloader(QMainWindow, PagesMixin):
                         continue
                     task["state"] = "stalled"
                     item = task.get("item") or {}
-                    pause_btn = item.get("pause_btn")
-                    if pause_btn:
-                        pause_btn.setEnabled(False)
+                    if item.get("pause_btn"):
+                        item["pause_btn"].setEnabled(False)
+                    if item.get("resume_btn"):
+                        item["resume_btn"].setEnabled(False)
                     status = item.get("status")
                     if status:
                         status.setText("Not responding...")
@@ -1853,6 +1948,14 @@ class Downloader(QMainWindow, PagesMixin):
             if widget and hasattr(widget, "_download_item"):
                 if hasattr(self, "_download_item_pool"):
                     self._download_item_pool.append(widget._download_item)
+                
+                # Stop marquee timers when task card is removed
+                title_label = widget._download_item.get("title")
+                if title_label and hasattr(title_label, "_cleanup_timers"):
+                    try:
+                        title_label._cleanup_timers()
+                    except Exception:
+                        pass
                 widget.setParent(None)
             elif widget:
                 widget.deleteLater()
@@ -2143,6 +2246,95 @@ class Downloader(QMainWindow, PagesMixin):
         self._clear_thumbnails()
         self.refresh_library()
 
+    def _set_analyzing_state(self, loading: bool):
+        self.analyze_btn = getattr(self, "fetch_btn", None)
+        if self.analyze_btn:
+            self.analyze_btn.setEnabled(not loading)
+            self.analyze_btn.setText("Analyzing..." if loading else "Analyze")
+        if hasattr(self, "fetch_btn") and self.fetch_btn:
+            self.fetch_btn.setEnabled(not loading)
+            if hasattr(self, "_animate_button_text"):
+                self._animate_button_text(self.fetch_btn, "Analyzing..." if loading else "Analyze")
+            else:
+                self.fetch_btn.setText("Analyzing..." if loading else "Analyze")
+        self.url_input.setEnabled(not loading)
+        if hasattr(self, "paste_btn") and self.paste_btn:
+            self.paste_btn.setEnabled(not loading)
+        if hasattr(self, "paste_url_btn") and self.paste_url_btn:
+            self.paste_url_btn.setEnabled(not loading)
+        if hasattr(self, "fetch_spinner") and self.fetch_spinner:
+            self.fetch_spinner.setVisible(loading)
+        if hasattr(self, "error_label") and self.error_label:
+            if loading:
+                self.error_label.setVisible(False)
+
+    def _discard_fetch_thread(self):
+        if self._fetch_thread:
+            old_thread = self._fetch_thread
+            old_worker = self._fetch_worker
+            if not hasattr(self, "_old_fetch_threads"):
+                self._old_fetch_threads = []
+            self._old_fetch_threads.append(old_thread)
+
+            # Safeguard against PySide6 already deleting C++ objects
+            try:
+                if old_worker:
+                    try:
+                        old_worker.info_ready.disconnect()
+                    except Exception:
+                        pass
+                    try:
+                        old_worker.error.disconnect()
+                    except Exception:
+                        pass
+                    try:
+                        old_worker.cookie_lock.disconnect()
+                    except Exception:
+                        pass
+                    try:
+                        old_worker.finished.disconnect()
+                    except Exception:
+                        pass
+                    try:
+                        old_worker.request_cancel()
+                    except Exception:
+                        pass
+                    
+                    # Ensure the thread quits and the worker is deleted when finished
+                    try:
+                        old_worker.finished.connect(old_thread.quit)
+                    except Exception:
+                        pass
+                    try:
+                        old_worker.finished.connect(old_worker.deleteLater)
+                    except Exception:
+                        pass
+            except RuntimeError:
+                pass
+
+            try:
+                if old_thread:
+                    try:
+                        old_thread.finished.disconnect()
+                    except Exception:
+                        pass
+                    try:
+                        old_thread.finished.connect(old_thread.deleteLater)
+                    except Exception:
+                        pass
+                    try:
+                        old_thread.finished.connect(
+                            lambda t=old_thread: self._old_fetch_threads.remove(t) 
+                            if (hasattr(self, "_old_fetch_threads") and t in self._old_fetch_threads) else None
+                        )
+                    except Exception:
+                        pass
+            except RuntimeError:
+                pass
+
+            self._fetch_thread = None
+            self._fetch_worker = None
+
     # ---------- FETCH VIDEO INFO ----------
     def fetch_info(self):
         self._collapse_details()
@@ -2156,8 +2348,35 @@ class Downloader(QMainWindow, PagesMixin):
         if is_playlist and not is_playlist_url(url):
             self._show_error_dialog("Error", "Please enter a valid playlist link.")
             return
-        if self._thread_is_running(self._fetch_thread):
-            return
+
+        # Fully clean up any previous worker before starting
+        if hasattr(self, '_analyze_worker') and self._analyze_worker is not None:
+            try:
+                self._analyze_worker.result.disconnect()
+                self._analyze_worker.error.disconnect()
+            except Exception:
+                pass
+            if self._analyze_worker.isRunning():
+                self._analyze_worker.quit()
+                self._analyze_worker.wait(500)
+            self._analyze_worker = None
+
+        if hasattr(self, '_fetch_thread') and self._fetch_thread is not None:
+            try:
+                self._fetch_worker.info_ready.disconnect()
+                self._fetch_worker.error.disconnect()
+            except Exception:
+                pass
+            if self._fetch_thread.isRunning():
+                self._fetch_thread.quit()
+                self._fetch_thread.wait(500)
+            self._fetch_thread = None
+            self._fetch_worker = None
+
+        # Clear any previous error
+        if hasattr(self, 'error_label') and self.error_label:
+            self.error_label.setVisible(False)
+
         quality = self.quality.currentText().strip() or "Auto (Best)"
         container = (self.format_combo.currentText().strip() or "auto").lower()
 
@@ -2177,9 +2396,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._active_is_playlist = is_playlist
         self.download_btn.setEnabled(False)
         self._set_config_enabled(False)
-        self.fetch_btn.setEnabled(False)
-        if hasattr(self, "fetch_spinner"):
-            self.fetch_spinner.setVisible(True)
+        self._set_analyzing_state(True)
         try:
             self.url_input.setCursorPosition(0)
             self.url_input.deselect()
@@ -2206,6 +2423,11 @@ class Downloader(QMainWindow, PagesMixin):
             container=container
         )
         self._fetch_worker.moveToThread(self._fetch_thread)
+        self._analyze_worker = self._fetch_worker
+        self._fetch_worker.result = self._fetch_worker.info_ready
+        self._fetch_worker.isRunning = lambda: (self._fetch_thread.isRunning() if self._fetch_thread else False)
+        self._fetch_worker.quit = lambda: (self._fetch_thread.quit() if self._fetch_thread else None)
+        self._fetch_worker.wait = lambda timeout=None: (self._fetch_thread.wait(timeout) if self._fetch_thread else None)
 
         self._fetch_thread.started.connect(self._fetch_worker.run)
         self._fetch_worker.info_ready.connect(self.on_info_ready, Qt.QueuedConnection)
@@ -2216,7 +2438,6 @@ class Downloader(QMainWindow, PagesMixin):
         self._fetch_thread.finished.connect(self._fetch_thread.deleteLater)
         self._fetch_thread.finished.connect(self._on_fetch_done)
 
-        self._animate_button_text(self.fetch_btn, "Analyzing...")
         self._fetch_thread.start()
 
     def _clear_fetch_refs(self):
@@ -2224,10 +2445,7 @@ class Downloader(QMainWindow, PagesMixin):
         self._fetch_thread = None
 
     def _on_fetch_done(self):
-        self.fetch_btn.setEnabled(True)
-        if hasattr(self, "fetch_spinner"):
-            self.fetch_spinner.setVisible(False)
-        self._animate_button_text(self.fetch_btn, "Analyze")
+        self._set_analyzing_state(False)
         try:
             self.url_input.setCursorPosition(0)
             self.url_input.deselect()
@@ -2242,6 +2460,7 @@ class Downloader(QMainWindow, PagesMixin):
                       available_formats=None,
                       available_qualities=None,
                       available_subtitles=None):
+        self._set_analyzing_state(False)
         if hasattr(self, "_set_metadata_placeholder"):
             self._set_metadata_placeholder(False)
         self.title.setText(f"Title: {title}")
@@ -2285,6 +2504,16 @@ class Downloader(QMainWindow, PagesMixin):
         self._expand_details()
 
     def on_fetch_error(self, msg):
+        self._set_analyzing_state(False)
+        # Stop the 30-second analyze timeout — an error arrived, no need to fire timeout
+        timeout = getattr(self, "_analyze_timeout", None)
+        if timeout is not None:
+            try:
+                timeout.stop()
+            except Exception:
+                pass
+            self._analyze_timeout = None
+
         clean = re.sub(r"\x1b\[[0-9;]*m", "", msg)
         _log.error("Fetch error: %s", clean)
         if not self._cookies_loaded() and self._is_cookie_related_error(clean):
@@ -2306,6 +2535,21 @@ class Downloader(QMainWindow, PagesMixin):
             self.size.setText("Estimated size: -")
             self.thumbnail.clear()
         self._sync_download_button_text()
+
+        if hasattr(self, "error_label") and self.error_label:
+            self.error_label.setText(f"⚠ {user_msg}")
+            self.error_label.setVisible(True)
+
+    def _on_analyze_result(self, info):
+        self._set_analyzing_state(False)   # ← must be first line
+        title = info.get("title", "Unknown") if isinstance(info, dict) else str(info)
+        size = info.get("size", "Unknown") if isinstance(info, dict) else "Unknown"
+        thumb_bytes = info.get("thumb_bytes", b"") if isinstance(info, dict) else b""
+        self.on_info_ready(title, size, thumb_bytes)
+
+    def _on_analyze_error(self, msg):
+        self._set_analyzing_state(False)   # ← must be first line
+        self.on_fetch_error(msg)
 
     def _on_cookie_lock(self, browser_name, msg):
         self._handle_browser_lock_restart(browser_name, msg, retry_cb=self.fetch_info)
@@ -2681,15 +2925,18 @@ class Downloader(QMainWindow, PagesMixin):
             "downloaded": None,
             "total": None
         }
-        item = self._create_download_item(title_text)
+        item = self._create_download_item(task_id, title_text)
         task["item"] = item
         item["status"].setText("Queued")
         self._set_status_icon(item["status_icon"], "active", "")
-        item["pause_btn"].setText("Pause")
         item["pause_btn"].setEnabled(False)
+        item["pause_btn"].setVisible(True)
         item["pause_btn"].setProperty("task_id", task_id)
+        if item.get("resume_btn"):
+            item["resume_btn"].setEnabled(False)
+            item["resume_btn"].setVisible(False)
+            item["resume_btn"].setProperty("task_id", task_id)
         if item.get("cancel_btn"):
-            item["cancel_btn"].setText("Cancel")
             item["cancel_btn"].setEnabled(True)
             item["cancel_btn"].setVisible(True)
             item["cancel_btn"].setProperty("task_id", task_id)
@@ -2745,10 +2992,12 @@ class Downloader(QMainWindow, PagesMixin):
             item = task["item"]
             item["status"].setText("Starting...")
             self._set_status_icon(item["status_icon"], "active", "")
-            item["pause_btn"].setText("Pause")
             item["pause_btn"].setEnabled(True)
+            item["pause_btn"].setVisible(True)
+            if item.get("resume_btn"):
+                item["resume_btn"].setEnabled(True)
+                item["resume_btn"].setVisible(False)
             if item.get("cancel_btn"):
-                item["cancel_btn"].setText("Cancel")
                 item["cancel_btn"].setEnabled(True)
                 item["cancel_btn"].setVisible(True)
 
@@ -2778,7 +3027,10 @@ class Downloader(QMainWindow, PagesMixin):
             thread.setProperty("task_id", task_id)
 
             thread.started.connect(worker.run)
-            worker.progress.connect(self.update_progress, Qt.QueuedConnection)
+            worker.progress.connect(
+                self._update_task_card,
+                Qt.ConnectionType.QueuedConnection
+            )
             worker.error.connect(self.on_download_error, Qt.QueuedConnection)
             worker.cookie_lock.connect(self._on_download_cookie_lock, Qt.QueuedConnection)
             worker.completed.connect(self.on_download_complete, Qt.QueuedConnection)
@@ -2855,16 +3107,24 @@ class Downloader(QMainWindow, PagesMixin):
             if worker and task:
                 task["state"] = TASK_STATE_PAUSED
                 task["item"]["status"].setText("Pausing...")
-                task["item"]["pause_btn"].setText("Resume")
                 task["item"]["pause_btn"].setEnabled(False)
+                if task["item"].get("resume_btn"):
+                    task["item"]["resume_btn"].setEnabled(False)
                 worker.request_pause()
             return
         if task_id in self._paused_tasks:
             task = self._paused_tasks.pop(task_id)
             task["state"] = TASK_STATE_QUEUED
-            task["item"]["status"].setText("Queued")
-            task["item"]["pause_btn"].setText("Pause")
-            task["item"]["pause_btn"].setEnabled(False)
+            item = task["item"]
+            item["status"].setText("Queued")
+            item["pause_btn"].setEnabled(False)
+            item["pause_btn"].setVisible(True)
+            if item.get("resume_btn"):
+                item["resume_btn"].setEnabled(False)
+                item["resume_btn"].setVisible(False)
+            if item.get("cancel_btn"):
+                item["cancel_btn"].setEnabled(True)
+                item["cancel_btn"].setVisible(True)
             self._pending_tasks.append(task)
             self._update_global_progress()
             self._persist_queue()
@@ -2897,6 +3157,8 @@ class Downloader(QMainWindow, PagesMixin):
                     item["status"].setText("Cancelling...")
                 if item.get("pause_btn"):
                     item["pause_btn"].setEnabled(False)
+                if item.get("resume_btn"):
+                    item["resume_btn"].setEnabled(False)
                 if item.get("cancel_btn"):
                     item["cancel_btn"].setEnabled(False)
             if worker and hasattr(worker, "request_cancel"):
@@ -2905,8 +3167,9 @@ class Downloader(QMainWindow, PagesMixin):
                 except Exception:
                     pass
             title = (task or {}).get("title") or "Download"
-            if self._active_tasks:
-                self._cancel_grace_timer.start(self._CANCEL_GRACE_MS)
+            # Restart the cancel grace timer for this specific cancel.
+            # _force_cleanup_active_tasks fires at the deadline and hard-terminates.
+            self._cancel_grace_timer.start(self._CANCEL_GRACE_MS)
             self._sync_download_button_text()
             self._show_toast(
                 f"Cancelled: {title}",
@@ -2959,11 +3222,13 @@ class Downloader(QMainWindow, PagesMixin):
             if item.get("status_icon"):
                 self._set_status_icon(item["status_icon"], "active", "")
             if item.get("pause_btn"):
-                item["pause_btn"].setText("Resume")
-                item["pause_btn"].setEnabled(True)
+                item["pause_btn"].setVisible(False)
+            if item.get("resume_btn"):
+                item["resume_btn"].setEnabled(True)
+                item["resume_btn"].setVisible(True)
             if item.get("cancel_btn"):
-                item["cancel_btn"].setText("Cancel")
                 item["cancel_btn"].setEnabled(True)
+                item["cancel_btn"].setVisible(True)
         except Exception:
             _log.exception("UI update failed while pausing task %s", task_id)
         self._paused_tasks[task_id] = task
@@ -2982,12 +3247,15 @@ class Downloader(QMainWindow, PagesMixin):
             self.refresh_library()
             item = task.get("item") or {}
             if item.get("status"):
-                item["status"].setText("")
+                item["status"].setText("Completed")
             if item.get("status_icon"):
                 self._set_status_icon(item["status_icon"], "done", "✓")
             if item.get("pause_btn"):
-                item["pause_btn"].setText("Completed")
+                item["pause_btn"].setVisible(False)
                 item["pause_btn"].setDisabled(True)
+            if item.get("resume_btn"):
+                item["resume_btn"].setVisible(False)
+                item["resume_btn"].setDisabled(True)
             if item.get("cancel_btn"):
                 item["cancel_btn"].setVisible(False)
                 item["cancel_btn"].setDisabled(True)
@@ -3116,13 +3384,31 @@ class Downloader(QMainWindow, PagesMixin):
         task = self._active_tasks.get(task_id)
         if not task or task.get("generation") != self._ui_generation:
             return
+
+        if not hasattr(self, "_progress_started"):
+            self._progress_started = {}
+
+        if value > 0:
+            self._progress_started[task_id] = True
+        elif self._progress_started.get(task_id):
+            # percent == 0 but task has already started -> audio/merge phase
+            item = task.get("item") or {}
+            if item.get("progress"):
+                prog_bar = item["progress"]
+                if prog_bar.maximum() != 0:
+                    prog_bar.setRange(0, 0)
+            return
+
         self._touch_task_activity(task_id)
         task["downloaded"] = downloaded if downloaded is not None else task.get("downloaded")
         task["total"] = total if total is not None else task.get("total")
         item = task.get("item") or {}
         try:
             if item.get("progress"):
-                item["progress"].setValue(value)
+                prog_bar = item["progress"]
+                if prog_bar.maximum() == 0:
+                    prog_bar.setRange(0, 100)
+                prog_bar.setValue(value)
             if value >= 100 and task.get("state") in (TASK_STATE_ACTIVE, TASK_STATE_PAUSED):
                 task["state"] = TASK_STATE_FINALIZING
                 task["finalizing_since"] = time.time()
@@ -3306,23 +3592,30 @@ class Downloader(QMainWindow, PagesMixin):
             "total": None
         }
 
-        item = self._create_download_item(title_text)
+        item = self._create_download_item(task_id, title_text)
         task["item"] = item
         item["pause_btn"].setProperty("task_id", task_id)
+        if item.get("resume_btn"):
+            item["resume_btn"].setProperty("task_id", task_id)
         if item.get("cancel_btn"):
             item["cancel_btn"].setProperty("task_id", task_id)
-            item["cancel_btn"].setText("Cancel")
             item["cancel_btn"].setEnabled(True)
             item["cancel_btn"].setVisible(True)
         if state == TASK_STATE_PAUSED:
             item["status"].setText("Paused")
-            item["pause_btn"].setText("Resume")
             item["pause_btn"].setEnabled(True)
+            item["pause_btn"].setVisible(False)
+            if item.get("resume_btn"):
+                item["resume_btn"].setEnabled(True)
+                item["resume_btn"].setVisible(True)
             self._paused_tasks[task_id] = task
         else:
             item["status"].setText("Queued")
-            item["pause_btn"].setText("Pause")
             item["pause_btn"].setEnabled(False)
+            item["pause_btn"].setVisible(True)
+            if item.get("resume_btn"):
+                item["resume_btn"].setEnabled(False)
+                item["resume_btn"].setVisible(False)
             self._pending_tasks.append(task)
 
         self.active_downloads_layout.insertWidget(0, item["frame"])
@@ -3360,14 +3653,12 @@ class Downloader(QMainWindow, PagesMixin):
         self._last_progress_value = 0
 
     def reset_ui(self):
-        if self._thread_is_running(self._fetch_thread):
-            worker = getattr(self, "_fetch_worker", None)
-            if worker and hasattr(worker, "request_cancel"):
-                try:
-                    worker.request_cancel()
-                except Exception:
-                    pass
-            return
+        # Cancel any in-progress metadata fetch and disconnect signals
+        if hasattr(self, "_discard_fetch_thread"):
+            self._discard_fetch_thread()
+
+        if hasattr(self, "error_label") and self.error_label:
+            self.error_label.setVisible(False)
 
         self._ui_generation += 1
 
@@ -3437,19 +3728,12 @@ class Downloader(QMainWindow, PagesMixin):
         title, thumbnail, and format selectors so the user can paste a new link,
         but never cancels or interferes with running download tasks.
         """
-        # Cancel any in-progress metadata fetch (harmless if nothing is running)
-        if self._thread_is_running(self._fetch_thread):
-            worker = getattr(self, "_fetch_worker", None)
-            if worker and hasattr(worker, "request_cancel"):
-                try:
-                    worker.request_cancel()
-                except Exception:
-                    pass
+        # Cancel any in-progress metadata fetch and disconnect signals
+        self._discard_fetch_thread()
 
-        self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("Analyze")
-        if hasattr(self, "fetch_spinner"):
-            self.fetch_spinner.setVisible(False)
+        self._set_analyzing_state(False)
+        if hasattr(self, "error_label") and self.error_label:
+            self.error_label.setVisible(False)
         self.download_btn.setEnabled(False)
         self._reset_download_ui()
         self.url_input.clear()
@@ -4132,7 +4416,7 @@ class Downloader(QMainWindow, PagesMixin):
         if self._tray and self._tray.isVisible() and not self._force_quit and has_downloads:
             self.hide()
             self._tray.showMessage(
-                "YTDownloader",
+                "YTDownloaderPro",
                 "Downloads are running in the tray.",
                 QSystemTrayIcon.Information,
                 1500

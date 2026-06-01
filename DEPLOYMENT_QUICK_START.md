@@ -1,7 +1,7 @@
 # Deployment Summary
 
 ## What You've Built
-YTDownloader is a desktop YouTube downloader with:
+YTDownloaderPro is a desktop YouTube downloader with:
 - Modern GUI (PySide6)
 - Advanced features (pause/resume, queue, concurrent downloads)
 - Professional installer (Inno Setup)
@@ -16,8 +16,8 @@ It is not production-ready. Public unsigned releases are acceptable without a pa
 ### **Step 1: Prepare Release** (30 minutes)
 ```powershell
 # Update version numbers
-app_config.py → APP_VERSION = "2.0.1"
-YTDownloader.iss → AppVersion=2.0.1
+app_config.py → APP_VERSION = "3.0.0"
+YTDownloaderPro.iss → AppVersion=3.0.0
 
 # Test on clean system
 # Run: CHANGELOG.md, README.md update
@@ -38,30 +38,30 @@ Remove-Item .\build, .\dist, .\dist_installer -Recurse -Force -ErrorAction Silen
 .\build_release.ps1
 
 # Smoke-test the packaged EXE before shipping the installer
-$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+$proc = Start-Process .\dist\YTDownloaderPro\YTDownloaderPro.exe -PassThru
 Start-Sleep -Seconds 8
-if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloaderPro exited early." }
 Stop-Process -Id $proc.Id
 # Confirm the window appears and stays open during the check
 
-# Output: dist_installer\YTDownloader-Setup.exe
+# Output: dist_installer\YTDownloaderPro-Setup.exe
 ```
 
 ### **Step 3: Distribute on GitHub** (10 minutes)
 ```bash
 # Create GitHub repo (free)
 1. Go to github.com
-2. New Repository → YTDownloader
+2. New Repository → YTDownloaderPro
 3. Push code: git push origin main
 
 # Create Release
-1. Click "Releases" tab
+1. Clicks "Releases" tab
 2. "Create a new release"
-3. Tag: v2.0.1
-4. Upload: YTDownloader-Setup.exe and SHA256SUMS-windows.txt
+3. Tag: v3.0.0
+4. Upload: YTDownloaderPro-Setup.exe and SHA256SUMS-windows.txt
 5. Add CHANGELOG content, unsigned release warning, no-warranty text, and `installer_sha256: <sha256>`
 
-# Users download from: github.com/tahsanahmmed25/YTDownloader/releases
+# Users download from: github.com/tahsanahmmed25/YTDownloaderPro/releases
 ```
 
 ---
@@ -86,9 +86,9 @@ Stop-Process -Id $proc.Id
 
 ### Installation Flow
 ```
-1. User visits: github.com/tahsanahmmed25/YTDownloader
+1. User visits: github.com/tahsanahmmed25/YTDownloaderPro
 2. Clicks "Releases"
-3. Downloads: YTDownloader-Setup.exe
+3. Downloads: YTDownloaderPro-Setup.exe
 4. Runs installer
 5. App auto-checks for updates (your built-in system)
 6. Users can update to the latest verified eligible version
@@ -117,8 +117,8 @@ User clicks "Update" → Downloads & installs
 |------|---------|
 | `DEPLOYMENT.md` | Full deployment guide (read this!) |
 | `CHANGELOG.md` | Version history for users |
-| `LICENSE` | GNU GPLv3 open source license |
-| Updated `YTDownloader.iss` | Professional installer info |
+| `LICENSE` | Custom License open source license |
+| Updated `YTDownloaderPro.iss` | Professional installer info |
 
 ---
 
@@ -155,11 +155,11 @@ git config --global user.name "Your Name"
 git config --global user.email "your.email@example.com"
 
 # 5. Initial Push
-cd YTDownloader
+cd YTDownloaderPro
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/tahsanahmmed25/YTDownloader.git
+git remote add origin https://github.com/tahsanahmmed25/YTDownloaderPro.git
 git branch -M main
 git push -u origin main
 
@@ -175,18 +175,18 @@ git push -u origin main
 # 2. Update CHANGELOG.md (5 min)
 # 3. Install deps: .\venv\Scripts\python.exe -m pip install -r requirements-dev.lock
 # 4. Build: .\build_release.ps1 (10 min)
-# 5. Smoke test: Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+# 5. Smoke test: Start-Process .\dist\YTDownloaderPro\YTDownloaderPro.exe -PassThru
 # 6. Wait 8s, confirm the process is still running, then stop it
 # 7. Test locally (10 min)
 # 8. Git push (2 min)
 git add .
-git commit -m "v1.0.1: Bug fixes and improvements"
+git commit -m "v3.0.0: Custom license, cleaned repo, updated branding"
 git push origin main
 
 # 9. Create Release on GitHub (5 min)
 # Via web: github.com → Releases → New Release
-# Tag: v1.0.1
-# Upload: dist_installer/YTDownloader-Setup.exe
+# Tag: v3.0.0
+# Upload: dist_installer/YTDownloaderPro-Setup.exe
 # Copy CHANGELOG content
 
 # Total: ~35 minutes per release
@@ -225,7 +225,7 @@ You: Send email with new link
 
 ### After (Professional)
 ```
-User: Goes to github.com/tahsanahmmed25/YTDownloader
+User: Goes to github.com/tahsanahmmed25/YTDownloaderPro
 User: Clicks Releases, downloads installer
 App: Checks GitHub automatically for updates
 User: Gets notified when updates available
@@ -248,7 +248,7 @@ You: Push code → Release on GitHub → Done!
 
 1. **Read** `DEPLOYMENT.md` (comprehensive guide)
 2. **Create** GitHub account & repo
-3. **Update** version number to 2.0.1
+3. **Update** version number to 3.0.0
 4. **Build** release: `.\build_release.ps1`
 5. **Create** GitHub Release with installer
 6. **Complete** - Users can now download & auto-update
@@ -259,7 +259,7 @@ You: Push code → Release on GitHub → Done!
 
 ### Common Questions
 - **"Can users make custom builds?"** Yes, open source means they can fork & modify
-- **"Is GPLv3 license okay?"** Yes, protects the code from closed-source rebranding while keeping it free software.
+- **"Is license okay?"** Yes, custom license protects the code from commercial/redistribution use.
 - **"Do I need to sign the installer?"** Optional but professional (code signing costs ~$300/year)
 - **"How do I get updates?"** GitHub email notifications, or check Releases tab
 

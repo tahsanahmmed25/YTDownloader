@@ -116,7 +116,10 @@ def _make_window(monkeypatch):
         "reset_ui",
         "closeEvent",
         "_on_update_error",
+        "update_progress",
+        "_touch_task_activity",
     ):
+
         setattr(window, name, MethodType(getattr(main_window.Downloader, name), window))
     window._ui_generation = 0
     window._active_tasks = {}
@@ -305,3 +308,31 @@ def test_private_update_404_quietly_pauses_startup_checks(qapp, monkeypatch):
     assert window.settings.values["update_url_404_disabled"] is True
     assert messages == []
     assert toasts == []
+
+
+def test_update_progress_ranges(qapp, monkeypatch):
+    window = _make_window(monkeypatch)
+    task, worker, thread = _add_active_task(window)
+    item = task["item"]
+    prog_bar = item["progress"]
+
+    # Initially range is 0-100
+    assert prog_bar.maximum() == 100
+    prog_bar.setValue(0)
+    assert prog_bar.value() == 0
+
+    # Progress start -> normal progress updates range to 0-100 and value to 25
+    window.update_progress(task["id"], 25.0)
+    assert prog_bar.maximum() == 100
+    assert prog_bar.value() == 25
+    assert window._progress_started.get(task["id"]) is True
+
+    # Audio merge phase -> progress emits 0
+    window.update_progress(task["id"], 0.0)
+    assert prog_bar.maximum() == 0  # Indeterminate mode
+
+    # Switch back to normal progress (e.g. download restarts or next item in playlist starts)
+    window.update_progress(task["id"], 50.0)
+    assert prog_bar.maximum() == 100
+    assert prog_bar.value() == 50
+

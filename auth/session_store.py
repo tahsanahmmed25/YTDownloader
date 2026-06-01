@@ -5,7 +5,7 @@ from app_config import app_data_dir, local_tmp_dir
 from core.security import atomic_write_text, ensure_private_dir, set_private_file_permissions
 
 
-SERVICE_NAME = "YTDownloader"
+SERVICE_NAME = "YTDownloaderPro"
 SESSION_ACCOUNT = "youtube-session-cookies"
 PROXY_ACCOUNT = "proxy-password"
 

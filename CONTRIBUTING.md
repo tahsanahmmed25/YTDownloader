@@ -1,8 +1,8 @@
-# Contributing to YTDownloader
+# Contributing to YTDownloaderPro
 
-First off, thank you for considering contributing to YTDownloader! It's people like you who make this a great utility for everyone.
+First off, thank you for considering contributing to YTDownloaderPro! It's people like you who make this a great utility for everyone.
 
-By contributing to this repository, you agree to license your work under the **GNU GPLv3** license.
+By contributing to this repository, you agree to license your work under the **Custom License** terms.
 
 ---
 
@@ -59,8 +59,8 @@ We aim to foster an open, welcoming, and inclusive community. Please ensure that
 ### Running the App
 1. Clone your fork:
    ```bash
-   git clone https://github.com/tahsanahmmed25/YTDownloader.git
-   cd YTDownloader
+   git clone https://github.com/tahsanahmmed25/YTDownloaderPro.git
+   cd YTDownloaderPro
    ```
 2. Set up a virtual environment:
    ```bash

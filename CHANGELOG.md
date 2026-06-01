@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to YTDownloader will be documented in this file.
+All notable changes to YTDownloaderPro will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [2.9.0] - 2026-05-30
 
 ### Changed
-- **Modernized UI Redesign** — Migrated the visual layer of YTDownloader to a clean, minimal, flat card-based layout inspired by Linear/Notion aesthetics. Includes customized sidebar navigation with colored dots, custom gradient action buttons, and flat preferences panels.
+- **Modernized UI Redesign** — Migrated the visual layer of YTDownloaderPro to a clean, minimal, flat card-based layout inspired by Linear/Notion aesthetics. Includes customized sidebar navigation with colored dots, custom gradient action buttons, and flat preferences panels.
 
 ---
 
@@ -374,7 +374,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## How to Update
 
-YTDownloader automatically checks for updates on startup. When an update is available:
+YTDownloaderPro automatically checks for updates on startup. When an update is available:
 
 1. **Optional Update** — shows a notification; you can choose to update later
 2. **Required Update** — prompts you to update before using the app
@@ -388,8 +388,8 @@ You can also manually check for app updates via **Preferences → Check for Upda
 
 Found a bug? Please help improve the app:
 
-1. Check [existing issues](https://github.com/tahsanahmmed25/YTDownloader/issues)
-2. Open a [new issue](https://github.com/tahsanahmmed25/YTDownloader/issues/new)
+1. Check [existing issues](https://github.com/tahsanahmmed25/YTDownloaderPro/issues)
+2. Open a [new issue](https://github.com/tahsanahmmed25/YTDownloaderPro/issues/new)
 3. Include:
    - OS and version (e.g. "Zorin OS 17", "Windows 11")
    - Error message (from logs or the app's error toast)
@@ -401,8 +401,8 @@ Found a bug? Please help improve the app:
 ## Development
 
 ```bash
-git clone https://github.com/tahsanahmmed25/YTDownloader.git
-cd YTDownloader
+git clone https://github.com/tahsanahmmed25/YTDownloaderPro.git
+cd YTDownloaderPro
 python3 -m venv venv
 source venv/bin/activate          # Linux
 # venv\Scripts\activate           # Windows

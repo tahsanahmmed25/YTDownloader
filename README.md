@@ -1,14 +1,14 @@
 <div align="center">
 
-# YTDownloader
+# YTDownloaderPro
 
 **A clean, fast YouTube downloader with a desktop UI — for Windows and Linux.**
 
-**Official Source Notice:** This is the official repository for YTDownloader. To protect your system from fake, rebranded, or malicious copies, always check the source URL and download only from: [https://github.com/tahsanahmmed25/YTDownloader](https://github.com/tahsanahmmed25/YTDownloader).
+**Official Source Notice:** This is the official repository for YTDownloaderPro. To protect your system from fake, rebranded, or malicious copies, always check the source URL and download only from: [https://github.com/tahsanahmmed25/YTDownloaderPro](https://github.com/tahsanahmmed25/YTDownloaderPro).
 
-[![Build](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloader/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloader?label=latest)](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)
-[![License](https://img.shields.io/github/license/tahsanahmmed25/YTDownloader?label=license&color=blue)](LICENSE)
+[![Build](https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml/badge.svg)](https://github.com/tahsanahmmed25/YTDownloaderPro/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/tahsanahmmed25/YTDownloaderPro?label=latest)](https://github.com/tahsanahmmed25/YTDownloaderPro/releases/latest)
+[![License](https://img.shields.io/badge/license-Custom-blue)](LICENSE)
 
 </div>
 
@@ -16,24 +16,24 @@
 
 ## Download
 
-Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloader/releases/latest)** and grab the file for your OS:
+Go to the **[Releases page](https://github.com/tahsanahmmed25/YTDownloaderPro/releases/latest)** and grab the file for your OS:
 
 | Platform | File | Notes |
 |---|---|---|
-| 🐧 **Linux** (Zorin OS, Ubuntu, Mint…) | `YTDownloader-linux-x86_64.AppImage` | Just download & run — no installation needed |
-| 🪟 **Windows 10/11** | `YTDownloader-Setup.exe` | Run the installer, choose your install drive |
+| 🐧 **Linux** (Zorin OS, Ubuntu, Mint…) | `YTDownloaderPro-linux-x86_64.AppImage` | Just download & run — no installation needed |
+| 🪟 **Windows 10/11** | `YTDownloaderPro-Setup.exe` | Run the installer, choose your install drive |
 
 > **Unsigned warning:** Windows SmartScreen and some Linux desktop environments may warn that this app is from an unknown publisher. That is expected because the app is not signed with a paid certificate.
 
 > **Security note:** Verify the SHA256 checksum before running the app. The in-app updater blocks installer downloads unless release metadata contains a valid `installer_sha256` value for the selected platform.
 
 ```bash
-sha256sum YTDownloader-linux-x86_64.AppImage
+sha256sum YTDownloaderPro-linux-x86_64.AppImage
 cat SHA256SUMS-linux.txt
 ```
 
 ```powershell
-Get-FileHash .\YTDownloader-Setup.exe -Algorithm SHA256
+Get-FileHash .\YTDownloaderPro-Setup.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS-windows.txt
 ```
 
@@ -51,14 +51,14 @@ Paid code signing is not required for this unsigned release. Trust is handled th
 
 ## 🐧 Linux — Quick Start (Zorin OS / Ubuntu)
 
-1. Download `YTDownloader-linux-x86_64.AppImage` from the Releases page.
+1. Download `YTDownloaderPro-linux-x86_64.AppImage` from the Releases page.
 2. Open a terminal and make it executable:
    ```bash
-   chmod +x YTDownloader-linux-x86_64.AppImage
+   chmod +x YTDownloaderPro-linux-x86_64.AppImage
    ```
 3. Run it:
    ```bash
-   ./YTDownloader-linux-x86_64.AppImage
+   ./YTDownloaderPro-linux-x86_64.AppImage
    ```
    Or right-click the file in your file manager → **Run as Program**.
 4. On first launch the app will use system **yt-dlp**/**FFmpeg** when available. 
@@ -75,11 +75,11 @@ Paid code signing is not required for this unsigned release. Trust is handled th
 
 ## 🪟 Windows — Quick Start
 
-1. Download `YTDownloader-Setup.exe` from the Releases page.
+1. Download `YTDownloaderPro-Setup.exe` from the Releases page.
 2. Run the installer.
    - You can choose **any drive** as the install location (D:, E:, etc.) — the app stores everything there.
    - Windows SmartScreen may warn "Unknown publisher". Click **More info → Run anyway**. This warning appears because the app isn't code-signed yet.
-3. Launch **YTDownloader** from the Start Menu or Desktop shortcut.
+3. Launch **YTDownloaderPro** from the Start Menu or Desktop shortcut.
 4. On first launch the app prepares **yt-dlp** and **FFmpeg** in the background when they are not already bundled or available.
 
 ---
@@ -107,8 +107,8 @@ Paid code signing is not required for this unsigned release. Trust is handled th
 | Item | Windows | Linux |
 |---|---|---|
 | App binaries | Your chosen install folder | Read-only AppImage |
-| yt-dlp / FFmpeg | Next to the app `.exe` | `~/.local/share/YTDownloader/bin/` |
-| History & cache | `{install folder}\.data\YTDownloader\` | `~/.local/share/YTDownloader/.data/` |
+| yt-dlp / FFmpeg | Next to the app `.exe` | `~/.local/share/YTDownloaderPro/bin/` |
+| History & cache | `{install folder}\.data\YTDownloaderPro\` | `~/.local/share/YTDownloaderPro/.data/` |
 | Downloaded videos | Your chosen download folder (default: `~/Downloads`) | Same |
 
 ---
@@ -120,7 +120,7 @@ Some videos require a YouTube login (age-restricted, members-only, private). To 
 ### Option 1 — Login to YouTube (Most Reliable 🌟)
 1. Click **Open YouTube Login** — your default system browser opens to the Google sign-in page.
 2. Log in to your Google/YouTube account normally.
-3. Return to YTDownloader and click **I'm Logged In ✓**.
+3. Return to YTDownloaderPro and click **I'm Logged In ✓**.
 4. The app automatically extracts your session cookies in the background. The status shows **✅ Logged in** when complete.
 
 Your session is saved and automatically restored next time you open the app. Click **Logout** to clear it.
@@ -219,8 +219,8 @@ The lock files currently pin direct dependencies. Treat dependency updates as re
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/tahsanahmmed25/YTDownloader.git
-cd YTDownloader
+git clone https://github.com/tahsanahmmed25/YTDownloaderPro.git
+cd YTDownloaderPro
 
 # 2. Create a virtual environment
 python3 -m venv venv
@@ -239,10 +239,9 @@ python app.py
 
 **Automated (GitHub Actions — recommended):**
 ```bash
-git tag v2.0.5
-git push origin v2.0.5
+git tag v3.0.0
+git push origin v3.0.0
 # GitHub builds both Windows + Linux automatically and publishes a release
-# Tags with -beta, -alpha, or -rc are marked as prerelease
 ```
 
 **Linux (AppImage) — locally:**
@@ -259,7 +258,6 @@ $env:YTDL_FFMPEG_WIN_ZIP_SHA256 = "<verified ffmpeg zip sha256>"
 
 ---
 
-
 ## 📋 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
@@ -271,13 +269,11 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 We welcome contributions of all sizes! To get started:
 
 1. Read our **[Contributing Guidelines](CONTRIBUTING.md)** for developer setup, testing, and coding standards.
-2. Check the existing **[Issues](https://github.com/tahsanahmmed25/YTDownloader/issues)** or open a new one to discuss your ideas.
+2. Check the existing **[Issues](https://github.com/tahsanahmmed25/YTDownloaderPro/issues)** or open a new one to discuss your ideas.
 3. Submit a Pull Request targeting the `main` branch.
 
 All contributors must respect code quality, write unit tests for new features, and ensure the entire test suite passes before submitting PRs.
 
 ## 📄 License
 
-This project is licensed under the **GNU General Public License v3 (GPLv3)**. See the [LICENSE](LICENSE) file for the full text. 
-
-GPLv3 is a strong copyleft license that guarantees you the freedom to share and change all versions of the program—ensuring it remains free software for all its users. Any redistributions, rebranding, or modifications of this codebase must also be fully open-source under GPLv3.
+This project is licensed under the **Custom License — Personal use only. See LICENSE file.**

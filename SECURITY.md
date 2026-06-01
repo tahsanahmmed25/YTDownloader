@@ -2,26 +2,18 @@
 
 ## Supported Versions
 
-Only the latest tagged release is expected to receive security fixes.
+Only the latest release is supported with security updates.
+
+| Version | Supported |
+| ------- | --------- |
+| Latest  | ✅ |
+| Older   | ❌ |
 
 ## Reporting a Vulnerability
 
-Open a private security advisory on GitHub if available, or contact the maintainer privately before publishing details. Include affected version, operating system, reproduction steps, and whether cookies, proxy credentials, update manifests, or downloaded binaries are involved.
+If you discover a security vulnerability, please **do not** open a public issue.
 
-## Security Design Notes
+Email: tahsanahmmed25@gmail.com
+Subject line: SECURITY – YTDownloaderPro
 
-- Cookies never leave the local machine.
-- Managed YouTube session cookies are stored in the OS keyring when available and materialized to a private file only because yt-dlp requires a cookies file path.
-- Proxy passwords are stripped from QSettings and stored in keyring when available.
-- Logs redact cookie values, proxy credentials, bearer tokens, and sensitive cookie-file arguments.
-- In-app installer updates require HTTPS, trusted update hosts by default, platform asset matching, and a valid SHA256.
-- Custom update URLs are disabled unless `YTDL_ALLOW_CUSTOM_UPDATE_URL=true` is set.
-- Managed FFmpeg downloads fail closed unless a trusted SHA256 is configured or an explicit local-development override is set.
-- Browser force-closing is intentional app behavior, but it must remain explicitly confirmed by the user.
-
-## Known Security Gaps
-
-- Release artifacts are not code-signed yet.
-- Update manifests are checksum-gated but not cryptographically signed.
-- Public Linux users without system FFmpeg may need to install FFmpeg through their package manager unless the release has a trusted managed FFmpeg SHA256 configured.
-- Direct dependencies are pinned, but a fully hash-locked transitive dependency workflow is still recommended.
+Include steps to reproduce the issue. I will acknowledge within 48 hours.

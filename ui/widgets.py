@@ -142,87 +142,112 @@ class NavRingSpinner(QWidget):
 
 class MarqueeLabel(QLabel):
     def __init__(self, text="", parent=None):
-        super().__init__(text, parent)
-        self._full_text = text or ""
+        super().__init__(parent)
+        self._full_text = ""
         self._offset = 0
-        self._gap_px = 36
         self._timer = QTimer(self)
-        self._timer.setInterval(30)
+        self._timer.setInterval(25)  # ~40fps scroll
         self._timer.timeout.connect(self._tick)
-        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._pause_timer = QTimer(self)
+        self._pause_timer.setSingleShot(True)
+        self._pause_timer.timeout.connect(self._resume)
+        self.setFixedHeight(20)
+        self.setWordWrap(False)
+        self.destroyed.connect(self._stop_timers)
+        if text:
+            self.set_full_text(text)
 
-    def setText(self, text):
-        self._full_text = text or ""
-        self._offset = 0
-        super().setText(self._full_text)
-        self._update_marquee()
-        self.updateGeometry()
+    def _stop_timers(self):
+        try:
+            self._timer.stop()
+        except Exception:
+            pass
+        try:
+            self._pause_timer.stop()
+        except Exception:
+            pass
 
-    def sizeHint(self):
-        base = super().sizeHint()
-        return QSize(0, base.height())
-
-    def minimumSizeHint(self):
-        base = super().minimumSizeHint()
-        return QSize(0, base.height())
-
-    def _tick(self):
-        text_w = self.fontMetrics().horizontalAdvance(self._full_text)
-        total = text_w + self._gap_px
-        if total <= 0:
-            return
-        self._offset = (self._offset + 1) % total
-        self.update()
-
-    def _needs_marquee(self):
-        if not self._full_text:
-            return False
-        text_w = self.fontMetrics().horizontalAdvance(self._full_text)
-        return text_w > max(10, self.contentsRect().width() - 2)
-
-    def _update_marquee(self):
-        if self._needs_marquee():
-            if not self._timer.isActive():
-                self._timer.start()
-        else:
-            if self._timer.isActive():
-                self._timer.stop()
-            self._offset = 0
-            self.update()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._update_marquee()
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._stop_timers()
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._update_marquee()
+        # Delay to let the layout assign a real width first
+        QTimer.singleShot(200, self._check_and_start)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Re-evaluate scroll whenever width changes
+        QTimer.singleShot(100, self._check_and_start)
+
+    def set_full_text(self, text: str):
+        self._full_text = text
+        self._offset = 0
+        self._stop_timers()
+        self.update()
+        # Wait for layout, then check if scrolling is needed
+        QTimer.singleShot(600, self._check_and_start)
+
+    def setText(self, text: str):
+        self.set_full_text(text)
+
+    def _check_and_start(self):
+        if self.width() <= 0:
+            # Widget not laid out yet — retry in 200ms
+            QTimer.singleShot(200, self._check_and_start)
+            return
+        if not self._full_text:
+            return
+        fm = self.fontMetrics()
+        self._text_width = fm.horizontalAdvance(self._full_text)
+        if self._text_width > self.width():
+            self._offset = 0
+            self._timer.stop()
+            self._pause_timer.stop()
+            self._pause_timer.start(2000)   # 2 second pause then scroll
+        else:
+            self._timer.stop()
+            self._pause_timer.stop()
+            self._offset = 0
+            self.update()
+
+    def _resume(self):
+        fm = self.fontMetrics()
+        if fm.horizontalAdvance(self._full_text) > max(self.width(), 1):
+            self._timer.start()
+
+    def _tick(self):
+        fm = self.fontMetrics()
+        text_w = fm.horizontalAdvance(self._full_text)
+        w = max(self.width(), 1)
+        if text_w <= w:
+            self._timer.stop()
+            self._offset = 0
+            self.update()
+            return
+        self._offset += 1
+        if self._offset > text_w + 30:
+            # Fully scrolled off — reset and pause before re-scrolling
+            self._timer.stop()
+            self._offset = 0
+            self._pause_timer.start(1500)
+        self.update()
 
     def paintEvent(self, event):
-        rect = self.contentsRect()
-        text = self._full_text or ""
-        if not text:
-            super().paintEvent(event)
-            return
-
-        fm = self.fontMetrics()
-        text_w = fm.horizontalAdvance(text)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
-        painter.setClipRect(rect)
+        painter.setFont(self.font())
         painter.setPen(self.palette().color(QPalette.WindowText))
-
-        if not self._needs_marquee():
-            baseline = rect.y() + (rect.height() + fm.ascent() - fm.descent()) // 2
-            painter.drawText(rect.x(), baseline, text)
-            return
-
-        total = text_w + self._gap_px
-        baseline = rect.y() + (rect.height() + fm.ascent() - fm.descent()) // 2
-        x = rect.x() - self._offset
-        while x < rect.right():
-            painter.drawText(x, baseline, text)
-            x += total
+        painter.setClipRect(self.rect())
+        painter.drawText(
+            -self._offset, 0,
+            self.width() + self._offset + 300,
+            self.height(),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            self._full_text,
+        )
+        painter.end()
 
 
 # ── BrandIcon ────────────────────────────────────────────────────────────────
@@ -248,8 +273,17 @@ class BrandIcon(QWidget):
         path.addRoundedRect(rect, 7, 7)
         painter.fillPath(path, accent)
 
-        # Draw white download arrow icon centered
-        painter.setPen(QPen(QColor("#ffffff"), 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        # Calculate perceptual luminance (0–255)
+        luminance = (
+            0.299 * accent.red() +
+            0.587 * accent.green() +
+            0.114 * accent.blue()
+        )
+        # Use dark arrow on light backgrounds, white arrow on dark backgrounds
+        arrow_color = QColor("#1a1a1a") if luminance > 140 else QColor("#ffffff")
+
+        # Draw download arrow icon centered
+        painter.setPen(QPen(arrow_color, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         cx = self.width() / 2
         cy = self.height() / 2
         # Arrow shaft
@@ -567,6 +601,7 @@ class StatusBadge(QLabel):
                 self._item_speed.show()
         else:
             self.show()
+            is_paused = "pause" in txt
             if "done" in txt or "complete" in txt or "finished" in txt:
                 self.setObjectName("BadgeSuccess")
                 super().setText("Done")
@@ -576,6 +611,9 @@ class StatusBadge(QLabel):
             elif "warn" in txt or "cancel" in txt:
                 self.setObjectName("BadgeWarning")
                 super().setText("Failed")
+            elif is_paused:
+                self.setObjectName("BadgeWarning")
+                super().setText("Paused")
             else:
                 self.setObjectName("BadgeNeutral")
                 super().setText("Queued")
@@ -583,7 +621,10 @@ class StatusBadge(QLabel):
             if self._item_pct:
                 self._item_pct.hide()
             if self._item_prog:
-                self._item_prog.hide()
+                if is_paused:
+                    self._item_prog.show()
+                else:
+                    self._item_prog.hide()
             if self._item_speed:
                 self._item_speed.hide()
             
@@ -670,13 +711,49 @@ class SectionLabel(QLabel):
 
 class NavCounter(QLabel):
     def __init__(self, count: int = 0, parent=None):
-        super().__init__(str(count) if count else "", parent)
+        super().__init__(parent)
         self.setObjectName("NavCounter")
-        self.setVisible(count > 0)
+        self._count = 0
+        self.set_count(count)
+        self.setFixedHeight(18)
+        self.setMinimumWidth(18)
+        self.setAlignment(Qt.AlignCenter)
 
     def set_count(self, n: int):
+        self._count = n
         self.setText(str(n) if n > 0 else "")
         self.setVisible(n > 0)
+        # Adjust width based on digit count
+        self.setFixedWidth(26 if n >= 10 else 18)
+        self.update()
+
+    def paintEvent(self, event):
+        if self._count <= 0:
+            return
+        from ui.themes import get_theme, DEFAULT_THEME
+        win = self.window()
+        theme_name = getattr(win, 'current_theme_name', DEFAULT_THEME)
+        dark = getattr(win, 'dark_mode', False)
+        theme = get_theme(theme_name)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(0, 0, self.width(), self.height())
+
+        # Pill background — accent color
+        accent = QColor(theme["accent_dark"] if dark else theme["accent_light"])
+        path = QPainterPath()
+        path.addRoundedRect(rect, 9, 9)
+        painter.fillPath(path, accent)
+
+        # Count text — white, 10px, centered
+        painter.setPen(QColor("#ffffff"))
+        font = QFont(self.font())
+        font.setPixelSize(10)
+        font.setWeight(QFont.Medium)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignCenter, str(self._count))
+        painter.end()
 
 
 class ElidedLabel(QLabel):

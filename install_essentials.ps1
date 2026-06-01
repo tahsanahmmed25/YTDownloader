@@ -31,7 +31,7 @@ $ffmpegTarget = Join-Path $TargetDir "ffmpeg.exe"
 $ffprobeTarget = Join-Path $TargetDir "ffprobe.exe"
 
 $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-$localTmp = Join-Path $TargetDir ".data\YTDownloader\.tmp"
+$localTmp = Join-Path $TargetDir ".data\YTDownloaderPro\.tmp"
 if (-not (Test-Path $localTmp)) {
     New-Item -ItemType Directory -Path $localTmp -Force | Out-Null
 }

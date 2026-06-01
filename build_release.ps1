@@ -63,7 +63,7 @@ Invoke-Python "$PSScriptRoot\build_release_support.py" preflight
 Ensure-PythonPackage "pyinstaller"
 Invoke-Python -m pytest
 
-$spec = "YTDownloader.spec"
+$spec = "YTDownloaderPro.spec"
 
 if ($Obfuscate) {
     Write-Host "PyArmor obfuscation ENABLED (you passed -Obfuscate)."
@@ -74,13 +74,13 @@ if ($Obfuscate) {
         }
         Invoke-Python -m pyarmor gen -O obf --recursive `
             main.py downloader.py history_manager.py queue_manager.py ui_style.py
-        $spec = "YTDownloader_obf.spec"
+        $spec = "YTDownloaderPro_obf.spec"
     } catch {
         Write-Warning "PyArmor failed or is unavailable. Falling back to non-obfuscated build."
         if (Test-Path "obf") {
             Remove-Item "obf" -Recurse -Force -ErrorAction SilentlyContinue
         }
-        $spec = "YTDownloader.spec"
+        $spec = "YTDownloaderPro.spec"
     }
 } else {
     Write-Host "PyArmor obfuscation DISABLED (default). Pass -Obfuscate to enable."
@@ -90,17 +90,17 @@ Write-Host "Building spec: $spec"
 Invoke-Python -m PyInstaller --clean -y $spec
 
 # -----------------------------------------------------------------------
-# Copy runtime binaries into dist\YTDownloader\ so they are included by
+# Copy runtime binaries into dist\YTDownloaderPro\ so they are included by
 # both the PyInstaller COLLECT step and the Inno Setup [Files] section.
 # These files must be present BEFORE Inno Setup runs.
 # -----------------------------------------------------------------------
-$distApp = Join-Path $PSScriptRoot "dist\YTDownloader"
+$distApp = Join-Path $PSScriptRoot "dist\YTDownloaderPro"
 $binaries = @("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe")
 foreach ($bin in $binaries) {
     $src = Join-Path $PSScriptRoot $bin
     $dst = Join-Path $distApp $bin
     if (Test-Path $src) {
-        Write-Host "Copying $bin -> dist\YTDownloader\"
+        Write-Host "Copying $bin -> dist\YTDownloaderPro\"
         Copy-Item -Path $src -Destination $dst -Force
     } else {
         Write-Warning "$bin not found in project root ($src). Downloads may not work on a fresh install."
@@ -122,13 +122,13 @@ if (-not $iscc) {
     throw "Inno Setup compiler not found. Install Inno Setup or add ISCC.exe to PATH."
 }
 
-& $iscc "$PSScriptRoot\YTDownloader.iss"
+& $iscc "$PSScriptRoot\YTDownloaderPro.iss"
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE"
 }
 
-$installer = Join-Path $PSScriptRoot "dist_installer\YTDownloader-Setup.exe"
+$installer = Join-Path $PSScriptRoot "dist_installer\YTDownloaderPro-Setup.exe"
 if (Test-Path $installer) {
     $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
-    "$hash  YTDownloader-Setup.exe" | Set-Content -Encoding ascii (Join-Path $PSScriptRoot "dist_installer\SHA256SUMS-windows.txt")
+    "$hash  YTDownloaderPro-Setup.exe" | Set-Content -Encoding ascii (Join-Path $PSScriptRoot "dist_installer\SHA256SUMS-windows.txt")
 }

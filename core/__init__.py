@@ -1,2 +1,2 @@
-"""Core helpers for YTDownloader."""
+"""Core helpers for YTDownloaderPro."""
 

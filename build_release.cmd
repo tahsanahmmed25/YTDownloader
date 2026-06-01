@@ -27,23 +27,23 @@ if errorlevel 1 exit /b %errorlevel%
 "%PYTHON_EXE%" -m pytest
 if errorlevel 1 exit /b %errorlevel%
 
-set SPEC=YTDownloader.spec
+set SPEC=YTDownloaderPro.spec
 
 if /i "%1"=="--no-obfuscate" goto build
 
 call :ensure_package pyarmor
 if errorlevel 1 (
   echo PyArmor is unavailable. Falling back to non-obfuscated build.
-  set SPEC=YTDownloader.spec
+  set SPEC=YTDownloaderPro.spec
 ) else (
   if exist obf rmdir /s /q obf
   "%PYTHON_EXE%" -m pyarmor gen -O obf --recursive main.py downloader.py history_manager.py queue_manager.py ui_style.py
   if errorlevel 1 (
     echo PyArmor failed. Falling back to non-obfuscated build.
     if exist obf rmdir /s /q obf
-    set SPEC=YTDownloader.spec
+    set SPEC=YTDownloaderPro.spec
   ) else (
-    set SPEC=YTDownloader_obf.spec
+    set SPEC=YTDownloaderPro_obf.spec
   )
 )
 
@@ -62,12 +62,12 @@ if not defined ISCC (
   exit /b 1
 )
 
-"%ISCC%" YTDownloader.iss
+"%ISCC%" YTDownloaderPro.iss
 if errorlevel 1 exit /b %errorlevel%
 
-if exist "dist_installer\YTDownloader-Setup.exe" (
-  for /f "tokens=1" %%H in ('certutil -hashfile "dist_installer\YTDownloader-Setup.exe" SHA256 ^| findstr /r "^[0-9A-Fa-f][0-9A-Fa-f]"') do (
-    echo %%H  YTDownloader-Setup.exe> "dist_installer\SHA256SUMS-windows.txt"
+if exist "dist_installer\YTDownloaderPro-Setup.exe" (
+  for /f "tokens=1" %%H in ('certutil -hashfile "dist_installer\YTDownloaderPro-Setup.exe" SHA256 ^| findstr /r "^[0-9A-Fa-f][0-9A-Fa-f]"') do (
+    echo %%H  YTDownloaderPro-Setup.exe> "dist_installer\SHA256SUMS-windows.txt"
   )
 )
 

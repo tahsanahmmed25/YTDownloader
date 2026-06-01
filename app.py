@@ -9,7 +9,7 @@ from logging_utils import setup_logging
 
 
 def _build_arg_parser():
-    parser = argparse.ArgumentParser(description="YTDownloader")
+    parser = argparse.ArgumentParser(description="YTDownloaderPro")
     parser.add_argument("--cli", action="store_true", help="Run in CLI mode")
     parser.add_argument("--url", help="YouTube URL to download")
     parser.add_argument("--info", action="store_true", help="Fetch info only")

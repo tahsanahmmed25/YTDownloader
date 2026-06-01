@@ -158,43 +158,204 @@ class FetchWorker(QObject):
         self._cancel_requested = True
 
     def run(self):
+        import time
+        from downloader import (
+            _get_yt_dlp, _cookiefile_path, _iter_auth_attempts, _client_fallbacks,
+            apply_restricted_mode_options, apply_normal_mode_options, apply_client_fallback,
+            _prepare_runtime_cookiefile, _restore_runtime_cookiefile, _cleanup_runtime_cookiefile,
+            _check_ydl_cookie_warnings, CookieLockError, _info_score, _estimate_size_mb,
+            _available_format_quality, _available_subtitles, _is_playlist_url, normalize_youtube_url,
+            build_base_options, _FORMAT_CACHE, _FORMAT_CACHE_LOCK
+        )
+
+
+        print(f"[Analyze] Worker started for URL: {self.url}")
         try:
             if self._cancel_requested:
+                print("[Analyze] Cancel requested before starting")
                 return
-            title, size, thumb, available_formats, available_qualities, available_subtitles = get_video_info(
-                self.url,
-                cookiefile=self.cookie_file,
-                browser_auth=self.browser_auth,
-                allow_playlist=self.allow_playlist,
-                quality=self.quality,
-                container=self.container
+
+            playlist_mode = self.allow_playlist and _is_playlist_url(self.url)
+            url = normalize_youtube_url(self.url, keep_playlist=playlist_mode)
+
+            base_opts = build_base_options(
+                timeout=10,
+                noplaylist=not playlist_mode,
+                skip_download=True,
+                logger=None
             )
+
+            if playlist_mode:
+                base_opts["extract_flat"] = "in_playlist"
+
+            print(f"[Analyze] yt-dlp extraction started")
+            
+            started_at = time.time()
+            max_probe_seconds = 45
+            ytdlp = _get_yt_dlp()
+            best_info = None
+            best_score = (-1, -1, -1)
+            last_err = None
+            lock_err = None
+
+            has_auth = bool(_cookiefile_path(self.cookie_file, require_auth=True) or self.browser_auth)
+            auth_attempts = _iter_auth_attempts(
+                self.cookie_file,
+                self.browser_auth,
+                allow_fallback=True,
+                prefer_no_auth=not has_auth
+            )
+            for mode, value in auth_attempts:
+                if self._cancel_requested:
+                    print("[Analyze] Cancel requested during auth loop")
+                    return
+                if (time.time() - started_at) >= max_probe_seconds:
+                    break
+                for client in _client_fallbacks(authenticated=(mode != "none")):
+                    if self._cancel_requested:
+                        print("[Analyze] Cancel requested during client loop")
+                        return
+                    if (time.time() - started_at) >= max_probe_seconds:
+                        break
+                    opts = dict(base_opts)
+                    if mode == "cookiefile":
+                        apply_restricted_mode_options(opts, cookiefile=value)
+                        auth_label = "cookiefile"
+                    elif mode == "browser":
+                        apply_restricted_mode_options(opts, browser_auth=value)
+                        auth_label = f"browser:{value}"
+                    else:
+                        apply_normal_mode_options(opts)
+                        auth_label = "none"
+
+                    apply_client_fallback(opts, client)
+                    _log.info(
+                        "Info extract attempt (lock-free): client=%s auth=%s",
+                        client or "default",
+                        auth_label,
+                    )
+                    runtime_cookie = None
+                    try:
+                        runtime_cookie = _prepare_runtime_cookiefile(opts)
+                        with ytdlp.YoutubeDL(opts) as ydl:
+                            info = ydl.extract_info(url, download=False)
+                            _check_ydl_cookie_warnings(ydl, base_opts)
+                        
+                        score = _info_score(info)
+                        if best_info is None or score > best_score:
+                            best_info = info
+                            best_score = score
+                        if best_score[0] >= 3 and best_score[1] >= 720:
+                            break
+                    except Exception as e:
+                        import traceback
+                        tb = traceback.format_exc()
+                        err_str = str(e).lower()
+                        if mode == "browser" and ("could not find" in err_str and "cookies database" in err_str):
+                            continue
+                        if "PermissionError" in tb or "[Errno 13]" in tb or "Could not copy" in tb:
+                            if mode == "browser":
+                                lock_err = CookieLockError(value, str(e))
+                                continue
+                        last_err = e
+                    finally:
+                        _restore_runtime_cookiefile(opts)
+                        _cleanup_runtime_cookiefile(runtime_cookie)
+                else:
+                    continue
+                break
+
+            if best_info is None:
+                if lock_err:
+                    raise lock_err
+                if last_err:
+                    raise last_err
+                raise RuntimeError("Failed to extract video info")
+
+            info = best_info
+            
             if self._cancel_requested:
+                print("[Analyze] Cancel requested after extraction")
                 return
+
+            print(f"[Analyze] yt-dlp extraction finished, info keys: {list(info.keys())[:5]}")
+
+            if info.get("_type") == "playlist":
+                title = info.get("title") or "Playlist"
+                count = info.get("playlist_count")
+                if count is None:
+                    entries = info.get("entries") or []
+                    try:
+                        count = len(entries)
+                    except Exception:
+                        count = None
+                if count:
+                    title = f"Playlist: {title} ({count} videos)"
+                else:
+                    title = f"Playlist: {title}"
+
+                thumbnail = info.get("thumbnail")
+                if not thumbnail:
+                    entries = info.get("entries") or []
+                    if isinstance(entries, list) and entries:
+                        thumbnail = entries[0].get("thumbnail")
+
+                available_formats = []
+                available_qualities = []
+                available_subtitles = []
+                size_mb = "Unknown"
+            else:
+                title = info.get("title", "Unknown")
+                size_mb = _estimate_size_mb(info)
+                if size_mb is None:
+                    size_mb = "Unknown"
+                thumbnail = info.get("thumbnail")
+
+                cache_key = info.get("id") or normalize_youtube_url(self.url, keep_playlist=playlist_mode)
+                with _FORMAT_CACHE_LOCK:
+                    cached = _FORMAT_CACHE.get(cache_key)
+                if cached:
+                    available_formats, available_qualities = cached
+                else:
+                    available_formats, available_qualities = _available_format_quality(info)
+                    with _FORMAT_CACHE_LOCK:
+                        _FORMAT_CACHE[cache_key] = (available_formats, available_qualities)
+                available_subtitles = _available_subtitles(info)
+
             thumb_bytes = None
-            if thumb:
+            if thumbnail:
                 try:
                     thumb_bytes = get_bytes(
-                        thumb,
+                        thumbnail,
                         timeout=10,
                         retries=2,
                         max_bytes=5 * 1024 * 1024,
                         allowed_content_types={"image/jpeg", "image/png", "image/webp"},
                     )
                 except Exception:
-                    _log.warning("Thumbnail fetch failed for %s", thumb)
+                    _log.warning("Thumbnail fetch failed for %s", thumbnail)
                     thumb_bytes = None
+
+            if self._cancel_requested:
+                print("[Analyze] Cancel requested before emitting result")
+                return
+
+            print(f"[Analyze] result signal emitting")
             self.info_ready.emit(
                 title,
-                size,
+                size_mb,
                 thumb_bytes,
                 available_formats,
                 available_qualities,
                 available_subtitles
             )
+            print(f"[Analyze] result emitted")
+
         except CookieLockError as e:
+            print(f"[Analyze] cookie lock exception: {e}")
             self.cookie_lock.emit(e.browser_name, str(e))
         except Exception as e:
+            print(f"[Analyze] error signal emitting: {e}")
             _log.exception("Fetch info failed for %s", self.url)
             self.error.emit(str(e))
         finally:
@@ -396,3 +557,91 @@ class DownloadWorker(QObject):
             self.error.emit(self.task_id, tb)
         finally:
             self.finished.emit()
+
+
+class AnalyzeWorker(QObject):
+    result = Signal(dict)
+    error = Signal(str)
+    cookie_lock = Signal(str, str)
+    finished = Signal()
+
+    def __init__(self, url, cookie_file=None, browser_auth=None):
+        super().__init__()
+        self.url = url
+        self.cookie_file = cookie_file
+        self.browser_auth = browser_auth
+        self._cancel_requested = False
+
+    def request_cancel(self):
+        self._cancel_requested = True
+
+    def run(self):
+        try:
+            if self._cancel_requested:
+                print("[Analyze] Cancel requested before starting")
+                return
+            print(f"[Analyze] Worker started for URL: {self.url}")
+            import yt_dlp
+            from downloader import apply_restricted_mode_options
+            
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'skip_download': True,
+            }
+            if self.cookie_file:
+                apply_restricted_mode_options(ydl_opts, cookiefile=self.cookie_file)
+            elif self.browser_auth:
+                apply_restricted_mode_options(ydl_opts, browser_auth=self.browser_auth)
+
+            print(f"[Analyze] yt-dlp extraction started")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+            
+            print(f"[Analyze] yt-dlp extraction finished, info keys: {list(info.keys())[:5]}")
+
+            # Extract ONLY what the UI needs — do NOT emit the full info dict
+            safe_info = {
+                "title":          info.get("title", "Unknown"),
+                "uploader":       info.get("uploader", ""),
+                "duration":       info.get("duration", 0),
+                "thumbnail":      info.get("thumbnail", ""),
+                "filesize_approx": info.get("filesize_approx", 0),
+                "webpage_url":    info.get("webpage_url", self.url),
+                "formats": [
+                    {
+                        "format_id":  f.get("format_id", ""),
+                        "ext":        f.get("ext", ""),
+                        "height":     f.get("height"),
+                        "width":      f.get("width"),
+                        "fps":        f.get("fps"),
+                        "vcodec":     f.get("vcodec", ""),
+                        "acodec":     f.get("acodec", ""),
+                        "filesize":   f.get("filesize"),
+                        "format_note": f.get("format_note", ""),
+                        "protocol":    f.get("protocol", ""),
+                        "resolution":  f.get("resolution", ""),
+                    }
+                    for f in info.get("formats", [])
+                    if isinstance(f, dict)
+                ],
+                "subtitles":      {k: {} for k in info.get("subtitles", {}).keys()} if isinstance(info.get("subtitles"), dict) else {},
+                "automatic_captions": {k: {} for k in info.get("automatic_captions", {}).keys()} if isinstance(info.get("automatic_captions"), dict) else {},
+            }
+
+            if self._cancel_requested:
+                print("[Analyze] Cancel requested before emitting result")
+                return
+
+            print(f"[Analyze] result signal emitting")
+            self.result.emit(safe_info)
+            print(f"[Analyze] result emitted")
+
+        except Exception as e:
+            import traceback
+            print(f"[Analyze] exception: {e}")
+            print(traceback.format_exc())
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
+

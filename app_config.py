@@ -4,17 +4,17 @@ import sys
 from core.security import ensure_private_dir
 
 
-APP_NAME = "YTDownloader"
+APP_NAME = "YTDownloaderPro"
 APP_ORG = "Tahsan"
-APP_VERSION = "2.9.9"
-DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloader/releases/latest"
+APP_VERSION = "3.0.0"
+DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloaderPro/releases/latest"
 LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 
 # ── Platform flags ────────────────────────────────────────────────────────────
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX   = sys.platform.startswith("linux")
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
-UPDATE_INSTALLER_NAME = "YTDownloader-Setup.exe" if IS_WINDOWS else "YTDownloader-linux-x86_64.AppImage"
+UPDATE_INSTALLER_NAME = "YTDownloaderPro-Setup.exe" if IS_WINDOWS else "YTDownloaderPro-linux-x86_64.AppImage"
 
 def is_local_dev_mode():
     return os.environ.get("YTDL_LOCAL_DEV_MODE", "false").lower() == "true"
@@ -55,7 +55,7 @@ def bin_dir():
     """Directory where auto-downloaded binaries (yt-dlp, ffmpeg) are stored.
 
     - Windows : same as app_dir() — next to the .exe (current behaviour).
-    - Linux   : ~/.local/share/YTDownloader/bin/
+    - Linux   : ~/.local/share/YTDownloaderPro/bin/
                 Kept separate so the AppImage (read-only) doesn't need to be writable.
     """
     if is_local_dev_mode():
@@ -68,8 +68,8 @@ def bin_dir():
 def app_data_dir():
     """Writable application data directory (history, thumbnails, logs, cache).
 
-    - Windows : {install_dir}/.data/YTDownloader
-    - Linux   : ~/.local/share/YTDownloader/.data
+    - Windows : {install_dir}/.data/YTDownloaderPro
+    - Linux   : ~/.local/share/YTDownloaderPro/.data
     """
     if is_local_dev_mode():
         path = os.path.join(app_dir(), "tools", "cache")

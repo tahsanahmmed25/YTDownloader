@@ -1,4 +1,4 @@
-# Deployment Guide for YTDownloader
+# Deployment Guide for YTDownloaderPro
 
 This project is hardened for unsigned releases, but it should not be treated as production-ready. Paid code signing is not a blocker for public unsigned builds; users must instead get clear unsigned-app warnings, SHA256 checksums, transparent release notes, and no-warranty language.
 
@@ -17,9 +17,9 @@ This project is hardened for unsigned releases, but it should not be treated as 
 ### Version Management
 ```bash
 # Update version in these files:
-1. app_config.py          → APP_VERSION = "2.0.1"
-2. YTDownloader.iss       → AppVersion=2.0.1
-3. CHANGELOG.md           → release entry for 2.0.1
+1. app_config.py          → APP_VERSION = "3.0.0"
+2. YTDownloaderPro.iss    → AppVersion=3.0.0
+3. CHANGELOG.md           → release entry for 3.0.0
 4. README.md              → current stable release text
 ```
 
@@ -103,9 +103,9 @@ This will:
 ls dist_installer/*.exe
 
 # Smoke-test the packaged EXE before distributing
-$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+$proc = Start-Process .\dist\YTDownloaderPro\YTDownloaderPro.exe -PassThru
 Start-Sleep -Seconds 8
-if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloaderPro exited early." }
 Stop-Process -Id $proc.Id
 
 # Confirm the GUI appears and stays open during the check
@@ -123,23 +123,19 @@ Stop-Process -Id $proc.Id
 # Initialize git (if not already)
 git init
 git add .
-git commit -m "Initial commit: YTDownloader v2.0.1"
+git commit -m "Initial commit: YTDownloaderPro v3.0.0"
 
 # Add remote (replace with your username)
-git remote add origin https://github.com/tahsanahmmed25/YTDownloader.git
+git remote add origin https://github.com/tahsanahmmed25/YTDownloaderPro.git
 git branch -M main
 git push -u origin main
 ```
 
 ### 2. Add License
-Create `LICENSE` file (GNU GPLv3 to protect code from closed-source rebranding):
+Create `LICENSE` file (Custom License to protect code from commercial/redistribution use):
 ```markdown
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
-
-Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
-Everyone is permitted to copy and distribute verbatim copies
-of this license document, but changing it is not allowed.
+Copyright (c) 2026 Tahsan Ahmmed
+All rights reserved.
 ...
 ```
 
@@ -176,30 +172,30 @@ Create `CHANGELOG.md`:
 ### Step 1: Create Release on GitHub
 ```bash
 # Method A: Via GitHub Web UI
-1. Go to: github.com/tahsanahmmed25/YTDownloader
+1. Go to: github.com/tahsanahmmed25/YTDownloaderPro
 2. Click "Releases" tab
 3. Click "Create a new release"
 4. Fill details (see below)
 
 # Method B: Via GitHub CLI
-gh release create v2.0.1-beta.1 \
-  ./dist_installer/YTDownloader-Setup.exe \
-  --title "YTDownloader v2.0.1-beta.1" \
+gh release create v3.0.0 \
+  ./dist_installer/YTDownloaderPro-Setup.exe \
+  --title "YTDownloaderPro v3.0.0" \
   --prerelease \
-  --notes "Unsigned beta. Verify SHA256 before running. See CHANGELOG.md for details."
+  --notes "Unsigned release. Verify SHA256 before running. See CHANGELOG.md for details."
 ```
 
 ### Step 2: Release Details Template
 
-**Tag:** `v2.0.1-beta.1`
+**Tag:** `v3.0.0`
 
-**Title:** `YTDownloader v2.0.1-beta.1 - Unsigned Release`
+**Title:** `YTDownloaderPro v3.0.0 - Unsigned Release`
 
 **Description:**
 ```markdown
-## YTDownloader v2.0.1-beta.1
+## YTDownloaderPro v3.0.0
 
-This is an unsigned release release of a personal project. Your system may show security warnings because the app is not signed with a paid certificate. Please verify the SHA256 checksum before running.
+This is an unsigned release of a personal project. Your system may show security warnings because the app is not signed with a paid certificate. Please verify the SHA256 checksum before running.
 
 No warranty is provided. Use at your own risk.
 
@@ -222,10 +218,10 @@ No warranty is provided. Use at your own risk.
 - Internet connection
 
 ### 📝 What's New
-See [CHANGELOG.md](https://github.com/tahsanahmmed25/YTDownloader/blob/main/CHANGELOG.md)
+See [CHANGELOG.md](https://github.com/tahsanahmmed25/YTDownloaderPro/blob/main/CHANGELOG.md)
 
 ### 🐛 Found a Bug?
-Report it: [Open Issue](https://github.com/tahsanahmmed25/YTDownloader/issues)
+Report it: [Open Issue](https://github.com/tahsanahmmed25/YTDownloaderPro/issues)
 
 ### 🔐 Verification
 SHA256: `<paste hash here>`
@@ -234,21 +230,21 @@ SHA256: `<paste hash here>`
 
 To verify installer integrity:
 \`\`\`powershell
-Get-FileHash YTDownloader-Setup.exe -Algorithm SHA256
+Get-FileHash YTDownloaderPro-Setup.exe -Algorithm SHA256
 \`\`\`
 ```
 
 ### Step 3: Upload Installer
 
 **Files to upload:**
-1. `YTDownloader-Setup.exe` - Windows installer
-2. `YTDownloader-linux-x86_64.AppImage` - Linux AppImage
+1. `YTDownloaderPro-Setup.exe` - Windows installer
+2. `YTDownloaderPro-linux-x86_64.AppImage` - Linux AppImage
 3. `SHA256SUMS-windows.txt` and `SHA256SUMS-linux.txt` - Security verification
 
 ### Step 4: Generate SHA256 Checksum
 ```powershell
 # In PowerShell
-Get-FileHash .\dist_installer\YTDownloader-Setup.exe -Algorithm SHA256 | Format-List
+Get-FileHash .\dist_installer\YTDownloaderPro-Setup.exe -Algorithm SHA256 | Format-List
 
 # Copy output to release notes for security verification
 ```
@@ -263,12 +259,12 @@ Your app already has update checking! Verify it works:
 Your app expects JSON with:
 ```json
 {
-  "tag_name": "v2.0.1",
-  "name": "v2.0.1",
+  "tag_name": "v3.0.0",
+  "name": "v3.0.0",
   "prerelease": true,
   "assets": [
     {
-      "name": "YTDownloader-Setup.exe",
+      "name": "YTDownloaderPro-Setup.exe",
       "browser_download_url": "https://github.com/..."
     }
   ],
@@ -299,15 +295,15 @@ The app automatically checks for updates on startup. When available, users can:
 ### Semantic Versioning (MAJOR.MINOR.PATCH)
 
 ```
-1.0.0
-├─ MAJOR (1) - Breaking changes (increment if user action needed)
+3.0.0
+├─ MAJOR (3) - Breaking changes (increment if user action needed)
 ├─ MINOR (0) - New features (backward compatible)
 └─ PATCH (0) - Bug fixes (backward compatible)
 
 Examples:
-- v1.0.0 → v1.0.1: Bug fix
-- v1.0.0 → v1.1.0: New feature
-- v1.0.0 → v2.0.0: Major rewrite (breaking changes)
+- v3.0.0 → v3.0.1: Bug fix
+- v3.0.0 → v3.1.0: New feature
+- v3.0.0 → v4.0.0: Major rewrite (breaking changes)
 ```
 
 ### Release Workflow
@@ -355,11 +351,11 @@ jobs:
       - run: .\build_release.ps1 -NoObfuscate
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "dist_installer/YTDownloader-Setup.exe"
+          artifacts: "dist_installer/YTDownloaderPro-Setup.exe"
           token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-This automatically builds & releases when you push a git tag like `git push origin v1.0.0`.
+This automatically builds & releases when you push a git tag like `git push origin v3.0.0`.
 
 ---
 
@@ -367,7 +363,7 @@ This automatically builds & releases when you push a git tag like `git push orig
 
 ```powershell
 # 1. Update version
-# Edit: app_config.py, YTDownloader.iss, CHANGELOG.md, README.md
+# Edit: app_config.py, YTDownloaderPro.iss, CHANGELOG.md, README.md
 
 # 2. Update changelog
 # Edit: CHANGELOG.md
@@ -379,17 +375,17 @@ This automatically builds & releases when you push a git tag like `git push orig
 .\build_release.ps1
 
 # 5. Smoke test the built EXE
-$proc = Start-Process .\dist\YTDownloader\YTDownloader.exe -PassThru
+$proc = Start-Process .\dist\YTDownloaderPro\YTDownloaderPro.exe -PassThru
 Start-Sleep -Seconds 8
-if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloader exited early." }
+if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { throw "YTDownloaderPro exited early." }
 Stop-Process -Id $proc.Id
 
 # 6. Confirm the GUI appears and stays open during the check
 
 # 7. Git commit
 git add .
-git commit -m "Release v2.0.1"
-git tag v2.0.1
+git commit -m "Release v3.0.0"
+git tag v3.0.0
 git push origin main --tags
 
 # 8. Create GitHub Release
@@ -414,4 +410,4 @@ git push origin main --tags
 
 ---
 
-**Unsigned beta rule:** release only after tests, checksums, AppImage smoke checks, and release notes pass. Do not call the app production-ready.
+**Unsigned release rule:** release only after tests, checksums, AppImage smoke checks, and release notes pass. Do not call the app production-ready.

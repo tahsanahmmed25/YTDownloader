@@ -18,7 +18,7 @@ Get the latest version from the **[Releases page](https://github.com/tahsanahmme
 | -------- | ---- | ----- |
 | 🐧 Linux (Ubuntu, Zorin, Mint…) | `YTDownloaderPro-linux-x86_64.AppImage` | Download and run — no install needed |
 | 🪟 Windows 10/11 | `YTDownloaderPro-Setup.exe` | Run the installer |
-| 🍎 macOS | Coming soon | macOS build in progress |
+| 🍎 macOS 12+ | `YTDownloaderPro-macOS.dmg` | Open DMG, drag to Applications |
 
 > Windows SmartScreen or Linux may warn "unknown publisher" — this is expected for unsigned builds. Verify the SHA256 checksum from the release page before running.
 

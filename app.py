@@ -132,6 +132,15 @@ def main():
     from PySide6.QtGui import QIcon
     from ui.main_window import Downloader
 
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "YTDownloaderPro.App.1.0"
+            )
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
 
     def handle_exception(exc_type, exc_value, exc_traceback):

@@ -2022,7 +2022,21 @@ QPushButton#CardIconButton[action="cancel"]:hover {{
                         pass
             QDesktopServices.openUrl(QUrl.fromLocalFile(target))
             return
-        self._show_message_dialog("Folder missing", "The folder was not found.", QMessageBox.Warning)
+        box = QMessageBox(self)
+        box.setWindowTitle("Folder Not Found")
+        box.setText(
+            "The folder no longer exists.\n\n"
+            "Would you like to open the Downloads folder instead?"
+        )
+        box.setIcon(QMessageBox.Question)
+        yes_btn = box.addButton("Open Downloads", QMessageBox.YesRole)
+        box.addButton("Cancel", QMessageBox.NoRole)
+        self._style_message_box(box)
+        box.exec()
+        if box.clickedButton() == yes_btn:
+            fallback = _default_download_dir()
+            if fallback and os.path.isdir(fallback):
+                self._open_folder(fallback)
 
     def _on_show_thumbnail_toggle(self, checked):
         self.show_thumbnail = bool(checked)

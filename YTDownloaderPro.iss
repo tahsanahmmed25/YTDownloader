@@ -45,7 +45,7 @@ Source: "ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\YTDownloaderPro"; Filename: "{app}\YTDownloaderPro.exe"; IconFilename: "{app}\icons\download.ico"
 Name: "{group}\Uninstall YTDownloaderPro"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\YTDownloaderPro"; Filename: "{app}\YTDownloaderPro.exe"; IconFilename: "{app}\icons\download.ico"; Tasks: desktopicon
+Name: "{userdesktop}\YTDownloaderPro"; Filename: "{app}\YTDownloaderPro.exe"; IconFilename: "{app}\icons\download.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"

@@ -395,18 +395,28 @@ QComboBox QAbstractItemView {{
     color: {text_primary};
     selection-background-color: {bg_hover};
     selection-color: {text_primary};
+    alternate-background-color: {bg_card};
     padding: 4px;
     outline: none;
+}}
+
+/* Force text colour on all children so Windows native delegate cannot override it */
+QComboBox QAbstractItemView * {{
+    color: {text_primary};
+    background: transparent;
 }}
 
 QComboBox QAbstractItemView::item {{
     padding: 6px 10px;
     border-radius: 4px;
     min-height: 28px;
+    color: {text_primary};
+    background: {bg_card};
 }}
 
 QComboBox QAbstractItemView::item:hover {{
     background: {bg_hover};
+    color: {text_primary};
 }}
 
 QComboBox QAbstractItemView::item:selected {{

@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [3.0.1] - 2026-06-03
+
+### Changed
+- **Branding Update** — Replaced the default/previous download icons with the vector-accurate **Teal Clarity** logo design. Updated application desktop icons (`download.png`, `download.ico`) and the official web landing page layout with the new design.
+
+---
+
 ## [2.9.0] - 2026-05-30
 
 ### Changed

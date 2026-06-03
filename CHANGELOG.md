@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [3.0.2] - 2026-06-04
+
+### Fixed
+- **Windows Installer Permission Error** — Resolved Inno Setup installer error (`IPersistFile::Save failed; code 0x80070005`) by switching desktop shortcut creation from `{commondesktop}` to `{userdesktop}`.
+- **Unreadable Dropdown Text** — Fixed Windows light theme dropdown unreadability by ensuring quality QComboBox items use theme-aware styling colors instead of hardcoded dark backgrounds.
+- **History Folder Navigation** — Replaced hard error dialog with a user-friendly prompt offering to open the default downloads directory when a history item's folder no longer exists.
+- **Console Window Flashing** — Prevented helper process consoles from flashing on startup/download tasks.
+- **Taskbar Icon Restoration** — Fixed missing taskbar icon issue on Windows by explicitly setting the AppUserModelID.
+
+---
+
 ## [3.0.1] - 2026-06-03
 
 ### Changed

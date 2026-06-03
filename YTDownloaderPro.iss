@@ -1,13 +1,13 @@
 [Setup]
 AppName=YTDownloaderPro
-AppVersion=3.0.1
-AppVerName=YTDownloaderPro 3.0.1
+AppVersion=3.0.2
+AppVerName=YTDownloaderPro 3.0.2
 AppPublisher=Tahsan Ahmmed
 AppPublisherURL=https://github.com/tahsanahmmed25/YTDownloaderPro
 AppSupportURL=https://github.com/tahsanahmmed25/YTDownloaderPro/issues
 AppUpdatesURL=https://github.com/tahsanahmmed25/YTDownloaderPro/releases
 AppCopyright=Copyright (C) 2024-2026 Tahsan Ahmmed
-VersionInfoVersion=3.0.1.0
+VersionInfoVersion=3.0.2.0
 VersionInfoCompany=Tahsan Ahmmed
 VersionInfoDescription=YTDownloaderPro - YouTube Video Downloader
 VersionInfoProductName=YTDownloaderPro

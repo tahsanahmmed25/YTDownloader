@@ -68,23 +68,37 @@ jobs:
     needs: test
 
     steps:
+      - name: Checkout repository
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate What's Changed list
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git fetch --tags --force
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "Previous tag detected: $PREV_TAG"
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            COMMITS=$(git log --pretty=format:"- %s" --no-merges)
+          fi
+          echo "COMMITS<<EOF" >> $GITHUB_ENV
+          echo "### What's Changed" >> $GITHUB_ENV
+          echo "$COMMITS" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Create release for version tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
-          body: |
-            Initial release of YTDownloaderPro ${{ github.ref_name }} under custom license.
-
-            ### What's New:
-            - **Modernized UI Redesign** — Migrated the visual layer of YTDownloaderPro to a clean, minimal, flat card-based layout. Includes customized sidebar navigation with colored dots, custom gradient action buttons, and flat preferences panels.
-            - **Cross-platform release binaries**:
-              - **Linux**: AppImage, DEB, RPM, and portable TAR.GZ.
-              - **macOS**: DMG installer and portable APP.TAR.GZ.
-              - **Windows**: Setup.exe installer, WiX-based MSI installer (silent/enterprise), and portable ZIP.
-
-            Full Changelog: https://github.com/tahsanahmmed25/YTDownloaderPro/compare/v2.9.9...${{ github.ref_name }}
+          body: ${{ env.COMMITS }}
+          generate_release_notes: true
 
       - name: Skip release creation for non-tag build
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

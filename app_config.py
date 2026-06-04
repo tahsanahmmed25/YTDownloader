@@ -8,7 +8,6 @@ APP_NAME = "YTDownloaderPro"
 APP_ORG = "Tahsan"
 APP_VERSION = "3.0.2"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloaderPro/releases/latest"
-LEGACY_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/tahsan-s-code/releases/latest"
 
 # ── Platform flags ────────────────────────────────────────────────────────────
 IS_WINDOWS = sys.platform == "win32"

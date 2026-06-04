@@ -20,7 +20,7 @@ def try_export(getter, name):
 
 def main():
     chrome_user_data = os.path.join(
-        os.getenv("LOCALAPPDATA", r"C:\Users\Tahsan\AppData\Local"),
+        os.getenv("LOCALAPPDATA") or os.path.expandvars(r"%LOCALAPPDATA%"),
         "Google",
         "Chrome",
         "User Data",

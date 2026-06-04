@@ -237,7 +237,7 @@ jobs:
             echo "Section: utils"
             echo "Priority: optional"
             echo "Architecture: amd64"
-            echo "Maintainer: Tahsan Ahmmed <tahsanahmmed25@gmail.com>"
+            echo "Maintainer: Tahsan Ahmmed <tahsanahmmed25@users.noreply.github.com>"
             echo "Description: Fast YouTube downloader with clean UI, queue management, subtitles, themes, and dark mode."
           } > "$DEBDIR/DEBIAN/control"
 

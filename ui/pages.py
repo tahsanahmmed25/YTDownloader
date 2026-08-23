@@ -1,4 +1,5 @@
 import os
+import app_config
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -1813,6 +1814,15 @@ class PagesMixin:
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(14, 14, 14, 14)
         card_layout.setSpacing(8)
+
+        icon_path = app_config.get_icon_path()
+        if icon_path and os.path.exists(icon_path):
+            logo_label = QLabel()
+            logo_pix = QPixmap(icon_path)
+            if not logo_pix.isNull():
+                logo_label.setPixmap(logo_pix.scaled(56, 56, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                logo_label.setFixedSize(56, 56)
+                card_layout.addWidget(logo_label)
 
         title = QLabel("YT Downloader Pro")
         title.setObjectName("SettingLabel")

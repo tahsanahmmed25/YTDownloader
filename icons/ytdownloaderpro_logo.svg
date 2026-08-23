@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Squircle Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141926" />
+      <stop offset="50%" stop-color="#0E121E" />
+      <stop offset="100%" stop-color="#07090F" />
+    </linearGradient>
+
+    <!-- Spectrum Glow Gradient -->
+    <linearGradient id="spectrumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1A4B" />
+      <stop offset="35%" stop-color="#FF208E" />
+      <stop offset="70%" stop-color="#7A5CFF" />
+      <stop offset="100%" stop-color="#00C6FF" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+
+    <filter id="symbolGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="20" flood-color="#7A5CFF" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- Base Dark Canvas Background -->
+  <rect width="512" height="512" fill="#0A0E1A" />
+
+  <!-- Squircle App Container with Shadow and Subtle Border -->
+  <g filter="url(#cardShadow)">
+    <rect x="48" y="48" width="416" height="416" rx="96" fill="url(#bgGrad)" stroke="#1F293D" stroke-width="2.5" />
+    <rect x="49" y="49" width="414" height="414" rx="95" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" />
+  </g>
+
+  <!-- Play Symbol with Negative Space Download Arrow -->
+  <g filter="url(#symbolGlow)">
+    <!-- Play Triangle Container -->
+    <path d="M 180 148 
+             C 180 134, 196 125, 208 132 
+             L 372 238 
+             C 384 246, 384 266, 372 274 
+             L 208 380 
+             C 196 387, 180 378, 180 364 
+             Z" 
+          fill="url(#spectrumGrad)" />
+
+    <!-- Dark Negative-Space Halo Around Download Arrow -->
+    <!-- Halo Shaft -->
+    <rect x="228" y="174" width="48" height="98" rx="8" fill="#0E121E" />
+    <!-- Halo Arrowhead -->
+    <path d="M 194 254 L 252 316 C 254 318, 258 318, 260 316 L 318 254 C 323 248, 318 240, 311 240 L 201 240 C 194 240, 189 248, 194 254 Z" fill="#0E121E" />
+
+    <!-- Crisp White Download Arrow (Centered in Negative Space) -->
+    <!-- White Arrow Shaft -->
+    <rect x="238" y="184" width="28" height="80" rx="4" fill="#FFFFFF" />
+    <!-- White Arrowhead -->
+    <path d="M 210 252 L 256 302 L 302 252 Z" fill="#FFFFFF" />
+  </g>
+</svg>

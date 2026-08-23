@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [3.1.1] - 2026-08-23
+
+### Added
+- **New Official Brand Identity & Logo** — Integrated the newly designed minimal, professional, and premium "Play + Download" monogram logo across the desktop application window, Windows installer, taskbar icon, desktop shortcuts, Linux packages, and About page.
+- **Multi-Resolution Icon Assets** — Generated crisp, multi-size `icons/download.ico` (16px to 256px) and high-res vector assets (`icons/ytdownloaderpro_logo.svg`, `icons/download.png`).
+
+---
+
 ## [3.1.0] - 2026-08-23
 
 ### Fixed

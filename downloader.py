@@ -947,27 +947,26 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
     # Note: --auth-type oauth2 has been removed; it conflicts with cookie-based
     # authentication and is not needed for standard cookie/browser-auth flows.
 
-    if not minimal:
-        extractor_args = ydl_opts.get("extractor_args") or {}
-        yt_args = extractor_args.get("youtube") if isinstance(extractor_args, dict) else None
-        if isinstance(yt_args, dict):
-            client = yt_args.get("player_client")
-            if client:
-                if isinstance(client, (list, tuple)):
-                    client_val = ",".join([str(c) for c in client if c])
-                else:
-                    client_val = str(client)
-                if client_val:
-                    cmd.extend(["--extractor-args", f"youtube:player_client={client_val}"])
+    extractor_args = ydl_opts.get("extractor_args") or {}
+    yt_args = extractor_args.get("youtube") if isinstance(extractor_args, dict) else None
+    if isinstance(yt_args, dict):
+        client = yt_args.get("player_client")
+        if client:
+            if isinstance(client, (list, tuple)):
+                client_val = ",".join([str(c) for c in client if c])
+            else:
+                client_val = str(client)
+            if client_val:
+                cmd.extend(["--extractor-args", f"youtube:player_client={client_val}"])
 
-        http_headers = ydl_opts.get("http_headers") or {}
-        user_agent = http_headers.get("User-Agent") or http_headers.get("user-agent")
-        if user_agent:
-            cmd.extend(["--user-agent", user_agent])
-        for name, value in http_headers.items():
-            if name.lower() == "user-agent":
-                continue
-            cmd.extend(["--add-header", f"{name}:{value}"])
+    http_headers = ydl_opts.get("http_headers") or {}
+    user_agent = http_headers.get("User-Agent") or http_headers.get("user-agent")
+    if user_agent:
+        cmd.extend(["--user-agent", user_agent])
+    for name, value in http_headers.items():
+        if name.lower() == "user-agent":
+            continue
+        cmd.extend(["--add-header", f"{name}:{value}"])
 
     if ydl_opts.get("writesubtitles") or ydl_opts.get("writeautomaticsub"):
         cmd.append("--write-subs")
@@ -1012,6 +1011,8 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
     results = []
     last_error = ""
     start_ts = time.time()
+    proc_env = dict(os.environ)
+    proc_env["PYTHONIOENCODING"] = "utf-8"
     popen_kwargs = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
@@ -1019,11 +1020,15 @@ def _download_with_exe(url, ydl_opts, progress_callback=None, pause_check=None, 
         "text": True,
         "encoding": "utf-8",
         "errors": "replace",
-        "bufsize": 1
+        "bufsize": 1,
+        "env": proc_env,
     }
-    if os.name == 'nt':
-        # Add CREATE_NO_WINDOW flag for Windows to suppress console window
+    if os.name == 'nt' or sys.platform == 'win32':
         popen_kwargs["creationflags"] = 0x08000000 # subprocess.CREATE_NO_WINDOW
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0 # SW_HIDE
+        popen_kwargs["startupinfo"] = startupinfo
 
     try:
         proc = subprocess.Popen(cmd, **popen_kwargs)
@@ -1558,28 +1563,9 @@ def apply_client_fallback(opts, client):
 
 
 def _client_fallbacks(authenticated=False):
-    """Ordered list of YouTube player clients to try.
-
-    As of April 2025, YouTube requires GVS Proof-of-Origin (PO) tokens for
-    most player clients when used without authentication cookies. The nightly
-    yt-dlp build handles this automatically for the 'android' client via
-    format 18 (360p combined), which does NOT require a PO token.
-
-    Without browser cookies (unauthenticated):
-      - 'android'     = returns format 18 (360p) without a PO token — use first
-      - 'ios'         = returns format 18 (360p) without a PO token — fallback
-      - 'tv_embedded' = returns format 18 (360p) without a PO token — fallback
-
-    With browser cookies (authenticated):
-      - None (default) = yt-dlp auto-selects, returns all formats (360p–1080p+)
-      - 'android'      = returns all formats
-
-    The 'web' client requires PO tokens (generated via JS/deno) and is
-    intentionally omitted for packaged builds without a JS runtime.
-    """
     if authenticated:
-        return [None, "android", "ios", "tv_embedded"]
-    return ["android", "ios", "tv_embedded", None]
+        return [None, ["android", "ios", "web"], "android", "ios", "tv_embedded"]
+    return [["android", "ios", "web"], "android", "ios", "tv_embedded", None]
 
 
 def _iter_auth_attempts(cookiefile=None, browser_auth=None, allow_fallback=True, prefer_no_auth=False):

@@ -145,8 +145,8 @@ def humanize_error(raw_message, cookies_loaded=False):
         if not cookies_loaded:
             hint = " Try Restricted Mode and connect your browser."
         return "This video can't be played in downloader mode. Try another link." + hint
-    if "video is unavailable" in lowered or "this video is unavailable" in lowered:
-        return "This video is unavailable. Try another link."
+    if "video is unavailable" in lowered or "this video is unavailable" in lowered or "video unavailable" in lowered:
+        return "This video is unavailable. It may be private, deleted, or blocked in your region."
     if "network" in lowered or "timed out" in lowered or "timeout" in lowered:
         return "Network error. Check your internet connection and try again."
     if "invalid url" in lowered or "unsupported url" in lowered:

@@ -1,14 +1,24 @@
 import sys
 import subprocess
 
-# Monkeypatch subprocess.Popen on Linux/macOS to avoid brief console/terminal window flashing
-if sys.platform != "win32":
-    _original_popen = subprocess.Popen
-    def _custom_popen(args, *args_list, **kwargs):
+# Monkeypatch subprocess.Popen across platforms to avoid brief console/terminal window flashing
+_original_popen = subprocess.Popen
+def _custom_popen(args, *args_list, **kwargs):
+    if sys.platform == "win32":
+        creationflags = kwargs.get("creationflags", 0)
+        creationflags |= 0x08000000  # CREATE_NO_WINDOW
+        kwargs["creationflags"] = creationflags
+        startupinfo = kwargs.get("startupinfo")
+        if startupinfo is None:
+            startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        kwargs["startupinfo"] = startupinfo
+    else:
         kwargs.setdefault("close_fds", True)
         kwargs.setdefault("start_new_session", True)
-        return _original_popen(args, *args_list, **kwargs)
-    subprocess.Popen = _custom_popen
+    return _original_popen(args, *args_list, **kwargs)
+subprocess.Popen = _custom_popen
 import os
 import re
 import time

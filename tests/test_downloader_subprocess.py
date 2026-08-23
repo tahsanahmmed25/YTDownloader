@@ -1,11 +1,17 @@
 import stat
-
+import sys
 import pytest
 
 import downloader
 
 
 def _write_fake_ytdlp(tmp_path, body):
+    if sys.platform == "win32":
+        py_script = tmp_path / "fake_ytdlp.py"
+        py_script.write_text(body, encoding="utf-8")
+        path = tmp_path / "yt-dlp.bat"
+        path.write_text(f'@"{sys.executable}" "{py_script}" %*\n', encoding="utf-8")
+        return path
     path = tmp_path / "yt-dlp"
     path.write_text("#!/usr/bin/env python3\n" + body, encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IXUSR)

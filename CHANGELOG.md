@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Estimated time remaining during download
 - CLI interface for scripting
 
+## [3.1.0] - 2026-08-23
+
+### Fixed
+- **Console Window Popup on Windows** — Completely suppressed black command prompt window popups during video analysis (`AnalyzeWorker`) and background worker execution by enforcing `CREATE_NO_WINDOW` and hidden `STARTUPINFO` across all subprocesses.
+- **Public Video Downloads & HTTP 403 Forbidden** — Fixed bug in `downloader.py` where player client extractor arguments were stripped on normal unauthenticated downloads, causing YouTube's SABR checks to reject streams. Added multi-client array (`android`, `ios`, `web`) fallback for reliable format extraction.
+- **Unavailable Video Error Clarity** — Improved error messages for region-blocked, deleted, or private videos to guide users accurately.
+- **Character Encoding in File Names** — Enforced `PYTHONIOENCODING=utf-8` on child processes to preserve non-ASCII / Unicode titles.
+
+### Changed
+- **Unbundled FFmpeg for Lightweight Installer** — Removed bundled FFmpeg binaries from the Windows installer, reducing installer file size from ~135 MB to ~18 MB. FFmpeg is now automatically managed and downloaded on demand via `ffmpeg_manager.py`.
+
+---
+
 ## [3.0.2] - 2026-06-04
 
 ### Fixed

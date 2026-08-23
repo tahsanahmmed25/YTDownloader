@@ -67,7 +67,7 @@ class AnalyzeWorker(QThread):
 
     def run(self):
         try:
-            import subprocess, json, shutil
+            import subprocess, json, shutil, os, sys
 
             # If the project has a ytdlp_exe_manager, get the path from it:
             try:
@@ -80,20 +80,41 @@ class AnalyzeWorker(QThread):
                 except ImportError:
                     ytdlp_cmd = shutil.which('yt-dlp') or 'yt-dlp'
 
-            self._process = subprocess.Popen(
-                [
-                    ytdlp_cmd,
-                    '--dump-json',
-                    '--no-playlist',
-                    '--quiet',
-                    '--no-warnings',
-                    '--socket-timeout', '10',
-                    self.url
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True
-            )
+            cmd = [
+                ytdlp_cmd,
+                '--dump-json',
+                '--no-playlist',
+                '--quiet',
+                '--no-warnings',
+                '--socket-timeout', '15',
+                '--extractor-args', 'youtube:player_client=android,ios,web',
+            ]
+
+            try:
+                from ui.session_manager import load_session
+                session_cookie = load_session()
+                if session_cookie and os.path.isfile(session_cookie):
+                    cmd.extend(['--cookies', session_cookie])
+            except Exception:
+                pass
+
+            cmd.append(self.url)
+
+            popen_kwargs = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+            }
+
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                popen_kwargs["startupinfo"] = startupinfo
+            else:
+                popen_kwargs["start_new_session"] = True
+
+            self._process = subprocess.Popen(cmd, **popen_kwargs)
 
             stdout, stderr = self._process.communicate(timeout=25)
 

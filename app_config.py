@@ -6,7 +6,7 @@ from core.security import ensure_private_dir
 
 APP_NAME = "YTDownloaderPro"
 APP_ORG = "Tahsan"
-APP_VERSION = "3.0.2"
+APP_VERSION = "3.1.0"
 DEFAULT_UPDATE_MANIFEST_URL = "https://api.github.com/repos/tahsanahmmed25/YTDownloaderPro/releases/latest"
 
 # ── Platform flags ────────────────────────────────────────────────────────────

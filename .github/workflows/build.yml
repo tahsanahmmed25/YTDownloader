@@ -340,8 +340,6 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item "yt-dlp.exe"   "dist\YTDownloaderPro\yt-dlp.exe"   -Force
-          Copy-Item "ffmpeg.exe"   "dist\YTDownloaderPro\ffmpeg.exe"   -Force
-          Copy-Item "ffprobe.exe"  "dist\YTDownloaderPro\ffprobe.exe"  -Force
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y

@@ -95,7 +95,7 @@ Invoke-Python -m PyInstaller --clean -y $spec
 # These files must be present BEFORE Inno Setup runs.
 # -----------------------------------------------------------------------
 $distApp = Join-Path $PSScriptRoot "dist\YTDownloaderPro"
-$binaries = @("yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe")
+$binaries = @("yt-dlp.exe")
 foreach ($bin in $binaries) {
     $src = Join-Path $PSScriptRoot $bin
     $dst = Join-Path $distApp $bin

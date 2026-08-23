@@ -177,5 +177,12 @@ ui_audit_report.md
 yt-downloader-pro-design.html
 run.sh
 
+# Dynamic metadata & runtime data
+*.version
+*.lastcheck
+.data/
+test_dl/
+screenshots/
+
 # Website folder
 Website/
